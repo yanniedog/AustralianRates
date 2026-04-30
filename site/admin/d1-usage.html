@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>D1 usage | Admin | AustralianRates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css?v=d30e686e00">
+    <link rel="stylesheet" href="../public-shell.css?v=5abed4c037">
+    <link rel="stylesheet" href="admin-layout.css?v=4e575d1466">
+    <link rel="stylesheet" href="admin-pages.css?v=6eb10979ea">
+    <script src="../site-variant.js?v=c71ae0e0a2"></script>
+    <script src="../theme.js?v=76040c583e"></script>
+</head>
+<body class="ar-admin">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-shell admin-shell--wide admin-d1-usage" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Cost</p>
+            <h1><abbr title="Cloudflare D1 database">D1</abbr> usage</h1>
+            <p class="admin-subtitle">Included tier, period %, projection, billing history, daily billable usage, 7d MA and OLS trend.</p>
+        </div>
+        <div class="admin-message" id="msg" role="alert"></div>
+        <div class="admin-toolbar">
+            <button type="button" class="primary" id="refresh-btn">Refresh</button>
+            <span class="admin-status-line" id="source-line">Loading...</span>
+        </div>
+        <section class="admin-card" aria-labelledby="usage-dash-heading">
+            <h2 id="usage-dash-heading">Allowance and projection</h2>
+            <p class="admin-muted d1-billing-note" id="billing-note"></p>
+            <div id="usage-dashboard"></div>
+        </section>
+        <section class="admin-card" aria-labelledby="guard-heading">
+            <h2 id="guard-heading">Guardrails</h2>
+            <div class="d1-guard-grid" id="guard-grid"></div>
+        </section>
+        <section class="admin-card" aria-labelledby="hist-heading">
+            <h2 id="hist-heading">Billing period history</h2>
+            <div class="admin-table-wrap" id="history-wrap"></div>
+        </section>
+        <section class="admin-card" aria-labelledby="trend-r-heading">
+            <h2 id="trend-r-heading">Reads — daily, 7d MA, trend</h2>
+            <div class="d1-chart-scroll" id="trend-reads-wrap"></div>
+            <p class="admin-muted d1-trend-meta" id="trend-reads-meta"></p>
+        </section>
+        <section class="admin-card" aria-labelledby="trend-w-heading">
+            <h2 id="trend-w-heading">Writes — daily, 7d MA, trend</h2>
+            <div class="d1-chart-scroll" id="trend-writes-wrap"></div>
+            <p class="admin-muted d1-trend-meta" id="trend-writes-meta"></p>
+        </section>
+        <section class="admin-card" aria-labelledby="reads-bars-heading">
+            <h2 id="reads-bars-heading">Daily reads (bars)</h2>
+            <div class="d1-usage-bars d1-usage-bars-read" id="read-bars" role="img" aria-label="Daily D1 reads"></div>
+        </section>
+        <section class="admin-card" aria-labelledby="writes-bars-heading">
+            <h2 id="writes-bars-heading">Daily writes (bars)</h2>
+            <div class="d1-usage-bars d1-usage-bars-write" id="write-bars" role="img" aria-label="Daily D1 writes"></div>
+        </section>
+        <section class="admin-card" aria-labelledby="table-heading">
+            <h2 id="table-heading">Daily billable usage table</h2>
+            <div class="admin-table-wrap" id="table-wrap"></div>
+        </section>
+    </main>
+    <script src="admin-portal.js?v=e6678ffa5b"></script>
+    <script src="admin-sidebar.js?v=5cd756e1fc"></script>
+    <script src="../ui-icons.js?v=0c1d292f12"></script>
+    <script src="../frame.js?v=eb81d922ba"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+            var portal = window.AR.AdminPortal;
+            var msgEl = document.getElementById('msg');
+            var refreshBtn = document.getElementById('refresh-btn');
+            var usageDashboard = document.getElementById('usage-dashboard');
+            var billingNote = document.getElementById('billing-note');
+            var guardGrid = document.getElementById('guard-grid');
+            var historyWrap = document.getElementById('history-wrap');
+            var trendReadsWrap = document.getElementById('trend-reads-wrap');
+            var trendWritesWrap = document.getElementById('trend-writes-wrap');
+            var trendReadsMeta = document.getElementById('trend-reads-meta');
+            var trendWritesMeta = document.getElementById('trend-writes-meta');
+            var readBars = document.getElementById('read-bars');
+            var writeBars = document.getElementById('write-bars');
+            var tableWrap = document.getElementById('table-wrap');
+            var sourceLine = document.getElementById('source-line');
+
+            function esc(value) {
+                var div = document.createElement('div');
+                div.textContent = value == null ? '' : String(value);
+                return div.innerHTML;
+            }
+
+            function showMsg(text, isError) {
+                msgEl.textContent = text;
+                msgEl.className = 'admin-message visible ' + (isError ? 'error' : 'success');
+                setTimeout(function () { msgEl.classList.remove('visible'); }, 4000);
+            }
+
+            function num(value) {
+                return Number(value || 0).toLocaleString('en-AU');
+            }
+
+            function pct(value) {
+                return (Number(value || 0) * 100).toFixed(1) + '%';
+            }
+
+            function money(value) {
+                return '$' + Number(value || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            function bytes(value) {
+                var n = Number(value || 0);
+                if (n >= 1e9) return (n / 1e9).toFixed(2) + ' GB';
+                if (n >= 1e6) return (n / 1e6).toFixed(2) + ' MB';
+                if (n >= 1e3) return (n / 1e3).toFixed(2) + ' KB';
+                return n ? n + ' B' : 'n/a';
+            }
+
+            function shortNum(value) {
+                var n = Number(value || 0);
+                if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+                if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+                if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+                return String(Math.round(n));
+            }
+
+            function iso(date) {
+                return date.toISOString().slice(0, 10);
+            }
+
+            function utcDate(year, monthIndex, day) {
+                return new Date(Date.UTC(year, monthIndex, day));
+            }
+
+            function daysInUtcMonth(year, monthIndex) {
+                return utcDate(year, monthIndex + 1, 0).getUTCDate();
+            }
+
+            function clampCycleDay(year, monthIndex, cycleDay) {
+                return Math.min(cycleDay, daysInUtcMonth(year, monthIndex));
+            }
+
+            function daysInclusive(start, end) {
+                var ms = 24 * 60 * 60 * 1000;
+                return Math.max(1, Math.floor((end.getTime() - start.getTime()) / ms) + 1);
+            }
+
+            function resolveBillingPeriod(now, cycleDay) {
+                var day = Math.min(31, Math.max(1, Math.floor(Number(cycleDay || 21))));
+                var year = now.getUTCFullYear();
+                var month = now.getUTCMonth();
+                var currentStart = utcDate(year, month, clampCycleDay(year, month, day));
+                var start = now >= currentStart ? currentStart : utcDate(year, month - 1, clampCycleDay(year, month - 1, day));
+                var nextStart = utcDate(start.getUTCFullYear(), start.getUTCMonth() + 1, clampCycleDay(start.getUTCFullYear(), start.getUTCMonth() + 1, day));
+                var end = utcDate(nextStart.getUTCFullYear(), nextStart.getUTCMonth(), nextStart.getUTCDate() - 1);
+                return {
+                    start_date: iso(start),
+                    end_date: iso(end),
+                    label: iso(start) + ' to ' + iso(end),
+                    cycle_start_day: day,
+                    elapsed_days: daysInclusive(start, now > end ? end : now),
+                    days_in_period: daysInclusive(start, end)
+                };
+            }
+
+            function computeOverage(q, reads, writes) {
+                var readOver = Math.max(0, Number(reads || 0) - Number(q.d1_reads_included_monthly || 0));
+                var writeOver = Math.max(0, Number(writes || 0) - Number(q.d1_writes_included_monthly || 0));
+                return (readOver / 1000000) * Number(q.d1_read_overage_per_million_usd || 0) +
+                    (writeOver / 1000000) * Number(q.d1_write_overage_per_million_usd || 0);
+            }
+
+            function periodForDate(date, cycleDay) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return null;
+                return resolveBillingPeriod(new Date(date + 'T12:00:00.000Z'), cycleDay);
+            }
+
+            function buildBillingHistory(days, q, cycleDay) {
+                var map = {};
+                (days || []).forEach(function (day) {
+                    var p = periodForDate(day.date, cycleDay);
+                    if (!p) return;
+                    var row = map[p.start_date] || { period: p.label, start_date: p.start_date, end_date: p.end_date, day_count: 0, reads: 0, writes: 0 };
+                    row.day_count += 1;
+                    row.reads += Math.max(0, Number(day.reads || 0));
+                    row.writes += Math.max(0, Number(day.writes || 0));
+                    row.overage_usd = computeOverage(q, row.reads, row.writes);
+                    map[p.start_date] = row;
+                });
+                return Object.keys(map).sort().reverse().map(function (key) { return map[key]; });
+            }
+
+            function ensureBillingPeriod(data) {
+                var q = data.quotas || {};
+                var m = data.month || {};
+                if (m.period && data.history_billing_periods) return data;
+                var cycleDay = Number(q.billing_cycle_start_day || 21);
+                var period = resolveBillingPeriod(new Date(data.generated_at || Date.now()), cycleDay);
+                var periodDays = (data.days || []).filter(function (day) { return day.date >= period.start_date && day.date <= period.end_date; });
+                var reads = periodDays.reduce(function (sum, day) { return sum + Math.max(0, Number(day.reads || 0)); }, 0);
+                var writes = periodDays.reduce(function (sum, day) { return sum + Math.max(0, Number(day.writes || 0)); }, 0);
+                var projectedReads = Math.round((reads / period.elapsed_days) * period.days_in_period);
+                var projectedWrites = Math.round((writes / period.elapsed_days) * period.days_in_period);
+                data.month = Object.assign({}, m, {
+                    period: period.label,
+                    period_basis: 'cloudflare_account_billing_cycle',
+                    period_start_date: period.start_date,
+                    period_end_date: period.end_date,
+                    billing_cycle_start_day: period.cycle_start_day,
+                    elapsed_days: period.elapsed_days,
+                    days_in_period: period.days_in_period,
+                    reads: reads,
+                    writes: writes,
+                    projected_reads: projectedReads,
+                    projected_writes: projectedWrites,
+                    read_quota_fraction: projectedReads / Number(q.d1_reads_included_monthly || 1),
+                    write_quota_fraction: projectedWrites / Number(q.d1_writes_included_monthly || 1),
+                    reads_pct_included_mtd: reads / Number(q.d1_reads_included_monthly || 1),
+                    writes_pct_included_mtd: writes / Number(q.d1_writes_included_monthly || 1),
+                    projected_read_rows_overage: Math.max(0, projectedReads - Number(q.d1_reads_included_monthly || 0)),
+                    projected_write_rows_overage: Math.max(0, projectedWrites - Number(q.d1_writes_included_monthly || 0)),
+                    mtd_read_rows_overage: Math.max(0, reads - Number(q.d1_reads_included_monthly || 0)),
+                    mtd_write_rows_overage: Math.max(0, writes - Number(q.d1_writes_included_monthly || 0)),
+                    estimated_overage_usd: computeOverage(q, reads, writes),
+                    projected_overage_usd: computeOverage(q, projectedReads, projectedWrites)
+                });
+                data.quotas = Object.assign({}, q, {
+                    billing_cycle_note: q.billing_cycle_note || 'This page rolls up by the Cloudflare account billing period (' + period.label + '). Daily rows are UTC analytics dates.',
+                    billing_period: period.label,
+                    billing_period_start_date: period.start_date,
+                    billing_period_end_date: period.end_date,
+                    billing_cycle_start_day: period.cycle_start_day
+                });
+                data.history_billing_periods = buildBillingHistory(data.days || [], data.quotas, period.cycle_start_day);
+                return data;
+            }
+
+            function meterRow(label, fraction, mtLabel, mtValue) {
+                var pctVal = Number(fraction || 0) * 100;
+                var w = Math.min(100, pctVal);
+                var over = pctVal > 100;
+                return '<div class="d1-meter-block">' +
+                    '<div class="d1-meter-head"><strong>' + esc(label) + '</strong>' +
+                    '<span>' + esc(mtLabel) + ': ' + esc(mtValue) + '</span></div>' +
+                    '<div class="d1-meter ' + (over ? 'd1-meter-over' : '') + '">' +
+                    '<div class="d1-meter-fill" style="width:' + w + '%"></div></div>' +
+                    '<div class="d1-meter-cap">' + pctVal.toFixed(1) + '% of included (period to date)</div></div>';
+            }
+
+            function cell(label, value) {
+                return '<div class="summary-cell"><strong>' + esc(label) + '</strong><span class="db-stats-value">' + esc(value) + '</span></div>';
+            }
+
+            function renderUsageDashboard(data) {
+                var q = data.quotas || {};
+                var m = data.month || {};
+                billingNote.textContent = (q.billing_cycle_note || '') + ' ' + (q.allowance_label || '');
+                var latestStorage = (data.days || []).slice().reverse().find(function (day) { return Number(day.storage_bytes || 0) > 0; });
+                usageDashboard.innerHTML =
+                    meterRow('Rows read vs included', m.reads_pct_included_mtd, 'Period rows', num(m.reads) + ' / ' + num(q.d1_reads_included_monthly)) +
+                    meterRow('Rows written vs included', m.writes_pct_included_mtd, 'Period rows', num(m.writes) + ' / ' + num(q.d1_writes_included_monthly)) +
+                    '<div class="admin-summary-grid d1-proj-grid">' +
+                    cell('Projected reads (period-end)', num(m.projected_reads) + ' (' + pct(m.read_quota_fraction) + ' of included)') +
+                    cell('Projected writes (period-end)', num(m.projected_writes) + ' (' + pct(m.write_quota_fraction) + ' of included)') +
+                    cell('Projected row overage (reads)', num(m.projected_read_rows_overage)) +
+                    cell('Projected row overage (writes)', num(m.projected_write_rows_overage)) +
+                    cell('Period row overage (reads)', num(m.mtd_read_rows_overage)) +
+                    cell('Period row overage (writes)', num(m.mtd_write_rows_overage)) +
+                    cell('Period overage cost', money(m.estimated_overage_usd)) +
+                    cell('Projected period-end overage cost', money(m.projected_overage_usd)) +
+                    cell('Storage (latest day)', bytes(latestStorage && latestStorage.storage_bytes)) +
+                    cell('Billing period', (m.period || m.month || '') + ' · day ' + String(m.elapsed_days || '') + ' / ' + String(m.days_in_period || m.days_in_calendar_month || '')) +
+                    '</div>';
+            }
+
+            function guardPill(label, active, tone) {
+                return '<span class="pill ' + (active ? (tone || 'warn') : 'pass') + '">' + esc(label) + ': ' + (active ? 'on' : 'off') + '</span>';
+            }
+
+            function renderGuardrails(data) {
+                var g = (data.month && data.month.guardrails) || {};
+                guardGrid.innerHTML = [
+                    guardPill('Warn', !!g.warn, 'warn'),
+                    guardPill('Nonessential paused', !!g.restrict_nonessential, 'warn'),
+                    guardPill('Public live D1 fallback disabled', !!g.disable_public_live_d1_fallback, 'error'),
+                    guardPill('Daily CDR protected', !!g.daily_cdr_protected, 'pass'),
+                    '<span class="pill">Coverage allowance: ' + money(g.overage_allowance_usd) + '</span>'
+                ].join('');
+            }
+
+            function renderHistory(data) {
+                var rows = data.history_billing_periods || data.history_months || [];
+                if (!rows.length) {
+                    historyWrap.innerHTML = '<p class="admin-muted">No history in range.</p>';
+                    return;
+                }
+                historyWrap.innerHTML = '<table class="admin-table"><thead><tr>' +
+                    '<th>Period</th><th>Days in range</th><th>Rows read</th><th>Rows written</th><th>Overage USD</th>' +
+                    '</tr></thead><tbody>' +
+                    rows.map(function (r) {
+                        return '<tr><td>' + esc(r.period || r.month) + '</td><td>' + esc(String(r.day_count)) + '</td><td>' + num(r.reads) + '</td><td>' + num(r.writes) + '</td><td>' + money(r.overage_usd) + '</td></tr>';
+                    }).join('') +
+                    '</tbody></table>';
+            }
+
+            function chartPoints(vals, nullTrend, w, h, pad) {
+                var candidates = vals.slice();
+                for (var t = 0; t < (nullTrend || []).length; t++) {
+                    var tv = nullTrend[t];
+                    if (tv != null && Number.isFinite(tv)) candidates.push(tv);
+                }
+                var maxV = Math.max(1, candidates.reduce(function (a, b) { return Math.max(a, b); }, 0));
+                var n = vals.length;
+                function xy(i, v) {
+                    var x = pad.left + (n <= 1 ? 0 : (i / (n - 1)) * (w - pad.left - pad.right));
+                    var y = h - pad.bottom - (v / maxV) * (h - pad.top - pad.bottom);
+                    return [x, y];
+                }
+                return { maxV: maxV, xy: xy };
+            }
+
+            function axisSvg(ctx, dates, w, h, pad, yLabel) {
+                var parts = [];
+                for (var yTick = 0; yTick <= 4; yTick++) {
+                    var value = (ctx.maxV / 4) * yTick;
+                    var y = ctx.xy(0, value)[1];
+                    parts.push('<line x1="' + pad.left + '" x2="' + (w - pad.right) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="var(--ar-line)" stroke-width="1"/>');
+                    parts.push('<text x="' + (pad.left - 8) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end" fill="var(--ar-text-muted)" font-size="11">' + esc(shortNum(value)) + '</text>');
+                }
+                var tickCount = Math.min(6, Math.max(1, dates.length));
+                for (var xTick = 0; xTick < tickCount; xTick++) {
+                    var idx = tickCount === 1 ? 0 : Math.round((xTick / (tickCount - 1)) * (dates.length - 1));
+                    var x = ctx.xy(idx, 0)[0];
+                    var label = (dates[idx] || '').slice(5) + ' UTC';
+                    parts.push('<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + (h - pad.bottom) + '" y2="' + (h - pad.bottom + 5) + '" stroke="var(--ar-line-strong)" stroke-width="1"/>');
+                    parts.push('<text x="' + x.toFixed(1) + '" y="' + (h - 14) + '" text-anchor="middle" fill="var(--ar-text-muted)" font-size="11">' + esc(label) + '</text>');
+                }
+                parts.push('<line x1="' + pad.left + '" x2="' + (w - pad.right) + '" y1="' + (h - pad.bottom) + '" y2="' + (h - pad.bottom) + '" stroke="var(--ar-line-strong)" stroke-width="1"/>');
+                parts.push('<line x1="' + pad.left + '" x2="' + pad.left + '" y1="' + pad.top + '" y2="' + (h - pad.bottom) + '" stroke="var(--ar-line-strong)" stroke-width="1"/>');
+                parts.push('<text x="' + (w / 2).toFixed(1) + '" y="' + (h - 2) + '" text-anchor="middle" fill="var(--ar-text-muted)" font-size="11">UTC date</text>');
+                parts.push('<text transform="translate(14 ' + (h / 2).toFixed(1) + ') rotate(-90)" text-anchor="middle" fill="var(--ar-text-muted)" font-size="11">' + esc(yLabel) + '</text>');
+                return parts.join('');
+            }
+
+            function legendSvg(w) {
+                return '<g aria-label="Legend" transform="translate(' + Math.max(72, w - 310) + ' 16)" fill="var(--ar-text-muted)" font-size="11">' +
+                    '<line x1="0" x2="22" y1="0" y2="0" stroke="var(--ar-accent)" stroke-width="2"/><text x="28" y="4">Daily</text>' +
+                    '<line x1="88" x2="110" y1="0" y2="0" stroke="var(--ar-positive)" stroke-width="2"/><text x="116" y="4">7d MA</text>' +
+                    '<line x1="178" x2="200" y1="0" y2="0" stroke="var(--ar-warning)" stroke-width="1.5" stroke-dasharray="6 4"/><text x="206" y="4">OLS trend</text>' +
+                    '</g>';
+            }
+
+            function polylineAttr(vals, ctx) {
+                var parts = [];
+                for (var i = 0; i < vals.length; i++) {
+                    var v = vals[i];
+                    if (!Number.isFinite(v)) continue;
+                    var p = ctx.xy(i, v);
+                    parts.push(p[0].toFixed(1) + ',' + p[1].toFixed(1));
+                }
+                return parts.join(' ');
+            }
+
+            function trendSegments(fitted, ctx) {
+                var segs = [];
+                var cur = [];
+                for (var i = 0; i < fitted.length; i++) {
+                    var v = fitted[i];
+                    if (v == null || !Number.isFinite(v)) {
+                        if (cur.length) { segs.push(cur); cur = []; }
+                    } else {
+                        cur.push(ctx.xy(i, v));
+                    }
+                }
+                if (cur.length) segs.push(cur);
+                return segs.map(function (seg) {
+                    return seg.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+                });
+            }
+
+            function renderTrendSvg(wrap, series, mode) {
+                var vals = mode === 'read' ? series.reads : series.writes;
+                var ma = mode === 'read' ? series.ma7_reads : series.ma7_writes;
+                var trend = mode === 'read' ? series.trend_reads_fitted : series.trend_writes_fitted;
+                var n = vals.length;
+                if (!n) {
+                    wrap.innerHTML = '<p class="admin-muted">No series.</p>';
+                    return;
+                }
+                var w = Math.max(640, n * 10);
+                var h = 250;
+                var pad = { top: 28, right: 18, bottom: 48, left: 66 };
+                var ctx = chartPoints(vals, trend, w, h, pad);
+                var plRaw = polylineAttr(vals, ctx);
+                var plMa = polylineAttr(ma, ctx);
+                var segAttrs = trendSegments(trend, ctx);
+                var dates = series.dates || [];
+                var lines = '';
+                for (var s = 0; s < segAttrs.length; s++) {
+                    if (segAttrs[s]) lines += '<polyline class="d1-trend-line" fill="none" stroke-dasharray="6 4" points="' + esc(segAttrs[s]) + '"/>';
+                }
+                wrap.innerHTML = '<svg class="d1-trend-svg" style="width:' + w + 'px;height:' + h + 'px" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="' + esc(mode === 'read' ? 'D1 read rows trend chart' : 'D1 written rows trend chart') + '">' +
+                    '<rect class="d1-trend-bg" x="0" y="0" width="' + w + '" height="' + h + '"/>' +
+                    axisSvg(ctx, dates, w, h, pad, mode === 'read' ? 'Rows read' : 'Rows written') +
+                    '<polyline class="d1-line-raw" fill="none" points="' + esc(plRaw) + '"/>' +
+                    '<polyline class="d1-line-ma" fill="none" points="' + esc(plMa) + '"/>' +
+                    lines +
+                    legendSvg(w) +
+                    '</svg>';
+            }
+
+            function renderTrendMeta(el, series, mode) {
+                var slope = mode === 'read' ? series.trend_reads_slope_per_day : series.trend_writes_slope_per_day;
+                var win = mode === 'read' ? series.trend_reads_window_days : series.trend_writes_window_days;
+                el.textContent = '7-day trailing MA; OLS trend on last ' + String(win) + ' days; slope ' + num(slope) + ' rows/day (fit for visualization only).';
+            }
+
+            function renderBars(target, days, metric, className, label) {
+                var max = days.reduce(function (m, day) {
+                    return Math.max(m, Number(day[metric] || 0));
+                }, 1);
+                target.innerHTML = days.map(function (day) {
+                    var value = Number(day[metric] || 0);
+                    var height = value > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
+                    return '<div class="d1-bar-day" title="' + esc(day.date + ' ' + label + ' ' + num(value)) + '">' +
+                        '<span class="d1-bar ' + className + '" style="height:' + height + '%"></span>' +
+                        '<small>' + esc(day.date.slice(5)) + '</small>' +
+                    '</div>';
+                }).join('');
+            }
+
+            function renderDailyCharts(data) {
+                var days = data.days || [];
+                renderBars(readBars, days, 'reads', 'd1-bar-read', 'reads');
+                renderBars(writeBars, days, 'writes', 'd1-bar-write', 'writes');
+            }
+
+            function renderTable(data) {
+                var rows = data.days || [];
+                var columns = data.billable_columns || [];
+                function cellValue(day, column) {
+                    var usage = (day.billable_usage || {})[column.key];
+                    if (!usage) return '<span class="admin-muted">0</span>';
+                    var quantity = Number(usage.quantity || 0);
+                    var cost = Number(usage.cost_usd || 0);
+                    var unit = usage.unit || column.unit || '';
+                    var costText = cost > 0 ? ' / ' + money(cost) : '';
+                    return esc(shortNum(quantity) + (unit ? ' ' + unit : '') + costText);
+                }
+                tableWrap.innerHTML = '<table class="admin-table"><thead><tr>' +
+                    '<th>UTC date</th>' +
+                    columns.map(function (column) {
+                        return '<th title="' + esc((column.quota_label || 'n/a') + ' | ' + (column.rate_label || '')) + '">' +
+                            esc(column.label) +
+                            '<small class="admin-muted"> ' + esc(column.quota_label || '') + '</small></th>';
+                    }).join('') +
+                    '</tr></thead><tbody>' +
+                    rows.map(function (day) {
+                        return '<tr><td>' + esc(day.date) + '</td>' +
+                            columns.map(function (column) {
+                                return '<td title="' + esc(column.label + ' | ' + (column.quota_label || 'n/a') + ' | ' + (column.rate_label || '')) + '">' + cellValue(day, column) + '</td>';
+                            }).join('') +
+                            '</tr>';
+                    }).join('') +
+                    '</tbody></table>';
+            }
+
+            function load() {
+                sourceLine.textContent = 'Loading...';
+                usageDashboard.innerHTML = '<p class="admin-muted">Loading...</p>';
+                billingNote.textContent = '';
+                guardGrid.innerHTML = '';
+                historyWrap.innerHTML = '';
+                trendReadsWrap.innerHTML = '';
+                trendWritesWrap.innerHTML = '';
+                trendReadsMeta.textContent = '';
+                trendWritesMeta.textContent = '';
+                readBars.innerHTML = '';
+                writeBars.innerHTML = '';
+                tableWrap.innerHTML = '';
+                portal.fetchAdmin('/cloudflare/d1-usage?days=31')
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (!data.ok) throw new Error(data.error && data.error.message ? data.error.message : 'Usage failed');
+                        data = ensureBillingPeriod(data);
+                        sourceLine.textContent = 'Source: ' + data.source + ' | Billable: ' + (data.billable_source || 'unavailable') + (data.billable_source_error ? ' (' + data.billable_source_error + ')' : '') + (data.storage_source_error ? ' | Storage: unavailable' : '') + ' | Generated: ' + data.generated_at;
+                        renderUsageDashboard(data);
+                        renderGuardrails(data);
+                        renderHistory(data);
+                        var s = data.series || { reads: [], writes: [], ma7_reads: [], ma7_writes: [], trend_reads_fitted: [], trend_writes_fitted: [], trend_reads_window_days: 0, trend_writes_window_days: 0, trend_reads_slope_per_day: 0, trend_writes_slope_per_day: 0 };
+                        renderTrendSvg(trendReadsWrap, s, 'read');
+                        renderTrendSvg(trendWritesWrap, s, 'write');
+                        renderTrendMeta(trendReadsMeta, s, 'read');
+                        renderTrendMeta(trendWritesMeta, s, 'write');
+                        renderDailyCharts(data);
+                        renderTable(data);
+                    })
+                    .catch(function (error) {
+                        sourceLine.textContent = 'Failed';
+                        showMsg(error && error.message ? error.message : 'Failed to load D1 usage', true);
+                    });
+            }
+
+            refreshBtn.addEventListener('click', load);
+            load();
+        })();
+    </script>
+</body>
+</html>

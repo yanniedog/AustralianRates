@@ -6,6 +6,12 @@
  *
  * Env: DOCTOR_TOLERATE_CF_ACTIONS_RUNNER_BLOCK + GITHUB_ACTIONS: if public /health is 403,
  * exit 0 (scheduled CI skip — Cloudflare often blocks GitHub runner IPs).
+ *
+ * Env: DIAG_EXPORT_CHECK_LIMIT — max rows for the single-shot GET /export?format=json smoke check
+ * (default 500). Full unbounded exports can exceed DIAG_REQUEST_TIMEOUT_MS on large datasets.
+ *
+ * Env: DIAG_ANALYTICS_TIMEOUT_MS — per-request timeout for GET /analytics/series (default 45000).
+ * Plain analytics payloads can be very large; diagnostics use compact=1 and this longer ceiling.
  */
 
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
@@ -30,6 +36,12 @@ const P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_P95_TARGET_
 const EXPORT_P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_EXPORT_P95_TARGET_MS || 4000)));
 const REQUEST_TIMEOUT_MS = Math.max(1000, Math.floor(Number(process.env.DIAG_REQUEST_TIMEOUT_MS || 10000)));
 const REQUEST_RETRIES = Math.max(1, Math.floor(Number(process.env.DIAG_REQUEST_RETRIES || 3)));
+const DIAG_ANALYTICS_TIMEOUT_MS = Math.max(
+  REQUEST_TIMEOUT_MS,
+  Math.floor(Number(process.env.DIAG_ANALYTICS_TIMEOUT_MS || 45_000)),
+);
+/** Capped rows for export(json) functional check; API still returns full `total` when limited. */
+const DIAG_EXPORT_CHECK_LIMIT = Math.max(1, Math.floor(Number(process.env.DIAG_EXPORT_CHECK_LIMIT || 500)));
 const DATASET_P95_OVERRIDES: Record<string, { default: number; exportJson: number }> = {
   'home-loans': { default: P95_TARGET_MS, exportJson: Math.max(P95_TARGET_MS, 1800) },
   savings: { default: P95_TARGET_MS, exportJson: Math.max(P95_TARGET_MS, 1200) },
@@ -78,7 +90,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function requestText(url: string): Promise<{ status: number; durationMs: number; text: string; headers: IncomingHttpHeaders }> {
+async function requestText(
+  url: string,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
+): Promise<{ status: number; durationMs: number; text: string; headers: IncomingHttpHeaders }> {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= REQUEST_RETRIES; attempt += 1) {
     try {
@@ -96,7 +111,7 @@ async function requestText(url: string): Promise<{ status: number; durationMs: n
               Pragma: 'no-cache',
               'User-Agent': 'AustralianRates-DiagnoseApi/1.0',
             },
-            timeout: REQUEST_TIMEOUT_MS,
+            timeout: timeoutMs,
           },
           (res) => {
             durationMs = Date.now() - start;
@@ -118,7 +133,7 @@ async function requestText(url: string): Promise<{ status: number; durationMs: n
         );
 
         req.on('timeout', () => {
-          req.destroy(new Error(`Request timeout after ${REQUEST_TIMEOUT_MS}ms for ${url} (attempt ${attempt}/${REQUEST_RETRIES})`));
+          req.destroy(new Error(`Request timeout after ${timeoutMs}ms for ${url} (attempt ${attempt}/${REQUEST_RETRIES})`));
         });
         req.on('error', reject);
         req.end();
@@ -132,9 +147,9 @@ async function requestText(url: string): Promise<{ status: number; durationMs: n
   throw lastError;
 }
 
-async function requestJson(pathname: string): Promise<any> {
+async function requestJson(pathname: string, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<any> {
   const url = `${ORIGIN}${pathname}`;
-  const res = await requestText(url);
+  const res = await requestText(url, timeoutMs);
   const text = res.text;
   let json: any = null;
   try {
@@ -223,7 +238,9 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
   }
 
   const rates = await requestJson(`${base}/rates?page=1&size=1&source_mode=all`);
-  const exportJson = await requestJson(`${base}/export?format=json&source_mode=all`);
+  const exportJson = await requestJson(
+    `${base}/export?format=json&source_mode=all&limit=${DIAG_EXPORT_CHECK_LIMIT}`,
+  );
 
   pushCheck('rates', rates);
   if (rates.status !== 200 || !rates.json) out.failures.push(`rates status ${rates.status}`);
@@ -249,7 +266,7 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
   if (exportJson.status !== 200 || !exportJson.json) out.failures.push(`export(json) status ${exportJson.status}`);
   const exportShape = inferRowsAndTotal(exportJson.json);
 
-  const analytics = await requestJson(`${base}/analytics/series`);
+  const analytics = await requestJson(`${base}/analytics/series?compact=1`, DIAG_ANALYTICS_TIMEOUT_MS);
   pushCheck('analytics/series', analytics);
   if (analytics.status !== 200 || !analytics.json || analytics.json.ok !== true) {
     out.failures.push(`analytics/series status ${analytics.status} or ok!=true`);

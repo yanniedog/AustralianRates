@@ -21,6 +21,7 @@ import type { DailyLenderJob, EnvBindings } from '../../../types'
 import { FetchWithTimeoutError, fetchJsonWithTimeout, fetchWithTimeout, hostFromUrl } from '../../../utils/fetch-with-timeout'
 import { log } from '../../../utils/logger'
 import { detectUpstreamBlock } from '../../../utils/upstream-block'
+import { isD1EmergencyMinimumWrites } from '../../../utils/d1-emergency'
 import { nowIso } from '../../../utils/time'
 import { recordDroppedAnomalies } from '../anomalies'
 import { finalizeLenderDatasetIfReady } from '../finalization'
@@ -203,6 +204,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         bankName,
         collectionDate: job.collectionDate,
         productIds: endpointIds,
+        skip: isD1EmergencyMinimumWrites(env),
       })
     }
     const endpointElapsedMs = elapsedMs(endpointStartedAt)
@@ -590,12 +592,14 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
     bankName,
     collectionDate: job.collectionDate,
     productIds: collectedRows.map((row) => row.productId),
+    skip: isD1EmergencyMinimumWrites(env),
   })
   await markHomeLoanSeriesSeenForRun(env.DB, {
     runId: job.runId,
     lenderCode: job.lenderCode,
     collectionDate: job.collectionDate,
     rows: collectedRows,
+    skip: isD1EmergencyMinimumWrites(env),
   })
   await recordDroppedAnomalies(env.DB, {
     runId: job.runId,
@@ -708,10 +712,19 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
 
   const writeStartedAt = Date.now()
   const deferProjectionWrites = fallbackSeedFetches > 0 && accepted.length >= 100
-  const written = await upsertHistoricalRateRows(
+  const emergencyMinimumWrites = isD1EmergencyMinimumWrites(env)
+  const writeResult = await upsertHistoricalRateRows(
     env.DB,
     accepted,
-    deferProjectionWrites
+    emergencyMinimumWrites
+      ? {
+          emitCanonicalFeed: false,
+          writeProjection: false,
+          updateCatalogs: false,
+          markSeriesSeen: false,
+          skipUnchangedRows: true,
+        }
+      : deferProjectionWrites
       ? {
           emitCanonicalFeed: false,
           writeProjection: false,
@@ -720,6 +733,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         }
       : undefined,
   )
+  const written = writeResult.written
   writeMs = elapsedMs(writeStartedAt)
   await recordLenderDatasetWriteStats(env.DB, {
     runId: job.runId,
@@ -727,19 +741,21 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
     dataset: 'home_loans',
     acceptedRows: accepted.length,
     writtenRows: written,
+    unchangedRows: writeResult.unchanged,
     droppedRows: dropped.length,
   })
   log.info('consumer', `daily_lender_fetch completed: ${written} written, ${dropped.length} dropped`, {
     runId: job.runId,
     lenderCode: job.lenderCode,
     context:
-      `collected=${collectedRows.length} accepted=${accepted.length} dropped=${dropped.length} written=${written}` +
+      `collected=${collectedRows.length} accepted=${accepted.length} dropped=${dropped.length}` +
+      ` written=${written} unchanged=${writeResult.unchanged}` +
       ` reasons=${JSON.stringify(droppedReasons)}` +
       ` inspected_html=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
       ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
       ` upstream_blocks=${observedUpstreamBlocks.length}` +
       ` detail_jobs=${detailJobsEnqueued}` +
-      ` projection_deferred=${deferProjectionWrites ? 1 : 0}` +
+      ` projection_deferred=${deferProjectionWrites || emergencyMinimumWrites ? 1 : 0}` +
       ` seed_fetches=${fallbackSeedFetches}` +
       ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},write=${writeMs},total=${elapsedMs(jobStartedAt)}`,
   })

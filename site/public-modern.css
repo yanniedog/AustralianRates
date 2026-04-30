@@ -1,0 +1,759 @@
+/* Final public UI normalization layer. Loaded after public page styles only. */
+
+:root[data-theme="light"] body.ar-public,
+:root[data-theme="light"] body.ar-legal,
+:root[data-theme="light"] body.ar-not-found {
+    --ar-bg: #f6f8fb;
+    --ar-bg-elevated: #ffffff;
+    --ar-surface: #ffffff;
+    --ar-surface-2: #f8fafc;
+    --ar-surface-3: #eef2f7;
+    --ar-surface-soft: #f3f6fa;
+    --ar-text: #111827;
+    --ar-text-soft: #374151;
+    --ar-text-muted: #6b7280;
+    --ar-line: rgba(17, 24, 39, 0.10);
+    --ar-line-strong: rgba(17, 24, 39, 0.18);
+    --ar-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
+    --ar-shadow-soft: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme="dark"] body.ar-public,
+:root[data-theme="dark"] body.ar-legal,
+:root[data-theme="dark"] body.ar-not-found {
+    --ar-bg: #0b0f14;
+    --ar-bg-elevated: #111821;
+    --ar-surface: #121922;
+    --ar-surface-2: #161f2a;
+    --ar-surface-3: #1d2936;
+    --ar-surface-soft: #0f151d;
+    --ar-text: #eef3f8;
+    --ar-text-soft: #c4cdd8;
+    --ar-text-muted: #8896a8;
+    --ar-line: rgba(226, 232, 240, 0.10);
+    --ar-line-strong: rgba(226, 232, 240, 0.18);
+    --ar-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+    --ar-shadow-soft: 0 8px 20px rgba(0, 0, 0, 0.24);
+}
+
+body.ar-section-home-loans { --ar-section-accent: #2563eb; --ar-section-soft: rgba(37, 99, 235, 0.12); }
+body.ar-section-savings { --ar-section-accent: #059669; --ar-section-soft: rgba(5, 150, 105, 0.12); }
+body.ar-section-term-deposits { --ar-section-accent: #b7791f; --ar-section-soft: rgba(183, 121, 31, 0.14); }
+body.ar-section-economic-data { --ar-section-accent: #0f766e; --ar-section-soft: rgba(15, 118, 110, 0.12); }
+
+body.ar-public,
+body.ar-legal,
+body.ar-not-found {
+    background: var(--ar-bg);
+    color: var(--ar-text);
+}
+
+body.ar-public::before,
+body.ar-legal::before,
+body.ar-not-found::before,
+body.ar-public .bg-layer,
+body.ar-legal .bg-layer,
+body.ar-not-found .bg-layer {
+    display: none;
+}
+
+body.ar-public .site-header,
+body.ar-legal .site-header,
+body.ar-not-found .site-header {
+    top: 8px;
+    width: min(var(--ar-shell-max), calc(100vw - 20px));
+    margin: 6px auto 0;
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--ar-surface) 94%, transparent);
+    box-shadow: var(--ar-shadow-soft);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+}
+
+body.ar-public .site-header-inner,
+body.ar-legal .site-header-inner,
+body.ar-not-found .site-header-inner {
+    min-height: 56px;
+    padding: 8px 12px;
+    gap: 12px;
+    grid-template-columns: minmax(190px, 1fr) auto auto;
+}
+
+.site-brand-lockup {
+    min-width: 0;
+    overflow: hidden;
+}
+
+body.ar-public .site-brand-copy,
+body.ar-legal .site-brand-copy,
+body.ar-not-found .site-brand-copy {
+    display: flex;
+}
+
+body.ar-public .site-brand-mark,
+body.ar-legal .site-brand-mark,
+body.ar-not-found .site-brand-mark {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    flex: 0 0 36px;
+    border-radius: 9px;
+    border-color: var(--ar-line);
+    background: var(--ar-surface);
+    box-shadow: none;
+    overflow: hidden;
+}
+
+.site-brand-logo {
+    width: 100%;
+    height: 100%;
+    min-width: 100%;
+    object-fit: contain;
+}
+
+body.ar-public .site-brand,
+body.ar-legal .site-brand,
+body.ar-not-found .site-brand {
+    color: var(--ar-text);
+    font-size: 0.9rem;
+    letter-spacing: 0;
+    white-space: nowrap;
+}
+
+body.ar-public .site-brand-tagline,
+body.ar-legal .site-brand-tagline,
+body.ar-not-found .site-brand-tagline {
+    display: none;
+}
+
+body.ar-public .site-header-segment {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: min(46vw, 540px);
+}
+
+body.ar-public .site-header-segment::-webkit-scrollbar {
+    display: none;
+}
+
+body.ar-public .site-header-segment-link,
+body.ar-public .site-action-btn,
+body.ar-legal .site-action-btn,
+body.ar-not-found .site-action-btn {
+    border-radius: 8px !important;
+    box-shadow: none !important;
+}
+
+body.ar-public .site-header-segment-link {
+    min-height: 34px;
+    padding-inline: 10px;
+    flex: 0 0 auto;
+    letter-spacing: 0;
+}
+
+body.ar-public .site-header-segment-link.is-active {
+    border-color: color-mix(in srgb, var(--ar-section-accent) 38%, var(--ar-line-strong)) !important;
+    background: var(--ar-section-soft) !important;
+}
+
+body.ar-public .site-header-actions,
+body.ar-legal .site-header-actions,
+body.ar-not-found .site-header-actions {
+    padding: 3px;
+    border: 1px solid var(--ar-line);
+    border-radius: 10px;
+    background: var(--ar-surface-2);
+    box-shadow: none;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+}
+
+body.ar-public .site-action-btn,
+body.ar-legal .site-action-btn,
+body.ar-not-found .site-action-btn {
+    width: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+}
+
+body.ar-public .site-action-text,
+body.ar-legal .site-action-text,
+body.ar-not-found .site-action-text {
+    display: none !important;
+}
+
+/* Header refresh: arc-heavy glyph reads faint at 1rem in the compact toolbar. */
+body.ar-public .site-action-refresh .site-action-icon,
+body.ar-legal .site-action-refresh .site-action-icon,
+body.ar-not-found .site-action-refresh .site-action-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+}
+
+body.ar-public .site-action-refresh .site-action-icon svg,
+body.ar-legal .site-action-refresh .site-action-icon svg,
+body.ar-not-found .site-action-refresh .site-action-icon svg {
+    stroke-width: 2.35;
+}
+
+body.ar-public .shell-public,
+body.ar-legal .shell,
+body.ar-not-found .shell {
+    padding-top: 18px;
+}
+
+body.ar-public .panel,
+body.ar-legal .panel,
+body.ar-not-found .panel,
+body.ar-public .terminal-panel,
+body.ar-public .terminal-subpanel,
+body.ar-public .terminal-notes,
+body.ar-public .rate-change-details {
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: var(--ar-surface);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+body.ar-public .market-intro {
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--ar-surface);
+}
+
+body.ar-public .market-intro-title {
+    max-width: none;
+    font-size: clamp(1.1rem, 1.4vw, 1.35rem);
+    line-height: 1.15;
+    letter-spacing: 0;
+}
+
+body.ar-public .market-intro-live-card,
+body.ar-public .terminal-stat,
+body.ar-public .ladder-card,
+body.ar-public .exec-card,
+body.ar-public .chart-series-card,
+body.ar-public .chart-spotlight-card,
+body.ar-section-economic-data .economic-signal-strip article {
+    border-radius: 8px;
+    background: var(--ar-surface-2);
+    border-color: var(--ar-line);
+    box-shadow: none;
+}
+
+body.ar-public .chart-figure,
+body.ar-section-economic-data #chart {
+    border-radius: 12px;
+    border-color: var(--ar-line);
+    background: var(--ar-surface);
+    box-shadow: none;
+}
+
+body.ar-public .chart-toolbar,
+body.ar-section-economic-data .economic-toolbar {
+    background: var(--ar-surface-2);
+    border-bottom-color: var(--ar-line);
+}
+
+body.ar-public .terminal-chart-surface,
+body.ar-public .chart-side-panel,
+body.ar-public .chart-figure .terminal-chart-surface {
+    background: var(--ar-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+body.ar-public .chart-footer {
+    background: var(--ar-surface-2);
+}
+
+body.ar-public .chart-status-line,
+body.ar-public #chart-status,
+body.ar-public .hint {
+    color: var(--ar-text-muted);
+}
+
+html[data-theme="dark"] body.ar-public .ar-ribbon-best {
+    color: #bbf7d0;
+    text-shadow: none;
+}
+
+body.ar-public .site-menu-actions {
+    display: grid;
+    gap: 6px;
+    padding-top: 10px;
+    margin-top: 10px;
+    border-top: 1px solid var(--ar-line);
+}
+
+.site-tree-action {
+    width: 100%;
+    justify-content: flex-start;
+    min-height: 34px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ar-text-soft);
+    font: inherit;
+    cursor: pointer;
+}
+
+.site-tree-action:hover {
+    color: var(--ar-text);
+    background: var(--ar-surface-2);
+}
+
+.site-guide-panel.site-help-panel {
+    width: min(520px, calc(100vw - 24px));
+}
+
+.site-guide-body {
+    gap: 14px;
+}
+
+.site-guide-current {
+    margin: 0;
+    color: var(--ar-text-soft);
+    font-size: 0.84rem;
+}
+
+.site-guide-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding-left: 1.25rem;
+}
+
+.site-guide-list li {
+    color: var(--ar-text);
+}
+
+.site-guide-list strong,
+.site-guide-list span {
+    display: block;
+}
+
+.site-guide-list span {
+    margin-top: 2px;
+    color: var(--ar-text-soft);
+    font-size: 0.84rem;
+}
+
+.site-guide-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.site-guide-backdrop {
+    background: color-mix(in srgb, var(--ar-overlay) 82%, transparent);
+}
+
+.site-guide-spotlight {
+    position: fixed;
+    z-index: 111;
+    box-sizing: border-box;
+    border: 2px solid var(--ar-section-accent, var(--ar-accent));
+    border-radius: 10px;
+    box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--ar-section-accent, var(--ar-accent)) 16%, transparent),
+        0 16px 42px rgba(0, 0, 0, 0.28);
+    pointer-events: none;
+    transition:
+        left var(--ar-motion-base) var(--ar-ease),
+        top var(--ar-motion-base) var(--ar-ease),
+        width var(--ar-motion-base) var(--ar-ease),
+        height var(--ar-motion-base) var(--ar-ease);
+}
+
+.site-guide-popover {
+    position: fixed;
+    z-index: 112;
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--ar-line-strong);
+    border-radius: 10px;
+    background: var(--ar-surface);
+    box-shadow: var(--ar-shadow);
+}
+
+.site-guide-popover-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.site-guide-step-count,
+.site-guide-action {
+    margin: 0;
+    color: var(--ar-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.site-guide-popover h2,
+.site-guide-copy {
+    margin: 0;
+}
+
+.site-guide-popover h2 {
+    color: var(--ar-text);
+    font-size: 1rem;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+.site-guide-copy {
+    color: var(--ar-text-soft);
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+abbr[title] {
+    cursor: help;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.16em;
+}
+
+body .site-guide-actions button.buttonish.primary,
+body .site-guide-actions .buttonish.primary {
+    color: #ffffff !important;
+    background: #1d4ed8 !important;
+    border-color: #1d4ed8 !important;
+}
+
+html[data-theme="dark"] body .site-guide-actions button.buttonish.primary,
+html[data-theme="dark"] body .site-guide-actions .buttonish.primary {
+    color: #020617 !important;
+    background: #93c5fd !important;
+    border-color: #93c5fd !important;
+}
+
+.site-donate-panel.site-help-panel {
+    width: min(440px, calc(100vw - 24px));
+}
+
+.site-donate-address {
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.site-donate-qr {
+    width: min(220px, 72vw);
+    height: auto;
+    aspect-ratio: 1;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+body.ar-section-economic-data .economic-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+}
+
+body.ar-section-economic-data .economic-topline,
+body.ar-section-economic-data .market-intro-summary {
+    display: none;
+}
+
+body.ar-section-economic-data .economic-hero-stats {
+    display: flex;
+    gap: 8px;
+}
+
+body.ar-section-economic-data .economic-hero-stats .terminal-stat {
+    min-width: 118px;
+    min-height: 44px;
+    padding: 7px 9px;
+}
+
+body.ar-section-economic-data .economic-signal-strip {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+body.ar-section-economic-data .economic-signal-strip article {
+    padding: 7px 9px;
+}
+
+body.ar-section-economic-data .chart-block {
+    display: flex;
+    flex-direction: column;
+}
+
+body.ar-section-economic-data .chart-block-head { order: 1; }
+body.ar-section-economic-data #chart-meta { order: 2; }
+body.ar-section-economic-data #scenario { order: 3; }
+body.ar-section-economic-data .economic-toolbar { order: 4; }
+body.ar-section-economic-data #economic-chart { order: 5; }
+body.ar-section-economic-data #economic-empty { order: 6; }
+body.ar-section-economic-data .economic-component-panel { order: 7; }
+
+body.ar-section-economic-data #scenario {
+    margin: 8px 0 0;
+    padding: 10px;
+    border: 1px solid var(--ar-line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, var(--ar-surface));
+}
+
+body.ar-section-economic-data .economic-selection-head {
+    display: flex;
+}
+
+body.ar-section-economic-data .economic-picker-row {
+    grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+}
+
+body.ar-section-economic-data .economic-picker:not([open]) {
+    background: var(--ar-surface-2);
+}
+
+body.ar-section-economic-data .economic-toolbar {
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid var(--ar-line);
+    border-radius: 10px;
+    margin: 0 0 10px;
+}
+
+body.ar-section-economic-data #economic-range-note,
+body.ar-section-economic-data #economic-y-scale-note,
+body.ar-section-economic-data #chart-meta {
+    font-size: 0.74rem;
+}
+
+body.ar-section-economic-data #chart-meta {
+    margin: 6px 0 0;
+}
+
+body.ar-section-economic-data .economic-chart {
+    min-height: clamp(360px, 48vh, 620px);
+    border: 1px solid var(--ar-line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ar-surface) 94%, var(--ar-surface-2));
+    overflow: hidden;
+}
+
+:root:not([data-theme="light"]) body.ar-section-economic-data .economic-chart,
+:root:not([data-theme="light"]) body.ar-section-economic-data .economic-forward-chart {
+    background: color-mix(in srgb, var(--ar-surface) 82%, #0f172a);
+    border-color: color-mix(in srgb, var(--ar-line-strong) 74%, transparent);
+}
+
+body.ar-section-economic-data .economic-component-panel {
+    margin-top: 12px;
+    padding-top: 12px;
+}
+
+body.ar-section-economic-data .economic-component-table-wrap {
+    border: 1px solid var(--ar-line);
+    border-radius: 10px;
+}
+
+body.ar-section-economic-data .economic-component-table th,
+body.ar-section-economic-data .economic-component-table td {
+    padding: 6px 8px;
+}
+
+body.ar-legal .legal-hero h1,
+body.ar-not-found .legal-hero h1 {
+    font-family: var(--ar-font-ui);
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    line-height: 1.05;
+    letter-spacing: 0;
+}
+
+body.ar-legal .legal-hero,
+body.ar-legal .legal-panel,
+body.ar-legal .legal-support-card {
+    padding: 16px;
+}
+
+@media (max-width: 900px) {
+    body.ar-public .site-header-inner,
+    body.ar-legal .site-header-inner,
+    body.ar-not-found .site-header-inner {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: auto auto;
+    }
+
+    body.ar-public .site-header-segment {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    body.ar-section-economic-data .economic-hero {
+        grid-template-columns: 1fr;
+    }
+
+    body.ar-section-economic-data .economic-signal-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    body.ar-public .site-header,
+    body.ar-legal .site-header,
+    body.ar-not-found .site-header {
+        width: calc(100vw - 16px);
+        top: 6px;
+        margin-top: 4px;
+    }
+
+    body.ar-public .site-header-inner,
+    body.ar-legal .site-header-inner,
+    body.ar-not-found .site-header-inner {
+        padding: 8px;
+        gap: 7px 8px;
+    }
+
+    body.ar-public .site-brand-mark,
+    body.ar-legal .site-brand-mark,
+    body.ar-not-found .site-brand-mark {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        flex-basis: 32px;
+    }
+
+    body.ar-public .site-brand,
+    body.ar-legal .site-brand,
+    body.ar-not-found .site-brand {
+        font-size: 0.84rem;
+    }
+
+    body.ar-public .site-brand-copy,
+    body.ar-legal .site-brand-copy,
+    body.ar-not-found .site-brand-copy {
+        display: flex !important;
+    }
+
+    body.ar-public .site-header-actions,
+    body.ar-legal .site-header-actions,
+    body.ar-not-found .site-header-actions {
+        gap: 2px;
+        padding: 2px;
+    }
+
+    body.ar-public .site-action-btn,
+    body.ar-legal .site-action-btn,
+    body.ar-not-found .site-action-btn {
+        width: 32px;
+        min-width: 32px;
+        min-height: 32px;
+    }
+
+    body.ar-public .site-header-segment-link {
+        min-height: 34px;
+        padding-inline: 9px;
+        font-size: 0.78rem;
+    }
+
+    body.ar-public .market-intro-live-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    body.ar-public .market-intro-live-card {
+        align-items: flex-start;
+        gap: 2px;
+        padding: 6px 7px;
+        border-radius: 8px;
+    }
+
+    body.ar-public .market-intro-live-label,
+    body.ar-public .market-intro-live-card strong {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    body.ar-section-economic-data .economic-hero {
+        padding: 9px 10px;
+    }
+
+    body.ar-section-economic-data .economic-signal-strip {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scroll-snap-type: x proximity;
+    }
+
+    body.ar-section-economic-data .economic-hero .market-intro-title {
+        font-size: 1.05rem;
+        line-height: 1.12;
+    }
+
+    body.ar-section-economic-data .economic-hero .market-intro-summary,
+    body.ar-section-economic-data .economic-hero-stats {
+        display: none;
+    }
+
+    body.ar-section-economic-data .economic-signal-strip article {
+        flex: 0 0 116px;
+        padding: 6px 7px;
+        scroll-snap-align: start;
+    }
+
+    body.ar-section-economic-data .economic-picker-row {
+        grid-template-columns: 1fr;
+    }
+
+    body.ar-section-economic-data .economic-chart {
+        min-height: min(54dvh, 390px);
+    }
+
+    body.ar-section-economic-data .economic-chip-row .chip-btn {
+        min-height: 38px;
+    }
+
+    .site-guide-actions {
+        justify-content: stretch;
+    }
+
+    .site-guide-actions .buttonish {
+        flex: 1 1 0;
+    }
+}
+
+@media (max-width: 380px) {
+    body.ar-public .site-action-donate {
+        display: none;
+    }
+
+    body.ar-public .market-intro-live-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-height: 760px) and (orientation: landscape) {
+    body.ar-section-economic-data .economic-hero,
+    body.ar-section-economic-data .economic-signal-strip {
+        display: none;
+    }
+
+    body.ar-section-economic-data .economic-chart {
+        min-height: max(260px, calc(100dvh - var(--ar-header-height) - 130px));
+    }
+}

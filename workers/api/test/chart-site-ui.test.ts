@@ -108,4 +108,50 @@ describe('chart-site-ui', () => {
     expect(merged.active_z).toBe(20)
     expect(merged.inactive_z).toBe(19)
   })
+
+  it('mergeChartRibbonStylePartial accepts known presets and falls back to glass', () => {
+    expect(mergeChartRibbonStylePartial({}).preset).toBe('glass')
+    expect(mergeChartRibbonStylePartial({ preset: 'classic' } as Record<string, unknown>).preset).toBe('classic')
+    expect(mergeChartRibbonStylePartial({ preset: 'GLASS' } as Record<string, unknown>).preset).toBe('glass')
+    expect(mergeChartRibbonStylePartial({ preset: 'nope' } as Record<string, unknown>).preset).toBe('glass')
+    expect(mergeChartRibbonStylePartial({ preset: 42 } as Record<string, unknown>).preset).toBe('glass')
+  })
+
+  it('gap_fill_enabled defaults true, only false disables it', () => {
+    expect(DEFAULT_CHART_RIBBON_STYLE.gap_fill_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({}).gap_fill_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({ gap_fill_enabled: true } as Record<string, unknown>).gap_fill_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({ gap_fill_enabled: false } as Record<string, unknown>).gap_fill_enabled).toBe(false)
+    // truthy non-false values still enable it
+    expect(mergeChartRibbonStylePartial({ gap_fill_enabled: 1 } as Record<string, unknown>).gap_fill_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({ gap_fill_enabled: null } as Record<string, unknown>).gap_fill_enabled).toBe(true)
+
+    const roundTripped = normalizeChartRibbonStyleForPut(JSON.stringify({ gap_fill_enabled: false }))
+    expect(roundTripped.ok).toBe(true)
+    if (roundTripped.ok) {
+      expect(JSON.parse(roundTripped.value).gap_fill_enabled).toBe(false)
+    }
+  })
+
+  it('mergeChartRibbonStylePartial defaults slice pair table on; explicit false disables', () => {
+    expect(DEFAULT_CHART_RIBBON_STYLE.slice_pair_table_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({}).slice_pair_table_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: true } as Record<string, unknown>).slice_pair_table_enabled).toBe(
+      true,
+    )
+    expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: false } as Record<string, unknown>).slice_pair_table_enabled).toBe(
+      false,
+    )
+    expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: 1 } as Record<string, unknown>).slice_pair_table_enabled).toBe(true)
+    const m = mergeChartRibbonStylePartial({
+      slice_pair_font_px: 99,
+      slice_pair_text_color: '#nothex',
+      slice_pair_table_bg_color: '#aabbcc',
+      slice_pair_grid_width_px: 9,
+    } as Record<string, unknown>)
+    expect(m.slice_pair_font_px).toBe(18)
+    expect(m.slice_pair_text_color).toBe('')
+    expect(m.slice_pair_table_bg_color).toBe('#aabbcc')
+    expect(m.slice_pair_grid_width_px).toBe(4)
+  })
 })

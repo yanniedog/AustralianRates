@@ -235,6 +235,8 @@ export type EnvBindings = {
   HISTORICAL_QUALITY_AUDIT_DO?: DurableObjectNamespace
   ADMIN_API_TOKEN?: string
   ADMIN_API_TOKENS?: string
+  /** Optional ABS Indicator API key for headline CPI/labour/demand/housing indicator feeds. */
+  ABS_INDICATOR_API_KEY?: string
   CF_ACCESS_TEAM_DOMAIN?: string
   CF_ACCESS_AUD?: string
   PUBLIC_ALLOWED_ORIGINS?: string
@@ -249,6 +251,12 @@ export type EnvBindings = {
   LOCK_TTL_SECONDS?: string
   MAX_QUEUE_ATTEMPTS?: string
   MAX_PRODUCTS_PER_LENDER?: string
+  FEATURE_SCHEDULED_INGEST_AUDITS_ENABLED?: string
+  FEATURE_SCHEDULED_PRODUCT_CLASSIFICATION_AUDIT_ENABLED?: string
+  D1_DAILY_READ_LIMIT?: string
+  D1_DAILY_WRITE_LIMIT?: string
+  D1_NONESSENTIAL_DISABLE_FRACTION?: string
+  D1_EMERGENCY_MINIMUM_WRITES?: string
   FEATURE_PROSPECTIVE_ENABLED?: string
   FEATURE_BACKFILL_ENABLED?: string
   MANUAL_RUN_COOLDOWN_SECONDS?: string
@@ -271,6 +279,16 @@ export type EnvBindings = {
   FETCH_MAX_RETRIES?: string
   FETCH_RETRY_BASE_MS?: string
   FETCH_RETRY_CAP_MS?: string
+  /** Cloudflare account id for GraphQL Analytics API usage dashboards. */
+  CLOUDFLARE_ACCOUNT_ID?: string
+  /** Cloudflare API token with analytics read access. */
+  CLOUDFLARE_API_TOKEN?: string
+  /** Preferred Worker secret for Cloudflare GraphQL Analytics API read access. */
+  CLOUDFLARE_GRAPHQL_API_TOKEN?: string
+  /** Optional override for the production D1 database id used by usage dashboards. */
+  CLOUDFLARE_D1_DATABASE_ID?: string
+  /** Cloudflare billing cycle start day for account-level billable usage reconciliation. */
+  CLOUDFLARE_BILLING_CYCLE_START_DAY?: string
 }
 
 export type SharedIngestTaskKind = IngestTaskKind

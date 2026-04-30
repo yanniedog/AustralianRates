@@ -14,6 +14,10 @@ import {
   reasonableStringLength,
   VALIDATE_COMMON,
 } from './validate-common.js'
+import {
+  cdrCategoryMatchesDataset,
+  parseCdrProductCategoryFromJson,
+} from './cdr/product-classification.js'
 
 export type NormalizedSavingsRow = {
   bankName: string
@@ -108,40 +112,26 @@ function isLikelyTdProductName(name: string): boolean {
   return tokens.some((x) => normalized.includes(x))
 }
 
-const CDR_DEPOSIT_PRODUCT_CATEGORIES = {
-  savings: 'TRANS_AND_SAVINGS_ACCOUNTS',
-  termDeposits: 'TERM_DEPOSITS',
-} as const
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value != null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function unwrapCdrDetailPayload(value: unknown): Record<string, unknown> | null {
-  if (!isRecord(value)) return null
-  if (isRecord(value.data)) return value.data
-  return value
-}
-
-function parseCdrProductCategory(json: string | null | undefined): string | null {
-  const text = typeof json === 'string' ? json.trim() : ''
-  if (!text) return null
-  try {
-    const parsed = JSON.parse(text) as unknown
-    const detail = unwrapCdrDetailPayload(parsed)
-    const category = String(detail?.productCategory ?? detail?.category ?? detail?.type ?? '').trim().toUpperCase()
-    return category || null
-  } catch {
-    return null
-  }
-}
-
 function hasExpectedCdrDepositCategory(
   row: { dataQualityFlag: string; cdrProductDetailJson?: string | null },
-  expectedCategory: (typeof CDR_DEPOSIT_PRODUCT_CATEGORIES)[keyof typeof CDR_DEPOSIT_PRODUCT_CATEGORIES],
+  expectedDataset: 'savings' | 'term_deposits',
 ): boolean {
   if (!lower(row.dataQualityFlag).startsWith('cdr_')) return false
-  return parseCdrProductCategory(row.cdrProductDetailJson) === expectedCategory
+  const category = parseCdrProductCategoryFromJson(row.cdrProductDetailJson)
+  return cdrCategoryMatchesDataset(category, expectedDataset)
+}
+
+function cdrCategoryMismatchReason(
+  row: { dataQualityFlag: string; cdrProductDetailJson?: string | null },
+  expectedDataset: 'savings' | 'term_deposits',
+): string | null {
+  if (!lower(row.dataQualityFlag).startsWith('cdr_')) return null
+  const category = parseCdrProductCategoryFromJson(row.cdrProductDetailJson)
+  if (!category) return null
+  if (cdrCategoryMatchesDataset(category, expectedDataset)) return null
+  return expectedDataset === 'savings'
+    ? 'cdr_category_mismatch_savings'
+    : 'cdr_category_mismatch_term_deposits'
 }
 
 export function minConfidenceForFlag(flag: string): number {
@@ -154,8 +144,11 @@ export function minConfidenceForFlag(flag: string): number {
 
 export function normalizeAccountType(text: string): SavingsAccountType {
   const t = lower(text)
-  if (t.includes('transaction') || t.includes('everyday') || t.includes('spending')) return 'transaction'
   if (t.includes('at call') || t.includes('at_call')) return 'at_call'
+  // Names like "Everyday Savings Account" (e.g. HSBC) must stay savings; do not let the
+  // generic "everyday" token (meant for spend/transaction-style accounts) win first.
+  if (t.includes('savings') || t.includes('saver') || t.includes('save account')) return 'savings'
+  if (t.includes('transaction') || t.includes('everyday') || t.includes('spending')) return 'transaction'
   return 'savings'
 }
 
@@ -268,7 +261,11 @@ export function validateNormalizedSavingsRow(
   if (hasBlockedProductText(row.productName)) {
     return { ok: false, reason: 'invalid_product_name_semantics' }
   }
-  if (!isLikelySavingsProductName(row.productName) && !hasExpectedCdrDepositCategory(row, CDR_DEPOSIT_PRODUCT_CATEGORIES.savings)) {
+  const savingsCategoryMismatch = cdrCategoryMismatchReason(row, 'savings')
+  if (savingsCategoryMismatch) {
+    return { ok: false, reason: savingsCategoryMismatch }
+  }
+  if (!isLikelySavingsProductName(row.productName) && !hasExpectedCdrDepositCategory(row, 'savings')) {
     return { ok: false, reason: 'invalid_product_name_semantics' }
   }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
@@ -340,7 +337,11 @@ export function validateNormalizedTdRow(
   if (hasBlockedProductText(row.productName)) {
     return { ok: false, reason: 'invalid_product_name_semantics' }
   }
-  if (!isLikelyTdProductName(row.productName) && !hasExpectedCdrDepositCategory(row, CDR_DEPOSIT_PRODUCT_CATEGORIES.termDeposits)) {
+  const tdCategoryMismatch = cdrCategoryMismatchReason(row, 'term_deposits')
+  if (tdCategoryMismatch) {
+    return { ok: false, reason: tdCategoryMismatch }
+  }
+  if (!isLikelyTdProductName(row.productName) && !hasExpectedCdrDepositCategory(row, 'term_deposits')) {
     return { ok: false, reason: 'invalid_product_name_semantics' }
   }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }

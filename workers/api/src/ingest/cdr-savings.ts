@@ -21,6 +21,7 @@ import {
   publishedAtFromDetail,
   type JsonRecord,
 } from './cdr.js'
+import { isCdrSavingsProduct, isCdrTermDepositProduct } from './cdr/product-classification.js'
 import type { FetchJsonResult } from './cdr/http.js'
 import type { EnvBindings, LenderConfig } from '../types.js'
 
@@ -30,19 +31,11 @@ type FetchEnvBindings = Pick<
 >
 
 export function isSavingsAccount(product: JsonRecord): boolean {
-  const category = pickText(product, ['productCategory', 'category', 'type']).toUpperCase()
-  const name = pickText(product, ['name', 'productName']).toUpperCase()
-  if (category.includes('TRANS_AND_SAVINGS') || category.includes('SAVINGS')) return true
-  if (name.includes('SAVINGS') || name.includes('SAVER') || name.includes('AT CALL')) return true
-  return false
+  return isCdrSavingsProduct(product, { allowNameFallback: true })
 }
 
 export function isTermDeposit(product: JsonRecord): boolean {
-  const category = pickText(product, ['productCategory', 'category', 'type']).toUpperCase()
-  const name = pickText(product, ['name', 'productName']).toUpperCase()
-  if (category.includes('TERM_DEPOSIT')) return true
-  if (name.includes('TERM DEPOSIT') || name.includes('FIXED DEPOSIT')) return true
-  return false
+  return isCdrTermDepositProduct(product, { allowNameFallback: true })
 }
 
 /**
@@ -105,6 +98,7 @@ function isBonusOnlyTermDepositRate(rate: JsonRecord, interestRate: number): boo
   const additionalValue = getText(rate.additionalValue).toLowerCase()
   const depositRateType = getText(rate.depositRateType || rate.rateType || rate.type).toLowerCase()
   const applicabilityText = `${getText(rate.rateApplicabilityType)} ${getText(rate.applicationType)}`.toLowerCase()
+  const applicabilityRaw = `${getText(rate.rateApplicabilityType)} ${getText(rate.applicationType)}`
   const bonusHint =
     depositRateType.includes('bonus') ||
     additionalInfo.includes('online bonus') ||
@@ -112,7 +106,52 @@ function isBonusOnlyTermDepositRate(rate: JsonRecord, interestRate: number): boo
     (additionalValue.includes('bonus') && additionalValue.includes('additional'))
   const onlineHint = applicabilityText.includes('online') || additionalInfo.includes('online')
   const maturityHint = applicabilityText.includes('maturity')
-  return bonusHint && onlineHint && maturityHint && interestRate <= 0.5
+  if (bonusHint && onlineHint && maturityHint && interestRate <= 0.5) return true
+  // Westpac-brand CDR payloads (incl. Bank of Melbourne / St.George) pair a headline rate with an
+  // ONLINE_ONLY scaffold row (~0.1% p.a.) described as an "additional … %" component. Wording varies;
+  // when that row is still ingested alongside the headline, SQLite upserts coalesce dimensions and last
+  // insertion order flips the stored rate by day → drop scaffold rows aggressively.
+  const rateApplicability = getText(rate.rateApplicabilityType).toUpperCase()
+  const onlineApplicable = rateApplicability.includes('ONLINE') || onlineHint
+  const additionalRateComponent =
+    additionalInfo.includes('additional') && (additionalInfo.includes('%') || additionalInfo.includes('p.a'))
+  const extraRateComponent =
+    additionalInfo.includes('extra') && (additionalInfo.includes('%') || additionalInfo.includes('p.a'))
+  const smallRate = interestRate <= 0.75
+  if ((additionalRateComponent || extraRateComponent) && onlineApplicable && maturityHint && smallRate) return true
+  const digitalChannel =
+    applicabilityRaw.toLowerCase().includes('digital') || additionalInfo.includes('internet') || additionalInfo.includes('app')
+  if (smallRate && maturityHint && digitalChannel && (additionalInfo.includes('%') || additionalInfo.includes('p.a'))) return true
+  return false
+}
+
+/**
+ * historical_term_deposit_rates upserts on (bank, collection_date, product_id, term_months,
+ * deposit_tier, interest_payment) — not on interest_rate. Multiple CDR rows mapping to the same key
+ * must not depend on array iteration order; keep the headline rate (max) per dimension bucket.
+ */
+function dedupeTermDepositRowsByUpsertDimensions(rows: NormalizedTdRow[]): NormalizedTdRow[] {
+  const key = (row: NormalizedTdRow) => `${row.termMonths}\u0001${row.depositTier}\u0001${row.interestPayment}`
+  const buckets = new Map<string, NormalizedTdRow[]>()
+  for (const row of rows) {
+    const k = key(row)
+    const list = buckets.get(k) ?? []
+    list.push(row)
+    buckets.set(k, list)
+  }
+  const out: NormalizedTdRow[] = []
+  for (const group of buckets.values()) {
+    if (group.length === 1) {
+      out.push(group[0])
+      continue
+    }
+    const sorted = [...group].sort((a, b) => {
+      if (b.interestRate !== a.interestRate) return b.interestRate - a.interestRate
+      return String(a.productName || '').localeCompare(String(b.productName || ''))
+    })
+    out.push(sorted[0])
+  }
+  return out
 }
 
 function parseMonthlyFeeFromDetail(detail: JsonRecord): number | null {
@@ -141,7 +180,7 @@ export function parseSavingsRatesFromDetail(input: {
   const { detail, lender, sourceUrl, collectionDate } = input
   const productId = pickText(detail, ['productId', 'id'])
   const productName = normalizeProductName(pickText(detail, ['name', 'productName']))
-  if (!productId || !productName) return []
+  if (!productId || !productName || !isCdrSavingsProduct(detail, { allowNameFallback: true })) return []
 
   const rates = extractDepositRatesArray(detail)
   if (rates.length === 0) return []
@@ -199,7 +238,7 @@ export function parseTermDepositRatesFromDetail(input: {
   const { detail, lender, sourceUrl, collectionDate } = input
   const productId = pickText(detail, ['productId', 'id'])
   const productName = normalizeProductName(pickText(detail, ['name', 'productName']))
-  if (!productId || !productName) return []
+  if (!productId || !productName || !isCdrTermDepositProduct(detail, { allowNameFallback: true })) return []
 
   const rates = extractDepositRatesArray(detail)
   if (rates.length === 0) return []
@@ -250,7 +289,7 @@ export function parseTermDepositRatesFromDetail(input: {
     })
   }
 
-  return result
+  return dedupeTermDepositRowsByUpsertDimensions(result)
 }
 
 type ProductListFetchResult = {

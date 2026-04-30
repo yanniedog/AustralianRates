@@ -375,6 +375,24 @@ export async function recordRunQueueOutcome(
   return refreshRunTerminalState(db, row)
 }
 
+/**
+ * Most recent finished_at among daily runs that completed (status='ok' or 'partial').
+ * Used by the public snapshot freshness check so a fresh snapshot is invalidated
+ * when ingest finalises after the snapshot was built.
+ */
+export async function getLatestCompletedDailyRunFinishedAt(db: D1Database): Promise<string | null> {
+  const row = await db
+    .prepare(
+      `SELECT MAX(finished_at) AS finished_at
+       FROM run_reports
+       WHERE run_type = 'daily'
+         AND status IN ('ok', 'partial')
+         AND finished_at IS NOT NULL`,
+    )
+    .first<{ finished_at: string | null }>()
+  return row?.finished_at ?? null
+}
+
 export async function getLastManualRunStartedAt(db: D1Database): Promise<string | null> {
   const row = await db
     .prepare(

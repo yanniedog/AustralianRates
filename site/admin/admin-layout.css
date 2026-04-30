@@ -71,6 +71,13 @@ body.ar-admin.has-admin-sidebar .admin-back {
     padding: 18px 0 36px;
 }
 
+.admin-shell > *,
+.admin-card,
+.admin-page-head,
+.admin-toolbar {
+    min-width: 0;
+}
+
 body.ar-admin.has-admin-sidebar .admin-shell {
     width: min(1400px, calc(100vw - var(--ar-admin-sidebar-width) - 60px));
     margin-left: calc(var(--ar-admin-sidebar-width) + 34px);
@@ -174,6 +181,7 @@ body.ar-admin.has-admin-sidebar .admin-shell {
 
 .admin-table-wrap,
 .admin-shell pre {
+    width: 100%;
     max-width: 100%;
     overflow: auto;
 }

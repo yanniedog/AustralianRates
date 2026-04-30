@@ -197,7 +197,10 @@ export function normalizeChartMaxProductsForPut(
 }
 
 /** Public Rate Report ribbon (ECharts bands mode) appearance; exposed via GET /site-ui. */
+export type ChartRibbonPreset = 'glass' | 'classic'
+
 export type ChartRibbonStyle = {
+  preset: ChartRibbonPreset
   edge_width: number
   edge_opacity: number
   edge_opacity_others: number
@@ -218,22 +221,41 @@ export type ChartRibbonStyle = {
   others_grey_mix: number
   active_z: number
   inactive_z: number
+  /** Forward-fill per-bank data gaps of ≤3 days; prevents short outages from breaking ribbon continuity or skewing mean. */
+  gap_fill_enabled: boolean
+  /** Optional compact slice-move table under Min/Mean/Max in rate-report ribbon hover box (visible products vs prior chart day). */
+  slice_pair_table_enabled: boolean
+  /** Row font size (px); matches hover row text by default. */
+  slice_pair_font_px: number
+  /** Text colour #RRGGBB, or empty string to follow chart tooltip theme colour. */
+  slice_pair_text_color: string
+  slice_pair_text_alpha: number
+  /** Table panel background #RRGGBB, or empty for neutral dark base. */
+  slice_pair_table_bg_color: string
+  slice_pair_table_bg_alpha: number
+  /** Grid line colour #RRGGBB or empty for slate default. */
+  slice_pair_grid_color: string
+  slice_pair_grid_alpha: number
+  slice_pair_grid_width_px: number
 }
 
+const RIBBON_PRESETS: ReadonlySet<ChartRibbonPreset> = new Set(['glass', 'classic'])
+
 export const DEFAULT_CHART_RIBBON_STYLE: ChartRibbonStyle = {
-  edge_width: 2,
-  edge_opacity: 1,
-  edge_opacity_others: 0.14,
-  fill_opacity_end: 0.22,
-  fill_opacity_peak: 0.48,
-  focus_fill_opacity_end: 0.34,
-  focus_fill_opacity_peak: 0.70,
-  selected_fill_opacity_end: 0.44,
-  selected_fill_opacity_peak: 0.82,
+  preset: 'glass',
+  edge_width: 1.25,
+  edge_opacity: 0.75,
+  edge_opacity_others: 0.12,
+  fill_opacity_end: 0.14,
+  fill_opacity_peak: 0.42,
+  focus_fill_opacity_end: 0.26,
+  focus_fill_opacity_peak: 0.60,
+  selected_fill_opacity_end: 0.34,
+  selected_fill_opacity_peak: 0.72,
   fill_opacity_others_scale: 0.22,
-  mean_width: 1.25,
-  mean_opacity: 1,
-  mean_opacity_others: 0.18,
+  mean_width: 1,
+  mean_opacity: 0.9,
+  mean_opacity_others: 0.16,
   product_line_opacity_hover: 0.5,
   product_line_opacity_selected: 0.85,
   product_line_width_hover: 1.2,
@@ -241,6 +263,16 @@ export const DEFAULT_CHART_RIBBON_STYLE: ChartRibbonStyle = {
   others_grey_mix: 0.62,
   active_z: 48,
   inactive_z: 2,
+  gap_fill_enabled: true,
+  slice_pair_table_enabled: true,
+  slice_pair_font_px: 11,
+  slice_pair_text_color: '',
+  slice_pair_text_alpha: 1,
+  slice_pair_table_bg_color: '',
+  slice_pair_table_bg_alpha: 0.22,
+  slice_pair_grid_color: '',
+  slice_pair_grid_alpha: 0.35,
+  slice_pair_grid_width_px: 1,
 }
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -271,6 +303,13 @@ function numNonNeg(v: unknown, fallback: number, hi: number): number {
   return clamp(n, 0, hi)
 }
 
+function optionalHex6(v: unknown): string {
+  if (v == null) return ''
+  const s = String(v).trim()
+  if (s === '') return ''
+  return /^#[0-9a-fA-F]{6}$/.test(s) ? s : ''
+}
+
 export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null | undefined): ChartRibbonStyle {
   const d = DEFAULT_CHART_RIBBON_STYLE
   if (!raw || typeof raw !== 'object') return { ...d }
@@ -279,7 +318,12 @@ export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null
   if (inactive_z >= active_z) {
     inactive_z = Math.max(0, active_z - 1)
   }
+  const presetRaw = typeof raw.preset === 'string' ? raw.preset.trim().toLowerCase() : ''
+  const preset: ChartRibbonPreset = RIBBON_PRESETS.has(presetRaw as ChartRibbonPreset)
+    ? (presetRaw as ChartRibbonPreset)
+    : d.preset
   return {
+    preset,
     edge_width: numNonNeg(raw.edge_width, d.edge_width, 12),
     edge_opacity: num01(raw.edge_opacity, d.edge_opacity),
     edge_opacity_others: num01(raw.edge_opacity_others, d.edge_opacity_others),
@@ -300,6 +344,20 @@ export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null
     others_grey_mix: num01(raw.others_grey_mix, d.others_grey_mix),
     active_z,
     inactive_z,
+    gap_fill_enabled: raw.gap_fill_enabled === false ? false : d.gap_fill_enabled,
+    slice_pair_table_enabled: raw.slice_pair_table_enabled === false ? false : d.slice_pair_table_enabled,
+    slice_pair_font_px: (() => {
+      const n = numLike(raw.slice_pair_font_px)
+      if (n === null) return d.slice_pair_font_px
+      return clamp(Math.round(n), 7, 18)
+    })(),
+    slice_pair_text_color: optionalHex6(raw.slice_pair_text_color),
+    slice_pair_text_alpha: num01(raw.slice_pair_text_alpha, d.slice_pair_text_alpha),
+    slice_pair_table_bg_color: optionalHex6(raw.slice_pair_table_bg_color),
+    slice_pair_table_bg_alpha: clamp(num01(raw.slice_pair_table_bg_alpha, d.slice_pair_table_bg_alpha), 0, 0.92),
+    slice_pair_grid_color: optionalHex6(raw.slice_pair_grid_color),
+    slice_pair_grid_alpha: num01(raw.slice_pair_grid_alpha, d.slice_pair_grid_alpha),
+    slice_pair_grid_width_px: numNonNeg(raw.slice_pair_grid_width_px, d.slice_pair_grid_width_px, 4),
   }
 }
 

@@ -10,6 +10,7 @@ import type { EnvBindings } from '../../types'
 import { isLenderDatasetReadyForFinalization } from '../../utils/lender-dataset-invariants'
 import { log } from '../../utils/logger'
 import type { DatasetKind } from '../../../../../packages/shared/src'
+import { isD1EmergencyMinimumWrites } from '../../utils/d1-emergency'
 
 type FinalizationDeps = {
   getLenderDatasetRun: typeof getLenderDatasetRun
@@ -123,13 +124,13 @@ export async function finalizeLenderDataset(
     return false
   }
 
-  if (expected <= 0) {
+  if (expected <= 0 || isD1EmergencyMinimumWrites(env)) {
     const marked = await runWithTransientRetry(
       {
         runId: input.runId,
         lenderCode: input.lenderCode,
         dataset: input.dataset,
-        operation: 'mark_dataset_finalized_zero_expected',
+        operation: expected <= 0 ? 'mark_dataset_finalized_zero_expected' : 'mark_dataset_finalized_emergency',
       },
       async () =>
         deps.tryMarkLenderDatasetFinalized(env.DB, {
@@ -143,9 +144,9 @@ export async function finalizeLenderDataset(
       runId: input.runId,
       lenderCode: input.lenderCode,
       context:
-        `dataset=${input.dataset} expected=0` +
+        `dataset=${input.dataset} expected=${expected}` +
         ` completed=${run.completed_detail_count} failed=${run.failed_detail_count}` +
-        ` presence_skipped=1`,
+        ` presence_skipped=1 emergency_minimum_writes=${isD1EmergencyMinimumWrites(env) ? 1 : 0}`,
     })
     return true
   }

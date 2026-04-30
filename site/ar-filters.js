@@ -117,7 +117,6 @@
         if (key === 'start_date') return 'From';
         if (key === 'end_date') return 'To';
         if (key === 'mode') return 'Rate Mode';
-        if (key === 'include_manual') return 'Manual Runs';
         if (key === 'exclude_compare_edge_cases') return 'Compare edge cases';
         if (key === 'balance_band') return 'Balance band';
         return toTitleWords(key);
@@ -152,11 +151,10 @@
             if (!text) return;
             var field = findFieldByParam(key);
             var label = formatChipLabel(field, key);
-            var values = key === 'include_manual' ? ['true'] : text.split(',').filter(Boolean);
+            var values = text.split(',').filter(Boolean);
             values.forEach(function (rawValue) {
                 var displayValue = rawValue;
-                if (key === 'include_manual') displayValue = 'Included';
-                else if (key === 'exclude_compare_edge_cases') displayValue = 'Included';
+                if (key === 'exclude_compare_edge_cases') displayValue = 'Included';
                 else if (field) displayValue = formatFilterValue(field.param, rawValue);
                 entries.push({
                     key: key,
@@ -244,7 +242,7 @@
                 entry.key === 'start_date' || entry.key === 'end_date' ||
                 entry.key === 'min_rate' || entry.key === 'max_rate' ||
                 entry.key === 'min_comparison_rate' || entry.key === 'max_comparison_rate' ||
-                entry.key === 'include_manual' || entry.key === 'balance_band') {
+                entry.key === 'balance_band') {
                 return '<span class="filter-chip">' +
                     '<span class="chip-key">' + esc(entry.label) + ':</span>' +
                     '<span class="chip-val">' + esc(entry.displayValue) + '</span>' +
@@ -314,7 +312,6 @@
             els.filterStartDate,
             els.filterEndDate,
             els.filterMode,
-            els.filterIncludeManual,
             els.filterExcludeCompareEdgeCases,
             els.refreshInterval
         );
@@ -386,8 +383,6 @@
             els.filterEndDate.value = '';
         } else if (key === 'mode' && els.filterMode) {
             els.filterMode.value = 'all';
-        } else if (key === 'include_manual' && els.filterIncludeManual) {
-            els.filterIncludeManual.checked = false;
         } else if (key === 'exclude_compare_edge_cases' && els.filterExcludeCompareEdgeCases) {
             els.filterExcludeCompareEdgeCases.checked = true;
         } else {
@@ -437,7 +432,6 @@
         if (els.filterStartDate) els.filterStartDate.value = '';
         if (els.filterEndDate) els.filterEndDate.value = '';
         if (els.filterMode) els.filterMode.value = 'all';
-        if (els.filterIncludeManual) els.filterIncludeManual.checked = false;
         if (els.filterExcludeCompareEdgeCases) els.filterExcludeCompareEdgeCases.checked = true;
         if (els.refreshInterval) els.refreshInterval.value = '60';
         applyDefaultMinRateIfEmpty();
@@ -563,7 +557,6 @@
             if (consumerFilterIds.indexOf(field.id) >= 0) continue;
             resetFieldValue(getFilterEl(field.id), field);
         }
-        if (els.filterIncludeManual) els.filterIncludeManual.checked = false;
         if (els.filterExcludeCompareEdgeCases) els.filterExcludeCompareEdgeCases.checked = true;
         if (els.filterMode) els.filterMode.value = 'all';
         if (els.refreshInterval) els.refreshInterval.value = '60';
@@ -579,7 +572,6 @@
         }
 
         if (els.filterMode) setControlVisible(els.filterMode, analyst);
-        if (els.filterIncludeManual) setControlVisible(els.filterIncludeManual, analyst);
         if (els.filterExcludeCompareEdgeCases) setControlVisible(els.filterExcludeCompareEdgeCases, analyst);
         if (els.refreshInterval) setControlVisible(els.refreshInterval, analyst);
         if (els.filterBar && els.filterBar.tagName === 'DETAILS') {
@@ -625,7 +617,6 @@
         else if (!endMeta && els.filterEndDate && els.filterEndDate.value) p.end_date = els.filterEndDate.value;
         if (isAnalystMode()) {
             if (els.filterMode && els.filterMode.value) p.mode = els.filterMode.value;
-            if (els.filterIncludeManual && els.filterIncludeManual.checked) p.include_manual = 'true';
             if (els.filterExcludeCompareEdgeCases && !els.filterExcludeCompareEdgeCases.checked) {
                 p.exclude_compare_edge_cases = '0';
             }
@@ -666,7 +657,6 @@
         if (fp.balance_min) q.set('balance_min', String(fp.balance_min).trim());
         if (fp.balance_max) q.set('balance_max', String(fp.balance_max).trim());
         if (fp.mode && fp.mode !== 'all') q.set('mode', fp.mode);
-        if (fp.include_manual) q.set('include_manual', fp.include_manual);
         if (fp.include_removed) q.set('include_removed', fp.include_removed);
         if (isAnalystMode() && fp.exclude_compare_edge_cases) {
             q.set('exclude_compare_edge_cases', fp.exclude_compare_edge_cases);
@@ -731,10 +721,6 @@
             els.filterMode.value = p.get('mode');
             restored.mode = p.get('mode');
         }
-        if (p.get('include_manual') === 'true' && els.filterIncludeManual) {
-            els.filterIncludeManual.checked = true;
-            restored.include_manual = 'true';
-        }
         if (els.filterExcludeCompareEdgeCases) {
             els.filterExcludeCompareEdgeCases.checked = true;
             if (p.has('exclude_compare_edge_cases')) {
@@ -778,6 +764,7 @@
                     timeoutMs: requestTimeoutMs,
                     retryCount: 0,
                     retryDelayMs: 700,
+                    bypassSnapshot: section === 'term-deposits',
                 })
                 : null;
             var data = result ? result.data : null;

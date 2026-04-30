@@ -127,6 +127,84 @@ type PreparedHomeLoanRow = {
   cdrProductDetailHash: string | null
 }
 
+export type RateBatchWriteResult = {
+  written: number
+  unchanged: number
+  skippedSideEffects: number
+}
+
+function emptyWriteResult(): RateBatchWriteResult {
+  return { written: 0, unchanged: 0, skippedSideEffects: 0 }
+}
+
+function addWriteResult(target: RateBatchWriteResult, source: RateBatchWriteResult): void {
+  target.written += source.written
+  target.unchanged += source.unchanged
+  target.skippedSideEffects += source.skippedSideEffects
+}
+
+function equalStateValue(left: unknown, right: unknown): boolean {
+  if (left == null && right == null) return true
+  if (typeof left === 'number' || typeof right === 'number') {
+    const a = left == null ? null : Number(left)
+    const b = right == null ? null : Number(right)
+    if (a == null || b == null) return a === b
+    return Number.isFinite(a) && Number.isFinite(b) ? a === b : String(left) === String(right)
+  }
+  return String(left ?? '') === String(right ?? '')
+}
+
+function homeLoanRowUnchanged(current: Record<string, unknown>, row: NormalizedRateRow): boolean {
+  const comparisons: Array<[unknown, unknown]> = [
+    [current.product_id, row.productId],
+    [current.product_name, row.productName],
+    [current.security_purpose, row.securityPurpose],
+    [current.repayment_type, row.repaymentType],
+    [current.rate_structure, row.rateStructure],
+    [current.lvr_tier, row.lvrTier],
+    [current.feature_set, row.featureSet],
+    [current.has_offset_account == null ? null : Number(current.has_offset_account), row.hasOffsetAccount == null ? null : (row.hasOffsetAccount ? 1 : 0)],
+    [current.interest_rate, row.interestRate],
+    [current.comparison_rate, row.comparisonRate ?? null],
+    [current.annual_fee, row.annualFee ?? null],
+  ]
+  return comparisons.every(([left, right]) => equalStateValue(left, right))
+}
+
+async function filterChangedHomeLoanRows(db: D1Database, rows: NormalizedRateRow[]): Promise<{
+  changed: NormalizedRateRow[]
+  unchanged: number
+}> {
+  const keyed = rows.map((row) => ({ row, seriesKey: homeLoanSeriesKey(row) }))
+  const currentByKey = new Map<string, Record<string, unknown>>()
+  for (const part of chunk(Array.from(new Set(keyed.map((item) => item.seriesKey))), 80)) {
+    const result = await db
+      .prepare(
+        `SELECT series_key, product_id, product_name, security_purpose, repayment_type,
+                rate_structure, lvr_tier, feature_set, has_offset_account, interest_rate,
+                comparison_rate, annual_fee, is_removed
+         FROM latest_home_loan_series
+         WHERE series_key IN (${part.map(() => '?').join(',')})`,
+      )
+      .bind(...part)
+      .all<Record<string, unknown>>()
+    for (const current of result.results ?? []) {
+      currentByKey.set(String(current.series_key || ''), current)
+    }
+  }
+  const changed: NormalizedRateRow[] = []
+  let unchanged = 0
+  for (const item of keyed) {
+    const current = currentByKey.get(item.seriesKey)
+    if (current && Number(current.is_removed ?? 0) === 0 && homeLoanRowUnchanged(current, item.row)) {
+      unchanged += 1
+    } else {
+      changed.push(item.row)
+    }
+  }
+  return { changed, unchanged }
+}
+
 async function prepareHomeLoanRow(db: D1Database, row: NormalizedRateRow): Promise<PreparedHomeLoanRow> {
   const parsedAt = nowIso()
   const seriesKey = homeLoanSeriesKey(row)
@@ -240,9 +318,9 @@ async function upsertHistoricalRateRowsFastPath(
   db: D1Database,
   rows: NormalizedRateRow[],
   options: HistoricalRateWriteOptions,
-): Promise<number> {
+): Promise<RateBatchWriteResult> {
   const preparedRows = await Promise.all(rows.map((row) => prepareHomeLoanRow(db, row)))
-  let written = 0
+  const result = emptyWriteResult()
 
   for (const part of chunk(preparedRows, 32)) {
     try {
@@ -254,12 +332,13 @@ async function upsertHistoricalRateRowsFastPath(
         }
       }
       await db.batch(statements)
-      written += part.length
+      result.written += part.length
+      result.skippedSideEffects += part.length
     } catch {
       for (const prepared of part) {
         try {
-          await upsertHistoricalRateRow(db, prepared.row, options)
-          written += 1
+          const rowResult = await upsertHistoricalRateRow(db, prepared.row, options)
+          addWriteResult(result, rowResult)
         } catch (error) {
           const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
           if (isHistoricalWriteContractError(error)) {
@@ -281,7 +360,7 @@ async function upsertHistoricalRateRowsFastPath(
     }
   }
 
-  return written
+  return result
 }
 
 export type HistoricalRateWriteOptions = {
@@ -291,13 +370,14 @@ export type HistoricalRateWriteOptions = {
   updateCatalogs?: boolean
   markSeriesSeen?: boolean
   upsertLatestSeries?: boolean
+  skipUnchangedRows?: boolean
 }
 
 export async function upsertHistoricalRateRow(
   db: D1Database,
   row: NormalizedRateRow,
   options: HistoricalRateWriteOptions = {},
-): Promise<void> {
+): Promise<RateBatchWriteResult> {
   const verdict = validateNormalizedRow(row)
   if (!verdict.ok) {
     throw new Error(`invalid_normalized_rate_row:${verdict.reason}`)
@@ -533,22 +613,33 @@ export async function upsertHistoricalRateRow(
       },
     )
   }
+  return { written: 1, unchanged: 0, skippedSideEffects: 0 }
 }
 
 export async function upsertHistoricalRateRows(
   db: D1Database,
   rows: NormalizedRateRow[],
   options: HistoricalRateWriteOptions = {},
-): Promise<number> {
-  if (rows.length === 0) return 0
-  if (shouldUseBatchedHomeLoanFastPath(options)) {
-    return upsertHistoricalRateRowsFastPath(db, rows, options)
+): Promise<RateBatchWriteResult> {
+  if (rows.length === 0) return emptyWriteResult()
+  let inputRows = rows
+  let unchanged = 0
+  if (options.skipUnchangedRows) {
+    const filtered = await filterChangedHomeLoanRows(db, rows)
+    inputRows = filtered.changed
+    unchanged = filtered.unchanged
+    if (inputRows.length === 0) return { written: 0, unchanged, skippedSideEffects: 0 }
   }
-  let written = 0
-  for (const row of rows) {
+  if (shouldUseBatchedHomeLoanFastPath(options)) {
+    const fast = await upsertHistoricalRateRowsFastPath(db, inputRows, options)
+    fast.unchanged += unchanged
+    return fast
+  }
+  const result = { written: 0, unchanged, skippedSideEffects: 0 }
+  for (const row of inputRows) {
     try {
-      await upsertHistoricalRateRow(db, row, options)
-      written += 1
+      const rowResult = await upsertHistoricalRateRow(db, row, options)
+      addWriteResult(result, rowResult)
     } catch (error) {
       const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
       if (isHistoricalWriteContractError(error)) {
@@ -567,5 +658,5 @@ export async function upsertHistoricalRateRows(
       })
     }
   }
-  return written
+  return result
 }

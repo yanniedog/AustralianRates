@@ -15,6 +15,7 @@
     };
 
     var uiIcons = (window.AR && window.AR.uiIcons) || {};
+    var LOADING_TEXT = 'Loading';
 
     function fallbackText(_icon, label, className, textClassName) {
         var classes = ['ar-icon-label'];
@@ -168,13 +169,6 @@
             ]
         },
         {
-            kind: 'toggle',
-            id: 'filter-include-manual',
-            label: 'Include manual runs',
-            icon: 'admin',
-            help: 'Include manually triggered runs in the result set.'
-        },
-        {
             kind: 'select',
             id: 'refresh-interval',
             label: 'Auto refresh',
@@ -212,7 +206,7 @@
             ],
             statSecondaryLabel: 'Cash rate',
             statSecondaryIcon: 'stats',
-            statSecondaryValue: '...',
+            statSecondaryValue: LOADING_TEXT,
             statSecondaryHelp: 'Current RBA cash rate.',
             notesHeading: 'Home loan notes',
             notesText: 'Rates are sourced from public CDR product feeds and grouped for shortlist-first comparison. Comparison rates, when available, use the standard Australian benchmark of $150,000 over 25 years.',
@@ -275,10 +269,10 @@
                 'How does the active slice differ by deposit tier?',
                 'Which account types stay competitive over time?'
             ],
-            statSecondaryLabel: 'Series continuity',
-            statSecondaryIcon: 'continuity',
-            statSecondaryValue: '...',
-            statSecondaryHelp: 'Series continuity by canonical product_key.',
+            statSecondaryLabel: 'Cash rate',
+            statSecondaryIcon: 'stats',
+            statSecondaryValue: LOADING_TEXT,
+            statSecondaryHelp: 'Current RBA cash rate.',
             notesHeading: 'Savings notes',
             notesText: 'Rates are sourced from public CDR savings feeds and grouped by account type, rate type, and deposit tier. Bonus and introductory conditions can materially change the observed rate.',
             continuityText: 'Series and charts follow canonical product_key identity so one line maps to one tracked savings product over time.',
@@ -332,10 +326,10 @@
                 'How much does payment frequency change the visible yield?',
                 'Which terms stay competitive across the same banks?'
             ],
-            statSecondaryLabel: 'Series continuity',
-            statSecondaryIcon: 'continuity',
-            statSecondaryValue: '...',
-            statSecondaryHelp: 'Series continuity by canonical product_key.',
+            statSecondaryLabel: 'Cash rate',
+            statSecondaryIcon: 'stats',
+            statSecondaryValue: LOADING_TEXT,
+            statSecondaryHelp: 'Current RBA cash rate.',
             notesHeading: 'Term deposit notes',
             notesText: 'Rates are sourced from public CDR term deposit feeds and grouped by term, deposit tier, and payment frequency. Maturity, rollover, and payment rules should be verified with the institution.',
             continuityText: 'Series and charts follow canonical product_key identity so one line maps to one tracked term-deposit product over time.',
@@ -605,7 +599,8 @@
         var statSecondaryHelp = ui.statSecondaryHelp || '';
         var statSecondaryLabel = ui.statSecondaryLabel || 'Cash rate';
         var statSecondaryIcon = ui.statSecondaryIcon || 'stats';
-        var statSecondaryValue = ui.statSecondaryValue || '...';
+        var statSecondaryValue = ui.statSecondaryValue || LOADING_TEXT;
+        // nosemgrep: javascript.browser.security.insecure-innerhtml,javascript.browser.security.insecure-document-method -- public page template values are local config or escaped before rendering.
         root.innerHTML = [
             '<section class="market-terminal" aria-label="' + esc(ui.title) + ' workspace">',
                 '<section class="terminal-column terminal-column-center">',
@@ -670,10 +665,11 @@
                                 '</div>',
                                 '<footer class="chart-footer" aria-label="Chart overview">',
                                     '<div class="terminal-stat-grid chart-footer-stats" id="hero-stats">',
-                                        '<div class="terminal-stat" id="stat-updated" data-help="Last collection date in the active slice." data-help-label="Updated"><span class="metric-code">' + iconText('calendar', 'Updated') + '</span><strong>...</strong></div>',
+                                        '<div class="terminal-stat" id="stat-updated" data-help="Last collection date in the active slice." data-help-label="Updated"><span class="metric-code">' + iconText('calendar', 'Updated') + '</span><strong>' + LOADING_TEXT + '</strong></div>',
                                         '<div class="terminal-stat" id="stat-cash-rate" data-help="' + esc(statSecondaryHelp) + '" data-help-label="' + esc(statSecondaryLabel) + '"><span class="metric-code">' + iconText(statSecondaryIcon, statSecondaryLabel) + '</span><strong>' + esc(statSecondaryValue) + '</strong></div>',
-                                        '<div class="terminal-stat" id="stat-records" data-help="Total rows available in the active slice." data-help-label="Rows"><span class="metric-code">' + iconText('rows', 'Rows') + '</span><strong>...</strong></div>',
-                                        '<div class="terminal-stat terminal-stat-small" id="stat-feeds" data-help="Last time bank feeds were collected and stored." data-help-label="Bank feeds"><span class="metric-code">' + iconText('calendar', 'Bank feeds') + '</span><strong>...</strong></div>',
+                                        '<div class="terminal-stat" id="stat-records" data-help="Total rows available in the active slice." data-help-label="Rows"><span class="metric-code">' + iconText('rows', 'Rows') + '</span><strong>' + LOADING_TEXT + '</strong></div>',
+                                        '<div class="terminal-stat terminal-stat-small" id="stat-feeds" data-help="Last time bank feeds were collected and stored." data-help-label="Bank feeds"><span class="metric-code">' + iconText('calendar', 'Bank feeds') + '</span><strong>' + LOADING_TEXT + '</strong></div>',
+                                        '<div class="terminal-stat terminal-stat-small" id="stat-slice-pairs" data-help="Counts for calendar day D vs prior day P among proper ingests in the active slice." data-help-label="Slice pair" aria-live="polite"><span class="metric-code">' + iconText('compare', 'Slice pair') + '</span><strong>' + LOADING_TEXT + '</strong></div>',
                                     '</div>',
                                 '</footer>',
                                 '<div class="chart-hidden-aux" hidden aria-hidden="true">',

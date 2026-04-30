@@ -8,10 +8,10 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="../foundation.css?v=d30e686e00">
     <link rel="stylesheet" href="../public-shell.css?v=5abed4c037">
-    <link rel="stylesheet" href="admin-layout.css?v=6354239a34">
-    <link rel="stylesheet" href="admin-pages.css?v=5594c2f51b">
-    <script src="../site-variant.js?v=3fa6bb1046"></script>
-    <script src="../theme.js?v=f42ffd8ec5"></script>
+    <link rel="stylesheet" href="admin-layout.css?v=4e575d1466">
+    <link rel="stylesheet" href="admin-pages.css?v=6eb10979ea">
+    <script src="../site-variant.js?v=c71ae0e0a2"></script>
+    <script src="../theme.js?v=76040c583e"></script>
 </head>
 <body class="ar-admin">
     <a href="#main-content" class="skip-link">Skip to content</a>
@@ -101,6 +101,15 @@
         <section class="admin-card" id="chart-ribbon-style-section">
             <h2>Rate report ribbon (bands mode)</h2>
             <p class="admin-hint">Used only when a rate report chart is in <strong>Ribbon</strong> view (Home Loans, Savings, Term Deposits). The chart shows each lender as a min&ndash;max rate band plus optional per-product lines after you select a lender. Saving writes one JSON object to <code>app_config.chart_ribbon_style</code>; the API merges missing keys with built-in defaults, clamps out-of-range values, and serves the result on <code>GET /site-ui</code> (about one minute cache). After saving, hard-refresh a public report page if you do not see a change immediately.</p>
+            <p class="admin-settings-group-title">Preset</p>
+            <p class="admin-hint">Choose a look. Selecting a preset fills every field below with its recommended values; you can then tweak individual numbers before saving. <strong>Glass</strong> is the default and uses a soft translucent gradient with a subtle highlight. <strong>Classic</strong> is the earlier flatter look with harder edges.</p>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <label for="ribbon-preset">Preset</label>
+                <select id="ribbon-preset" aria-label="Ribbon style preset">
+                    <option value="glass">Glass (recommended)</option>
+                    <option value="classic">Classic</option>
+                </select>
+            </div>
             <p class="admin-settings-group-title">Band outline (top and bottom edge of each lender band)</p>
             <p class="admin-hint">Edge width and opacity apply to the band boundary lines. &ldquo;Others&rdquo; rows apply while another lender is highlighted or selected so non-focused banks stay subdued.</p>
             <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;">
@@ -141,6 +150,28 @@
                 <label>Active z-index <input type="number" id="ribbon-z-a" min="4" max="120" step="1" value="48" style="width:4em;"></label>
                 <label>Inactive z-index <input type="number" id="ribbon-z-i" min="0" max="80" step="1" value="2" style="width:4em;"></label>
             </div>
+            <p class="admin-settings-group-title">Data gap handling</p>
+            <p class="admin-hint">When enabled, a bank's ribbon is forward-filled for up to 3 consecutive missing days using the last known value. Gaps of 4+ days still break the ribbon and are excluded from the mean. Applies only to per-bank ribbon data, not to raw product lines.</p>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label><input type="checkbox" id="ribbon-gap-fill" checked> Forward-fill short gaps (&le;3 days)</label>
+            </div>
+            <p class="admin-settings-group-title">Slice pair table (hover box)</p>
+            <p class="admin-hint">Optional compact grid under Min/Mean/Max on the chart&rsquo;s left hover panel (Ribbon mode only). Counts use <strong>visible product lines</strong> for the hovered chart day vs the <strong>previous day on the same chart axis</strong> (not ingest-lag moves). Leave colours empty to use theme-friendly defaults. Defaults stay subtle so the chart stays readable.</p>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label><input type="checkbox" id="ribbon-slice-table" checked> Show slice pair table</label>
+            </div>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label>Font size (px) <input type="number" id="ribbon-slice-font" min="7" max="18" step="1" value="11" style="width:4em;"></label>
+                <label>Text #RRGGBB <input type="text" id="ribbon-slice-text-hex" maxlength="7" placeholder="(theme)" pattern="#[0-9A-Fa-f]{6}" style="width:6.5em;"></label>
+                <label>Text alpha % <input type="number" id="ribbon-slice-text-a" min="0" max="100" value="100" style="width:4em;"></label>
+            </div>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label>Panel bg #RRGGBB <input type="text" id="ribbon-slice-bg-hex" maxlength="7" placeholder="#020617" pattern="#[0-9A-Fa-f]{6}" style="width:6.5em;"></label>
+                <label>Panel bg alpha % <input type="number" id="ribbon-slice-bg-a" min="0" max="92" value="22" style="width:4em;"></label>
+                <label>Grid #RRGGBB <input type="text" id="ribbon-slice-grid-hex" maxlength="7" placeholder="#64748b" pattern="#[0-9A-Fa-f]{6}" style="width:6.5em;"></label>
+                <label>Grid alpha % <input type="number" id="ribbon-slice-grid-a" min="0" max="100" value="35" style="width:4em;"></label>
+                <label>Grid width (px) <input type="number" id="ribbon-slice-grid-w" min="0" max="4" step="0.5" value="1" style="width:4em;"></label>
+            </div>
             <div class="rate-check-row" style="margin-top:10px;">
                 <button type="button" id="chart-ribbon-save-btn" class="primary">Save ribbon style</button>
                 <button type="button" id="chart-ribbon-reset-btn" class="secondary">Remove stored (defaults)</button>
@@ -149,9 +180,9 @@
         </section>
     </main>
     <script src="admin-portal.js?v=e6678ffa5b"></script>
-    <script src="admin-sidebar.js?v=6114d7314a"></script>
+    <script src="admin-sidebar.js?v=5cd756e1fc"></script>
     <script src="../ui-icons.js?v=0c1d292f12"></script>
-    <script src="../frame.js?v=c96cee988c"></script>
+    <script src="../frame.js?v=eb81d922ba"></script>
     <script>
         (function () {
             if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
@@ -180,28 +211,75 @@
                 'Europe/London',
                 'America/New_York',
             ];
-            var RIBBON_DEFAULT = {
-                edge_width: 2,
-                edge_opacity: 1,
-                edge_opacity_others: 0.14,
-                fill_opacity_end: 0.22,
-                fill_opacity_peak: 0.48,
-                focus_fill_opacity_end: 0.34,
-                focus_fill_opacity_peak: 0.70,
-                selected_fill_opacity_end: 0.44,
-                selected_fill_opacity_peak: 0.82,
-                fill_opacity_others_scale: 0.22,
-                mean_width: 1.25,
-                mean_opacity: 1,
-                mean_opacity_others: 0.18,
-                product_line_opacity_hover: 0.5,
-                product_line_opacity_selected: 0.85,
-                product_line_width_hover: 1.2,
-                product_line_width_selected: 2.5,
-                others_grey_mix: 0.62,
-                active_z: 48,
-                inactive_z: 2
+            var RIBBON_PRESETS = {
+                glass: {
+                    preset: 'glass',
+                    edge_width: 1.25,
+                    edge_opacity: 0.75,
+                    edge_opacity_others: 0.12,
+                    fill_opacity_end: 0.14,
+                    fill_opacity_peak: 0.42,
+                    focus_fill_opacity_end: 0.26,
+                    focus_fill_opacity_peak: 0.60,
+                    selected_fill_opacity_end: 0.34,
+                    selected_fill_opacity_peak: 0.72,
+                    fill_opacity_others_scale: 0.22,
+                    mean_width: 1,
+                    mean_opacity: 0.9,
+                    mean_opacity_others: 0.16,
+                    product_line_opacity_hover: 0.5,
+                    product_line_opacity_selected: 0.85,
+                    product_line_width_hover: 1.2,
+                    product_line_width_selected: 2.5,
+                    others_grey_mix: 0.62,
+                    active_z: 48,
+                    inactive_z: 2,
+                    gap_fill_enabled: true,
+                    slice_pair_table_enabled: true,
+                    slice_pair_font_px: 11,
+                    slice_pair_text_color: '',
+                    slice_pair_text_alpha: 1,
+                    slice_pair_table_bg_color: '',
+                    slice_pair_table_bg_alpha: 0.22,
+                    slice_pair_grid_color: '',
+                    slice_pair_grid_alpha: 0.35,
+                    slice_pair_grid_width_px: 1
+                },
+                classic: {
+                    preset: 'classic',
+                    edge_width: 2,
+                    edge_opacity: 1,
+                    edge_opacity_others: 0.14,
+                    fill_opacity_end: 0.22,
+                    fill_opacity_peak: 0.48,
+                    focus_fill_opacity_end: 0.34,
+                    focus_fill_opacity_peak: 0.70,
+                    selected_fill_opacity_end: 0.44,
+                    selected_fill_opacity_peak: 0.82,
+                    fill_opacity_others_scale: 0.22,
+                    mean_width: 1.25,
+                    mean_opacity: 1,
+                    mean_opacity_others: 0.18,
+                    product_line_opacity_hover: 0.5,
+                    product_line_opacity_selected: 0.85,
+                    product_line_width_hover: 1.2,
+                    product_line_width_selected: 2.5,
+                    others_grey_mix: 0.62,
+                    active_z: 48,
+                    inactive_z: 2,
+                    gap_fill_enabled: true,
+                    slice_pair_table_enabled: true,
+                    slice_pair_font_px: 11,
+                    slice_pair_text_color: '',
+                    slice_pair_text_alpha: 1,
+                    slice_pair_table_bg_color: '',
+                    slice_pair_table_bg_alpha: 0.22,
+                    slice_pair_grid_color: '',
+                    slice_pair_grid_alpha: 0.35,
+                    slice_pair_grid_width_px: 1
+                }
             };
+            var RIBBON_DEFAULT = RIBBON_PRESETS.glass;
             var msgEl = document.getElementById('msg');
             var desktopRangeEl = document.getElementById('chart-legend-opacity-desktop-pct');
             var desktopOutEl = document.getElementById('chart-legend-opacity-desktop-out');
@@ -273,6 +351,10 @@
                     var el = document.getElementById(id);
                     if (el) el.value = String(val);
                 }
+                var presetEl = document.getElementById('ribbon-preset');
+                var presetVal = String(d.preset || 'glass').toLowerCase();
+                if (!RIBBON_PRESETS[presetVal]) presetVal = 'glass';
+                if (presetEl) presetEl.value = presetVal;
                 v('ribbon-edge-w', d.edge_width);
                 v('ribbon-edge-op', pct100(d.edge_opacity));
                 v('ribbon-edge-op-o', pct100(d.edge_opacity_others));
@@ -293,6 +375,18 @@
                 v('ribbon-grey-mix', pct100(d.others_grey_mix));
                 v('ribbon-z-a', d.active_z);
                 v('ribbon-z-i', d.inactive_z);
+                var gapFillEl = document.getElementById('ribbon-gap-fill');
+                if (gapFillEl) gapFillEl.checked = d.gap_fill_enabled !== false;
+                var sliceTbl = document.getElementById('ribbon-slice-table');
+                if (sliceTbl) sliceTbl.checked = d.slice_pair_table_enabled === true;
+                v('ribbon-slice-font', d.slice_pair_font_px);
+                v('ribbon-slice-text-hex', d.slice_pair_text_color ? String(d.slice_pair_text_color) : '');
+                v('ribbon-slice-text-a', pct100(d.slice_pair_text_alpha));
+                v('ribbon-slice-bg-hex', d.slice_pair_table_bg_color ? String(d.slice_pair_table_bg_color) : '');
+                v('ribbon-slice-bg-a', Math.round(Math.max(0, Math.min(0.92, Number(d.slice_pair_table_bg_alpha) || 0)) * 100));
+                v('ribbon-slice-grid-hex', d.slice_pair_grid_color ? String(d.slice_pair_grid_color) : '');
+                v('ribbon-slice-grid-a', pct100(d.slice_pair_grid_alpha));
+                v('ribbon-slice-grid-w', d.slice_pair_grid_width_px);
             }
             function collectRibbonObject() {
                 function n(id, fallback) {
@@ -304,7 +398,11 @@
                 function p(id, fallbackPct) {
                     return Math.max(0, Math.min(100, n(id, fallbackPct))) / 100;
                 }
+                var presetEl = document.getElementById('ribbon-preset');
+                var presetVal = presetEl ? String(presetEl.value || '').trim().toLowerCase() : 'glass';
+                if (!RIBBON_PRESETS[presetVal]) presetVal = 'glass';
                 return {
+                    preset: presetVal,
                     edge_width: Math.max(0, Math.min(12, n('ribbon-edge-w', 2))),
                     edge_opacity: p('ribbon-edge-op', 100),
                     edge_opacity_others: p('ribbon-edge-op-o', 14),
@@ -324,7 +422,29 @@
                     product_line_width_selected: Math.max(0, Math.min(8, n('ribbon-pl-w-s', 2.5))),
                     others_grey_mix: p('ribbon-grey-mix', 62),
                     active_z: Math.max(4, Math.min(120, Math.floor(n('ribbon-z-a', 48)))),
-                    inactive_z: Math.max(0, Math.min(80, Math.floor(n('ribbon-z-i', 2))))
+                    inactive_z: Math.max(0, Math.min(80, Math.floor(n('ribbon-z-i', 2)))),
+                    gap_fill_enabled: !!(document.getElementById('ribbon-gap-fill') || {}).checked,
+                    slice_pair_table_enabled: !!(document.getElementById('ribbon-slice-table') || {}).checked,
+                    slice_pair_font_px: Math.max(7, Math.min(18, Math.round(n('ribbon-slice-font', 11)))),
+                    slice_pair_text_color: (function () {
+                        var el = document.getElementById('ribbon-slice-text-hex');
+                        var s = el ? String(el.value || '').trim() : '';
+                        return /^#[0-9a-fA-F]{6}$/.test(s) ? s : '';
+                    })(),
+                    slice_pair_text_alpha: p('ribbon-slice-text-a', 100),
+                    slice_pair_table_bg_color: (function () {
+                        var el = document.getElementById('ribbon-slice-bg-hex');
+                        var s = el ? String(el.value || '').trim() : '';
+                        return /^#[0-9a-fA-F]{6}$/.test(s) ? s : '';
+                    })(),
+                    slice_pair_table_bg_alpha: Math.max(0, Math.min(0.92, n('ribbon-slice-bg-a', 22) / 100)),
+                    slice_pair_grid_color: (function () {
+                        var el = document.getElementById('ribbon-slice-grid-hex');
+                        var s = el ? String(el.value || '').trim() : '';
+                        return /^#[0-9a-fA-F]{6}$/.test(s) ? s : '';
+                    })(),
+                    slice_pair_grid_alpha: p('ribbon-slice-grid-a', 35),
+                    slice_pair_grid_width_px: Math.max(0, Math.min(4, n('ribbon-slice-grid-w', 1)))
                 };
             }
 
@@ -696,6 +816,14 @@
             if (chartRibbonSaveBtn) chartRibbonSaveBtn.addEventListener('click', saveChartRibbonStyle);
             var chartRibbonResetBtn = document.getElementById('chart-ribbon-reset-btn');
             if (chartRibbonResetBtn) chartRibbonResetBtn.addEventListener('click', resetChartRibbonStyle);
+            var ribbonPresetEl = document.getElementById('ribbon-preset');
+            if (ribbonPresetEl) {
+                ribbonPresetEl.addEventListener('change', function () {
+                    var key = String(ribbonPresetEl.value || '').trim().toLowerCase();
+                    var preset = RIBBON_PRESETS[key];
+                    if (preset) applyRibbonToForm(preset);
+                });
+            }
             var doctorSaveBtn = document.getElementById('doctor-schedule-save-btn');
             if (doctorSaveBtn) doctorSaveBtn.addEventListener('click', saveDoctorSchedule);
             var doctorResetBtn = document.getElementById('doctor-schedule-reset-btn');

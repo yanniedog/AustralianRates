@@ -1,6 +1,6 @@
 /**
  * Slim precomputed cache for chart and pivot data. Served when request matches default filters.
- * Refreshed every 15 min by cron. KV caches any response for 5 min.
+ * Refreshed by manual/admin jobs and daily public package refresh.
  */
 
 import type { EnvBindings } from '../types'
@@ -37,8 +37,8 @@ const D1_CACHE_FRESH_MINUTES = 90
  */
 export const GZIP_PREFIX = 'gz:'
 export const MAX_UNCOMPRESSED_CHARS = 500_000
-/** KV TTL for computed responses (seconds). Set to 2 h so KV stays warm across the hourly cron refresh cycle. */
-export const CHART_CACHE_KV_TTL = 7200
+/** KV TTL for public packages (seconds). Must bridge one missed daily package refresh without user D1 fallback. */
+export const CHART_CACHE_KV_TTL = 129600
 export { PRECOMPUTED_CHART_WINDOWS }
 
 const CONSUMER_DEFAULT_SCOPE = 'preset:consumer-default' as const
@@ -571,6 +571,7 @@ export async function getCachedOrCompute(
   representation: 'day' | 'change',
   params: Record<string, string | undefined>,
   compute: () => Promise<ChartAnalyticsPayload>,
+  options?: { allowLiveCompute?: boolean },
 ): Promise<ChartAnalyticsPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const key = buildChartCacheKey(section, representation, params)
 
@@ -620,6 +621,10 @@ export async function getCachedOrCompute(
         fromCache: 'd1',
       }
     }
+  }
+
+  if (options?.allowLiveCompute === false) {
+    throw new Error(`chart_cache_live_compute_disabled:${section}:${representation}`)
   }
 
   const result = await compute()

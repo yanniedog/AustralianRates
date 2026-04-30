@@ -508,4 +508,19 @@ describe('shouldIgnoreStatusActionableLog', () => {
       ),
     ).toBe(true)
   })
+
+  it('ignores public analytics_series_slow performance warnings', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'public',
+          level: 'warn',
+          code: 'analytics_series_slow',
+          message: 'analytics_series_slow',
+          context: '{"section":"savings"}',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
 })

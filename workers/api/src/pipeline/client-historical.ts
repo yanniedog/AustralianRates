@@ -356,11 +356,14 @@ export async function ingestHistoricalPullTaskBatch(
     })
   }
 
-  const [mortgageWritten, savingsWritten, tdWritten] = await Promise.all([
+  const [mortgageWriteResult, savingsWriteResult, tdWriteResult] = await Promise.all([
     upsertHistoricalRateRows(env.DB, mortgageRows),
     upsertSavingsRateRows(env.DB, savingsRows),
     upsertTdRateRows(env.DB, tdRows),
   ])
+  const mortgageWritten = mortgageWriteResult.written
+  const savingsWritten = savingsWriteResult.written
+  const tdWritten = tdWriteResult.written
 
   await addHistoricalTaskBatchCounts(env.DB, {
     taskId: input.taskId,

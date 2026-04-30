@@ -136,8 +136,8 @@
                 var localDateTime = formatLocalDateTime(fromSource.date, timeZone);
                 return {
                     ok: true,
-                    text: dateTimeCanonical + ' (local: ' + localDateTime + ')',
-                    title: 'Source date: ' + canonical + ' | Local date/time in ' + timeZone + ': ' + localDateTime + ' (parsed_at unavailable)'
+                    text: localDateTime,
+                    title: 'Source date: ' + canonical + ' | Local (' + timeZone + '): ' + localDateTime + ' | UTC: ' + dateTimeCanonical + ' (parsed_at unavailable)'
                 };
             }
             if (/^\d{4}-\d{2}-\d{2}$/.test(canonical)) {
@@ -146,8 +146,8 @@
                     var localDateTimeFallback = formatLocalDateTime(midnight.date, timeZone);
                     return {
                         ok: true,
-                        text: canonical + ' 00:00 (local: ' + localDateTimeFallback + ')',
-                        title: 'Source date: ' + canonical + ' | Local date/time in ' + timeZone + ': ' + localDateTimeFallback + ' (time assumed midnight; parsed_at unavailable)'
+                        text: localDateTimeFallback,
+                        title: 'Source date: ' + canonical + ' | Local (' + timeZone + '): ' + localDateTimeFallback + ' | Interpreted as midnight UTC (parsed_at unavailable)'
                     };
                 }
             }
@@ -167,8 +167,8 @@
         var localDateTime = formatLocalDateTime(parsed.date, timeZone);
         return {
             ok: true,
-            text: dateTimeCanonical + ' (local: ' + localDateTime + ')',
-            title: 'Source date: ' + canonical + ' | Local date/time in ' + timeZone + ': ' + localDateTime + ' | parsed_at: ' + parsed.raw
+            text: localDateTime,
+            title: 'Source date: ' + canonical + ' | Local (' + timeZone + '): ' + localDateTime + ' | UTC: ' + dateTimeCanonical + ' | parsed_at: ' + parsed.raw
         };
     }
 

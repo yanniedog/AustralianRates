@@ -34,12 +34,15 @@ easy to bisect if a visual regression appears.
 | `site/ar-charts.js` | 1092 | Split report-view lifecycle from generic chart orchestration. The report snapshot bootstrap / lightweight render path (`buildReportPreviewModel`, `renderReportPreview`, `refreshReportRangePreview`, report draw branch) can move into a dedicated report-controller module. |
 | `site/ar-explorer.js` | 1299 | Split by explorer subsystem (filters, sort, URL sync, DOM wiring). |
 | `site/admin/status-page.js` | 1213 | Split by section card: coverage-gaps, logs, replay-queue, remediation-hints. |
-| `site/economic-data.js` | 1048 | Split by metric family (RBA / CPI / other). |
+| `site/economic-data.js` | 995 | Existing large economic dashboard entrypoint; this PR split signal summary/chart, axis helpers, and legend-stack rendering into sibling modules. Split catalog controls and ECharts raw/indexed rendering next. |
 | `site/frame.js` | 1045 | Split chrome bootstrap from runtime re-render / resize handlers. |
 | `tools/node-scripts/src/test-homepage.ts` | 1490 | Split by suite: smoke, pivot, mobile, sections. |
 | `tools/node-scripts/src/integrity/repair-presence-prod.ts` | 1359 | Split by repair stage (detect / plan / apply / verify). |
 | `tools/node-scripts/src/integrity/data-integrity-audit-prod.ts` | 1340 | Split by audit dimension (CDR coverage, presence, duplicates, timestamps). |
 | `workers/api/src/db/integrity-checks.ts` | 945 | Below 1000 but trending up — plan a split when next touched. |
+| `workers/api/src/db/chart-cache.ts` | 594 | Below 1000 but above the refactor trigger and touched by cost-control work. Split gzip/KV helpers, scope resolution, and D1 cache read/write operations into sibling modules before the next cache behavior change. |
+| `workers/api/src/routes/snapshot-public.ts` | 321 | Over the review threshold. Split public package request handling from package construction when replacing the current snapshot shape with the v2 `meta`/`dict`/`hierarchy`/`ribbon` package. |
+| `workers/api/src/pipeline/scheduler-dispatch.ts` | 323 | Over the review threshold after adding public package refresh. Split task routing from task execution if more scheduled job logic is added. |
 
 ## Exempt (do not split for size)
 

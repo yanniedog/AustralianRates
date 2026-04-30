@@ -17,6 +17,7 @@ import { markDetailProcessedAndFinalize } from '../finalization'
 import { elapsedMs, serializeForLog } from '../log-helpers'
 import { bankNameForLender, markHomeLoanSeriesSeenForRun, markProductsSeenForRun, markSavingsSeriesSeenForRun, markTdSeriesSeenForRun } from '../series-tracking'
 import { splitValidatedRows, splitValidatedSavingsRows, splitValidatedTdRows } from '../validation'
+import { isD1EmergencyMinimumWrites } from '../../../utils/d1-emergency'
 
 export function resolveProductDetailEndpoint(
   job: Pick<ProductDetailJob, 'endpointUrl'>,
@@ -89,6 +90,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
     let fetchedRows = 0
     let acceptedRows = 0
     let written = 0
+    let unchangedRows = 0
     let validationMs = 0
     let fetchStatus = 0
     let fetchEventId: number | null | undefined
@@ -172,12 +174,14 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         bankName,
         collectionDate: job.collectionDate,
         productIds: details.rows.map((row) => row.productId),
+        skip: isD1EmergencyMinimumWrites(env),
       })
       await markHomeLoanSeriesSeenForRun(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
         collectionDate: job.collectionDate,
         rows: details.rows,
+        skip: isD1EmergencyMinimumWrites(env),
       })
       const validationStartedAt = Date.now()
       const { accepted, dropped } = splitValidatedRows(details.rows)
@@ -207,7 +211,11 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         throw new Error(`detail_lineage_persist_failed:home_loans:${job.productId}`)
       }
       if (accepted.length > 0) {
-        written = await runWithD1Retry(async () => upsertHistoricalRateRows(env.DB, accepted))
+        const writeResult = await runWithD1Retry(async () =>
+          upsertHistoricalRateRows(env.DB, accepted, { skipUnchangedRows: isD1EmergencyMinimumWrites(env) }),
+        )
+        written = writeResult.written
+        unchangedRows = writeResult.unchanged
       }
       await recordLenderDatasetWriteStats(env.DB, {
         runId: job.runId,
@@ -215,6 +223,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         dataset: 'home_loans',
         acceptedRows,
         writtenRows: written,
+        unchangedRows,
         droppedRows: dropped.length,
         detailFetchEventCount: fetchEventId != null ? 1 : 0,
       })
@@ -294,12 +303,14 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         bankName,
         collectionDate: job.collectionDate,
         productIds: details.savingsRows.map((row) => row.productId),
+        skip: isD1EmergencyMinimumWrites(env),
       })
       await markSavingsSeriesSeenForRun(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
         collectionDate: job.collectionDate,
         rows: details.savingsRows,
+        skip: isD1EmergencyMinimumWrites(env),
       })
       const validationStartedAt = Date.now()
       const { accepted, dropped } = splitValidatedSavingsRows(details.savingsRows)
@@ -329,7 +340,11 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         throw new Error(`detail_lineage_persist_failed:savings:${job.productId}`)
       }
       if (accepted.length > 0) {
-        written = await runWithD1Retry(async () => upsertSavingsRateRows(env.DB, accepted))
+        const writeResult = await runWithD1Retry(async () =>
+          upsertSavingsRateRows(env.DB, accepted, { skipUnchangedRows: isD1EmergencyMinimumWrites(env) }),
+        )
+        written = writeResult.written
+        unchangedRows = writeResult.unchanged
       }
       await recordLenderDatasetWriteStats(env.DB, {
         runId: job.runId,
@@ -337,6 +352,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         dataset: 'savings',
         acceptedRows,
         writtenRows: written,
+        unchangedRows,
         droppedRows: dropped.length,
         detailFetchEventCount: fetchEventId != null ? 1 : 0,
       })
@@ -416,12 +432,14 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         bankName,
         collectionDate: job.collectionDate,
         productIds: details.tdRows.map((row) => row.productId),
+        skip: isD1EmergencyMinimumWrites(env),
       })
       await markTdSeriesSeenForRun(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
         collectionDate: job.collectionDate,
         rows: details.tdRows,
+        skip: isD1EmergencyMinimumWrites(env),
       })
       const validationStartedAt = Date.now()
       const { accepted, dropped } = splitValidatedTdRows(details.tdRows)
@@ -451,7 +469,11 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         throw new Error(`detail_lineage_persist_failed:term_deposits:${job.productId}`)
       }
       if (accepted.length > 0) {
-        written = await runWithD1Retry(async () => upsertTdRateRows(env.DB, accepted))
+        const writeResult = await runWithD1Retry(async () =>
+          upsertTdRateRows(env.DB, accepted, { skipUnchangedRows: isD1EmergencyMinimumWrites(env) }),
+        )
+        written = writeResult.written
+        unchangedRows = writeResult.unchanged
       }
       await recordLenderDatasetWriteStats(env.DB, {
         runId: job.runId,
@@ -459,6 +481,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         dataset: 'term_deposits',
         acceptedRows,
         writtenRows: written,
+        unchangedRows,
         droppedRows: dropped.length,
         detailFetchEventCount: fetchEventId != null ? 1 : 0,
       })
@@ -476,7 +499,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
       context:
         `dataset=${job.dataset} product=${job.productId} status=${fetchStatus}` +
         ` lineage(detail=${fetchEventId ?? 'none'},fallback=${fallbackFetchEventId ?? 'none'})` +
-        ` fetched=${fetchedRows} accepted=${acceptedRows} written=${written}` +
+        ` fetched=${fetchedRows} accepted=${acceptedRows} written=${written} unchanged=${unchangedRows}` +
         ` dropped_reasons=${serializeForLog(droppedReasons)}` +
         ` timings(ms):validate=${validationMs},total=${elapsedMs(startedAt)}`,
     })

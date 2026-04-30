@@ -63,7 +63,7 @@ describe('batched savings and td writers', () => {
     ]
 
     const written = await upsertSavingsRateRows(env.DB, rows)
-    expect(written).toBe(2)
+    expect(written.written).toBe(2)
 
     const historical = await env.DB
       .prepare('SELECT COUNT(*) AS n FROM historical_savings_rates WHERE product_id = ?')
@@ -133,7 +133,7 @@ describe('batched savings and td writers', () => {
     ]
 
     const written = await upsertTdRateRows(env.DB, rows)
-    expect(written).toBe(2)
+    expect(written.written).toBe(2)
 
     const historical = await env.DB
       .prepare('SELECT COUNT(*) AS n FROM historical_term_deposit_rates WHERE product_id = ?')

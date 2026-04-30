@@ -3,6 +3,7 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  normalizeAccountType,
   validateNormalizedSavingsRow,
   validateNormalizedTdRow,
   type NormalizedSavingsRow,
@@ -45,6 +46,23 @@ function cdrDetailJson(
     },
   })
 }
+
+describe('normalizeAccountType', () => {
+  it('classifies everyday savings products as savings, not transaction', () => {
+    expect(normalizeAccountType('HSBC Everyday Savings Account')).toBe('savings')
+    expect(normalizeAccountType('Everyday Saver')).toBe('savings')
+    expect(normalizeAccountType('Everyday Save Account')).toBe('savings')
+  })
+
+  it('still classifies everyday spend/transaction products as transaction', () => {
+    expect(normalizeAccountType('Everyday Account')).toBe('transaction')
+    expect(normalizeAccountType('CommBank Smart Access everyday account')).toBe('transaction')
+  })
+
+  it('classifies at-call wording before other heuristics', () => {
+    expect(normalizeAccountType('At call deposit')).toBe('at_call')
+  })
+})
 
 describe('validateNormalizedSavingsRow', () => {
   it('accepts a valid savings row from real-data fixture', () => {
@@ -150,6 +168,18 @@ describe('validateNormalizedSavingsRow', () => {
     expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
   })
 
+  it('rejects cdr savings rows when cdr detail category indicates a different dataset', () => {
+    const row = loadRealSavingsFixture()
+    const verdict = validateNormalizedSavingsRow({
+      ...row,
+      productName: 'ANZ Plus',
+      cdrProductDetailJson: cdrDetailJson('TERM_DEPOSITS', 'ANZ Plus'),
+      dataQualityFlag: 'cdr_live',
+    })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('cdr_category_mismatch_savings')
+  })
+
   it('rejects blocked savings names even when CDR category metadata matches', () => {
     const row = loadRealSavingsFixture()
     const verdict = validateNormalizedSavingsRow({
@@ -233,6 +263,18 @@ describe('validateNormalizedTdRow', () => {
     })
     expect(verdict.ok).toBe(false)
     expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
+  })
+
+  it('rejects cdr term-deposit rows when cdr detail category indicates a different dataset', () => {
+    const row = loadRealTdFixture()
+    const verdict = validateNormalizedTdRow({
+      ...row,
+      productName: 'Business Investment Account',
+      cdrProductDetailJson: cdrDetailJson('TRANS_AND_SAVINGS_ACCOUNTS', 'Business Investment Account'),
+      dataQualityFlag: 'cdr_live',
+    })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('cdr_category_mismatch_term_deposits')
   })
 
   it('rejects TD rows below the minimum confidence for the quality flag', () => {

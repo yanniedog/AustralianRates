@@ -1,6 +1,7 @@
 /**
  * Landing-page overview: RBA rate (with change/check times) and latest bank feed summary.
  * Used by GET /overview to power hero stats and hover tooltips.
+ * RBA is returned for every dataset; feed summary is section-specific.
  */
 
 export type RbaLandingRow = {
@@ -25,6 +26,7 @@ const FEEDS_SQL = `
     bank_name AS latest_bank,
     product_name AS latest_product
   FROM historical_loan_rates
+  WHERE (quarantine_reason IS NULL OR TRIM(quarantine_reason) = '')
   ORDER BY collection_date DESC, parsed_at DESC
   LIMIT 1
 ` as const
@@ -36,6 +38,7 @@ const SAVINGS_FEEDS_SQL = `
     bank_name AS latest_bank,
     product_name AS latest_product
   FROM historical_savings_rates
+  WHERE (quarantine_reason IS NULL OR TRIM(quarantine_reason) = '')
   ORDER BY collection_date DESC, parsed_at DESC
   LIMIT 1
 ` as const
@@ -47,6 +50,7 @@ const TD_FEEDS_SQL = `
     bank_name AS latest_bank,
     product_name AS latest_product
   FROM historical_term_deposit_rates
+  WHERE (quarantine_reason IS NULL OR TRIM(quarantine_reason) = '')
   ORDER BY collection_date DESC, parsed_at DESC
   LIMIT 1
 ` as const
@@ -104,12 +108,13 @@ export type LandingOverviewPayload = {
   } | null
 }
 
+/** RBA block is the same for every dataset; feeds are section-specific. */
 export async function getLandingOverview(
   db: D1Database,
   section: DatasetKind,
 ): Promise<LandingOverviewPayload> {
   const [rba, feeds] = await Promise.all([
-    section === 'home_loans' ? getLatestRbaForLanding(db) : Promise.resolve(null),
+    getLatestRbaForLanding(db),
     getLatestFeedsForLanding(db, section),
   ])
   return {

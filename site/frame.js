@@ -18,7 +18,6 @@
     var currentTooltipTarget = null;
     var longPressTimer = 0;
     var helpSheet = null;
-    var donateSheet = null;
     var navScrim = null;
 
     (function stripNocacheFromUrl() {
@@ -66,10 +65,7 @@
     function fallbackText(_icon, label, className, textClassName) {
         var classes = ['ar-icon-label'];
         if (className) classes.push(className);
-        return '' +
-            '<span class="' + classes.join(' ') + '">' +
-                '<span class="' + esc(textClassName || 'ar-icon-label-text') + '">' + esc(label) + '</span>' +
-            '</span>';
+        return '<span class="' + classes.join(' ') + '"><span class="' + esc(textClassName || 'ar-icon-label-text') + '">' + esc(label) + '</span></span>';
     }
 
     function fallbackPanel(_icon, label, className) {
@@ -191,12 +187,7 @@
     }
 
     function publicSections() {
-        return [
-            sectionMeta('home-loans'),
-            sectionMeta('savings'),
-            sectionMeta('term-deposits'),
-            sectionMeta('economic-data')
-        ];
+        return [sectionMeta('home-loans'), sectionMeta('savings'), sectionMeta('term-deposits'), sectionMeta('economic-data')];
     }
 
     function isSectionActive(currentPath, item) {
@@ -322,19 +313,9 @@
             '</nav>';
     }
 
-    function actionTextMarkup(label) {
-        return '<span class="site-action-text">' + esc(label) + '</span>';
-    }
-
-    function actionIconMarkup(icon, label) {
-        return iconOnly(icon, label, 'site-action-icon') + actionTextMarkup(label);
-    }
-
+    function actionTextMarkup(label) { return '<span class="site-action-text">' + esc(label) + '</span>'; } function actionIconMarkup(icon, label) { return iconOnly(icon, label, 'site-action-icon') + actionTextMarkup(label); }
     function headerSegmentMarkup(context) {
         if (context.admin || context.legal || context.notFound) return '';
-        // All data sources are trusted: publicSections() returns hardcoded metadata,
-        // window.location.pathname is the current page path (not user input),
-        // and all values are escaped via esc() before insertion into innerHTML.
         var sections = publicSections();
         var currentPath = window.location.pathname;
         return '' +
@@ -358,24 +339,21 @@
         var refreshTitle = context.admin
             ? 'Reload and bypass cached assets (keeps admin session)'
             : 'Clear site cache and reload to get the latest version';
-        var prefix = [];
+        var actions = [];
         if (!context.admin && !context.legal && !context.notFound) {
-            prefix.push(
-                '<a href="' + esc(GITHUB_REPO_URL) + '" class="icon-btn secondary buttonish site-action-btn site-action-github" target="_blank" rel="noopener" aria-label="GitHub repository" title="GitHub repository">' +
-                    iconOnly('github', 'GitHub', 'site-action-icon') +
-                '</a>',
-                '<button type="button" id="site-donate-btn" class="icon-btn secondary site-action-btn site-action-donate" aria-label="Donate" title="Donate">' +
-                    iconOnly('heart', 'Donate', 'site-action-icon') +
-                '</button>'
-            );
+            actions.push('<button type="button" id="site-donate-btn" class="icon-btn secondary site-action-btn site-action-donate" aria-label="Donate" title="Donate">' + iconOnly('heart', 'Donate', 'site-action-icon') + '</button>');
         }
-        var actions = [
-            '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
-            '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + iconOnly('help', 'Help', 'site-action-icon') + '</button>',
-            '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="' + esc(refreshTitle) + '">' + actionIconMarkup('refresh', 'Refresh') + '</button>',
-        ];
+        actions.push('<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>');
+        if (context.admin) {
+            actions.push(
+                '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + iconOnly('help', 'Help', 'site-action-icon') + '</button>',
+                '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="' + esc(refreshTitle) + '">' + actionIconMarkup('refresh', 'Refresh') + '</button>'
+            );
+        } else {
+            actions.push('<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + iconOnly('help', 'Help', 'site-action-icon') + '</button>', '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="' + esc(refreshTitle) + '">' + actionIconMarkup('refresh', 'Refresh') + '</button>');
+        }
         actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
-        return '<div class="site-header-actions">' + prefix.join('') + actions.join('') + '</div>';
+        return '<div class="site-header-actions">' + actions.join('') + '</div>';
     }
 
     function buildHeader() {
@@ -385,13 +363,10 @@
         if (!inner) return;
 
         var context = getPageContext();
-        inner.innerHTML =
-            '<div class="site-brand-lockup">' +
-                '<a href="/" class="site-brand-mark" aria-label="AustralianRates home"><img src="/assets/branding/ar-mark.svg" alt="" class="site-brand-logo"></a>' +
-                '<div class="site-brand-copy">' +
-                    '<a href="/" class="site-brand">AustralianRates</a>' +
-                    '<span class="site-brand-tagline">' + esc(currentPageLabel(context)) + '</span>' +
-                '</div>' +
+        // nosemgrep: javascript.browser.security.insecure-innerhtml,javascript.browser.security.insecure-document-method -- header values come from hardcoded route metadata and are escaped before rendering.
+        inner.innerHTML = '<div class="site-brand-lockup">' +
+            '<a href="/" class="site-brand-mark" aria-label="AustralianRates home"><img src="/assets/branding/ar-mark.svg" alt="" class="site-brand-logo"></a>' +
+            '<div class="site-brand-copy"><a href="/" class="site-brand">AustralianRates</a><span class="site-brand-tagline">' + esc(currentPageLabel(context)) + '</span></div>' +
             '</div>' +
             headerSegmentMarkup(context) +
             '<div class="site-header-context">' +
@@ -441,10 +416,22 @@
         }
         if (!menuBody) return;
 
+        var actionBody = '' +
+            '<div class="site-menu-actions" aria-label="Quick actions">' +
+                '<button type="button" class="site-tree-leaf site-tree-action" data-guide-open>' + iconText('help', 'Guide', 'nav-link-label') + '</button>' +
+                (!context.legal && !context.notFound
+                    ? '<button type="button" class="site-tree-leaf site-tree-action" data-donate-open>' + iconText('heart', 'Donate', 'nav-link-label') + '</button>'
+                    : '') +
+                '<button type="button" class="site-tree-leaf site-tree-action" data-help-open>' + iconText('help', 'Help', 'nav-link-label') + '</button>' +
+                '<button type="button" class="site-tree-leaf site-tree-action" data-refresh-site>' + iconText('refresh', 'Refresh', 'nav-link-label') + '</button>' +
+                '<a class="site-tree-leaf" href="' + esc(GITHUB_REPO_URL) + '" target="_blank" rel="noopener">' + iconText('github', 'GitHub', 'nav-link-label') + '</a>' +
+            '</div>';
+
         var drawer = document.createElement('aside');
         drawer.id = 'site-menu-drawer';
         drawer.className = 'site-menu-drawer';
         drawer.hidden = true;
+        // nosemgrep: javascript.browser.security.insecure-innerhtml,javascript.browser.security.insecure-document-method -- menu markup is assembled from escaped hardcoded route metadata.
         drawer.innerHTML =
             '<div class="site-menu-backdrop" data-menu-close></div>' +
             '<div class="site-menu-panel">' +
@@ -453,6 +440,7 @@
                     '<button type="button" class="icon-btn secondary" data-menu-close aria-label="Close menu">' + iconOnly('close', 'Close menu') + '</button>' +
                 '</div>' +
                 menuBody +
+                actionBody +
             '</div>';
         document.body.appendChild(drawer);
     }
@@ -631,148 +619,17 @@
             '</div>';
     }
 
-    function getDonateNetworks() {
-        var raw = window.AR && Array.isArray(window.AR.donateNetworks) ? window.AR.donateNetworks : [];
-        return raw.filter(function (n) {
-            return n && String(n.address || '').trim().length > 0;
-        });
-    }
-
-    function donateQrUrl(address) {
-        var text = String(address || '').trim();
-        if (!text) return '';
-        return 'https://quickchart.io/qr?size=220x220&margin=2&text=' + encodeURIComponent(text);
-    }
-
-    function donateModalHtml(networks) {
-        var sub = 'Choose a network, scan the QR, or copy the wallet to support AustralianRates.';
-        if (!networks.length) {
-            return '' +
-                '<div class="site-help-backdrop" data-donate-close></div>' +
-                '<div class="site-help-panel site-donate-panel" role="dialog" aria-modal="true" aria-labelledby="site-donate-title">' +
-                    '<div class="site-help-head">' +
-                        '<h2 id="site-donate-title" tabindex="-1">Fuel the development</h2>' +
-                        '<button type="button" class="icon-btn secondary" data-donate-close aria-label="Close">' + iconOnly('close', 'Close') + '</button>' +
-                    '</div>' +
-                    '<div class="site-help-body site-donate-body">' +
-                        '<p class="site-donate-lead">' + esc(sub) + '</p>' +
-                        '<p class="site-donate-config-hint">Add receiving addresses to <code class="site-donate-code">window.AR.donateNetworks</code> in <code class="site-donate-code">site/site-variant.js</code> (same layout as Order Skew: Solana, Cardano, BNB, Dogecoin, Monero). Empty <code class="site-donate-code">address</code> values hide that tab.</p>' +
-                    '</div>' +
-                '</div>';
-        }
-        var tabs = networks.map(function (n, i) {
-            return '<button type="button" class="site-donate-tab" role="tab" aria-selected="' + (i === 0 ? 'true' : 'false') + '" data-donate-tab="' + i + '" id="site-donate-tab-' + i + '">' + esc(n.label) + '</button>';
-        }).join('');
-        var panes = networks.map(function (n, i) {
-            var addr = String(n.address || '').trim();
-            var shortLabel = String(n.label || '').replace(/\s*\([^)]*\)\s*$/, '').trim() || 'Wallet';
-            var qr = donateQrUrl(addr);
-            return '' +
-                '<div class="site-donate-pane" role="tabpanel" aria-labelledby="site-donate-tab-' + i + '" data-donate-pane="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
-                    '<p class="site-donate-wallet-label">' + esc(shortLabel) + ' wallet</p>' +
-                    '<p class="site-donate-field-label">Wallet address</p>' +
-                    '<pre class="site-donate-address" aria-label="Wallet address">' + esc(addr) + '</pre>' +
-                    '<button type="button" class="buttonish secondary site-donate-copy" data-donate-copy>Copy address</button>' +
-                    (qr
-                        ? '<img class="site-donate-qr" src="' + esc(qr) + '" width="220" height="220" alt="" loading="lazy" decoding="async">'
-                        : '') +
-                '</div>';
-        }).join('');
-        return '' +
-            '<div class="site-help-backdrop" data-donate-close></div>' +
-            '<div class="site-help-panel site-donate-panel" role="dialog" aria-modal="true" aria-labelledby="site-donate-title">' +
-                '<div class="site-help-head">' +
-                    '<h2 id="site-donate-title" tabindex="-1">Fuel the development</h2>' +
-                    '<button type="button" class="icon-btn secondary" data-donate-close aria-label="Close">' + iconOnly('close', 'Close') + '</button>' +
-                '</div>' +
-                '<div class="site-help-body site-donate-body">' +
-                    '<p class="site-donate-lead">' + esc(sub) + '</p>' +
-                    '<p class="site-donate-blockchain-label">Blockchain</p>' +
-                    '<div class="site-donate-tabs" role="tablist" aria-label="Blockchain">' + tabs + '</div>' +
-                    '<div id="site-donate-copy-status" class="site-donate-copy-status" aria-live="polite" hidden></div>' +
-                    '<div class="site-donate-panels">' + panes + '</div>' +
-                '</div>' +
-            '</div>';
-    }
-
     function isDonateOpen() {
-        return !!(donateSheet && !donateSheet.hidden);
-    }
-
-    function ensureDonateSheet() {
-        if (donateSheet) return donateSheet;
-        donateSheet = document.createElement('div');
-        donateSheet.id = 'site-donate-sheet';
-        donateSheet.className = 'site-help-sheet site-donate-sheet';
-        donateSheet.hidden = true;
-        donateSheet.addEventListener('click', function (event) {
-            if (event.target && event.target.closest && event.target.closest('[data-donate-close]')) {
-                closeDonateSheet();
-                return;
-            }
-            var tabBtn = event.target && event.target.closest ? event.target.closest('[data-donate-tab]') : null;
-            if (tabBtn) {
-                var idx = Number(tabBtn.getAttribute('data-donate-tab'));
-                if (!Number.isNaN(idx)) setDonateTab(idx);
-                return;
-            }
-            if (event.target && event.target.closest && event.target.closest('[data-donate-copy]')) {
-                var pane = event.target.closest('.site-donate-pane');
-                var addrEl = pane && pane.querySelector('.site-donate-address');
-                var t = addrEl ? String(addrEl.textContent || '').trim() : '';
-                if (!t) return;
-                var statusEl = document.getElementById('site-donate-copy-status');
-                var done = function () {
-                    if (statusEl) {
-                        statusEl.textContent = 'Value copied!';
-                        statusEl.hidden = false;
-                        window.setTimeout(function () {
-                            if (statusEl) statusEl.hidden = true;
-                        }, 2200);
-                    }
-                };
-                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                    navigator.clipboard.writeText(t).then(done).catch(function () {});
-                }
-            }
-        });
-        document.body.appendChild(donateSheet);
-        return donateSheet;
-    }
-
-    function setDonateTab(index) {
-        var sheet = ensureDonateSheet();
-        var tabs = sheet.querySelectorAll('[data-donate-tab]');
-        var panes = sheet.querySelectorAll('[data-donate-pane]');
-        for (var i = 0; i < tabs.length; i++) {
-            tabs[i].setAttribute('aria-selected', i === index ? 'true' : 'false');
-        }
-        for (var j = 0; j < panes.length; j++) {
-            if (j === index) panes[j].removeAttribute('hidden');
-            else panes[j].setAttribute('hidden', 'hidden');
-        }
-    }
-
-    function openDonateSheet() {
-        closeHelpSheet();
-        setMenuOpen(false);
-        var sheet = ensureDonateSheet();
-        var networks = getDonateNetworks();
-        sheet.innerHTML = donateModalHtml(networks);
-        sheet.hidden = false;
-        document.body.classList.add('has-donate-open');
-        syncOverlayState();
-        var focusTarget = sheet.querySelector('button[data-donate-close]') || sheet.querySelector('#site-donate-title');
-        if (focusTarget && typeof focusTarget.focus === 'function') {
-            window.setTimeout(function () {
-                focusTarget.focus();
-            }, 0);
-        }
+        return document.body.classList.contains('has-donate-open');
     }
 
     function closeDonateSheet() {
-        if (!donateSheet) return;
-        donateSheet.hidden = true;
+        if (window.ARDonate && typeof window.ARDonate.close === 'function') {
+            window.ARDonate.close();
+            return;
+        }
+        var sheet = document.getElementById('site-donate-sheet');
+        if (sheet) sheet.hidden = true;
         document.body.classList.remove('has-donate-open');
         syncOverlayState();
     }
@@ -798,7 +655,7 @@
 
     function syncOverlayState() {
         var menuOpen = document.body.classList.contains('is-nav-open');
-        var overlayOpen = menuOpen || isHelpOpen() || isDonateOpen();
+        var overlayOpen = menuOpen || isHelpOpen() || isDonateOpen() || document.body.classList.contains('has-guide-open');
         var scrim = ensureNavScrim();
         var showNavScrim = menuOpen && isPublicMobileMenuContext(getPageContext());
         scrim.hidden = !showNavScrim;
@@ -862,10 +719,7 @@
     function shouldShowMenuButton(context) {
         if (context.legal) return true;
         if (context.admin || context.notFound) return false;
-        return !!(window.matchMedia && (
-            window.matchMedia('(max-width: 760px)').matches ||
-            window.matchMedia('(max-height: 760px) and (orientation: landscape)').matches
-        ));
+        return true;
     }
 
     function syncMenuButtonState(context) {
@@ -1064,12 +918,6 @@
                 openHelpSheet(currentPageLabel(context), pageHelpText(context));
             });
         }
-        var donateBtn = document.getElementById('site-donate-btn');
-        if (donateBtn) {
-            donateBtn.addEventListener('click', function () {
-                openDonateSheet();
-            });
-        }
         if (menuBtn) {
             menuBtn.addEventListener('click', function () {
                 setMenuOpen(!document.body.classList.contains('is-nav-open'));
@@ -1079,7 +927,22 @@
             var link = event.target && event.target.closest ? event.target.closest('a[href]') : null;
             if (link && link.id === 'site-footer-donate') {
                 event.preventDefault();
-                openDonateSheet();
+                return;
+            }
+            if (event.target && event.target.closest && event.target.closest('[data-donate-open]')) {
+                event.preventDefault();
+                return;
+            }
+            if (event.target && event.target.closest && event.target.closest('[data-help-open]')) {
+                event.preventDefault();
+                openHelpSheet(currentPageLabel(getPageContext()), pageHelpText(getPageContext()));
+                return;
+            }
+            if (event.target && event.target.closest && event.target.closest('[data-refresh-site]')) {
+                event.preventDefault();
+                var ctx = getPageContext();
+                if (ctx.admin) softCacheBustReload();
+                else clearSiteDataAndReload();
                 return;
             }
             var navigation = samePageHashNavigation(context, link);

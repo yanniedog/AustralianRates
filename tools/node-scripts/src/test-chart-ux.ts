@@ -293,22 +293,22 @@ async function verifyRibbonTrayHighlight(page, failures, labelPrefix) {
     await page.waitForTimeout(250);
     let state = await readRibbonChipClasses();
     const baselineDim = state.dim;
-    if (baselineDim !== 0) {
-        return;
-    }
 
     await chips.nth(0).hover({ timeout: 15000 });
     await page.waitForTimeout(350);
     state = await readRibbonChipClasses();
-    if (state.dim !== state.n - 1 || state.firstDim) {
-        return;
+    if (state.dim < baselineDim || state.dim > state.n - 1) {
+        failures.push(`${labelPrefix}: hover chip 0 expected dim count between baseline ${baselineDim} and ${state.n - 1}, got ${state.dim}`);
+    }
+    if (state.firstDim) {
+        failures.push(`${labelPrefix}: hovered first chip should not have is-ribbon-dim`);
     }
 
     await neutral.hover({ timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(350);
     state = await readRibbonChipClasses();
     if (state.dim !== baselineDim) {
-        return;
+        failures.push(`${labelPrefix}: after unhover expected baseline ${baselineDim} is-ribbon-dim, got ${state.dim} (pointer should not hold ribbon focus)`);
     }
 
     await chips.nth(0).click({ timeout: 15000 });

@@ -17,23 +17,25 @@ export const TD_API_BASE_PATH = '/api/term-deposit-rates'
 export const ECONOMIC_API_BASE_PATH = '/api/economic-data'
 export const MELBOURNE_TIMEZONE = 'Australia/Melbourne'
 export const MELBOURNE_TARGET_HOUR = 6
-/** Second default wall-clock hour (Melbourne) for scheduled daily ingest when `MELBOURNE_DAILY_INGEST_HOURS` is unset. */
+/** Legacy second wall-clock hour; production now uses MELBOURNE_DAILY_INGEST_HOURS=6 for one daily ingest. */
 export const MELBOURNE_SECOND_INGEST_HOUR = 18
 /**
- * Four UTC hours: pairs bracket Melbourne 06:00 (19,20) and 18:00 (07,08) across AEDT/AEST.
- * `handleScheduledDaily` gates on local hours from `MELBOURNE_DAILY_INGEST_HOURS` or 6+18.
+ * Two UTC hours bracket Melbourne 06:00 across AEDT/AEST. The handler gates on local wall-clock
+ * hours, so only one of these ticks performs the daily CDR ingest.
  */
-export const DAILY_SCHEDULE_CRON_EXPRESSION = '0 7,8,19,20 * * *'
+export const DAILY_SCHEDULE_CRON_EXPRESSION = '0 19,20 * * *'
+/** Daily post-ingest public package refresh; writes KV packages so users do not hit D1. */
+export const PUBLIC_PACKAGE_REFRESH_CRON_EXPRESSION = '0 23 * * *'
 export const SITE_HEALTH_CRON_EXPRESSION = '*/15 * * * *'
-/** Top-of-hour UTC: Wayback backfill, chart pivot cache refresh, same-day RBA cash tick (not full daily ingest). */
+/** Manual/admin-only maintenance; no longer scheduled in production. */
 export const HOURLY_MAINTENANCE_CRON_EXPRESSION = '0 * * * *'
 /** 23:59 daily; handler runs monthly export only on the last day of each month. */
 export const MONTHLY_EXPORT_CRON_EXPRESSION = '59 23 * * *'
-/** 04:00 UTC daily; data integrity audit for admin UI. */
+/** Manual/admin-only integrity audit; no longer scheduled in production. */
 export const INTEGRITY_AUDIT_CRON_EXPRESSION = '0 4 * * *'
-/** 09:00 UTC daily; daily DB backup (one day of data) for instant download and reconstruction. */
+/** Manual/admin-only daily DB backup; no longer scheduled in production. */
 export const DAILY_BACKUP_CRON_EXPRESSION = '0 9 * * *'
-/** 23:59 Melbourne/Hobart local time daily; dual UTC hours cover DST and handler gates on local wall clock. */
+/** Manual/admin-only historical quality snapshot; no longer scheduled in production. */
 export const HISTORICAL_QUALITY_DAILY_CRON_EXPRESSION = '59 12,13 * * *'
 export const SCHEDULE_CRON_EXPRESSION = DAILY_SCHEDULE_CRON_EXPRESSION
 // Hourly cron should keep attempting the active Melbourne collection date until coverage is complete.

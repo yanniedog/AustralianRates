@@ -60,11 +60,20 @@ type TdReportFilters = TdAnalyticsInput & ReportFiltersBase
 type ReportFilters = HomeLoanReportFilters | SavingsReportFilters | TdReportFilters
 
 type WhereClause = { clause: string; binds: Array<string | number> }
+type BandSourceRow = {
+  bank_name: string
+  series_key: string
+  date: string
+  interest_rate: number
+}
 type SectionConfig = {
   deltaTable: string
   historyTable: string
   refreshSql: string
 }
+
+const BAND_PRODUCT_GAP_FILL_MAX_DAYS = 3
+export const REPORT_BANDS_SOURCE_VERSION = 3
 
 function rateBoundsForReportSection(section: ReportPlotSection): { min: number; max: number } {
   switch (section) {
@@ -89,6 +98,47 @@ function isValidBandPoint(
   if (lo > hi + 1e-9) return false
   if (lo < bounds.min - 1e-9 || hi > bounds.max + 1e-9) return false
   return true
+}
+
+/** ISO date only; used for window end and band point keys. */
+const YMD_ISO = /^\d{4}-\d{2}-\d{2}$/
+
+function addCalendarDaysUtcYmd(ymd: string, deltaDays: number): string {
+  const t = Date.parse(`${ymd}T00:00:00Z`) + deltaDays * 86400000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+/**
+ * When newer calendar days fall inside the resolved query window but a bank has no new qualifying rows
+ * (sparse ingest timing), replicate the last computed band forward so ribbons align with meta.end_date
+ * and neighbouring banks rather than disappearing at the trailing edge.
+ */
+export function forwardFillReportBandSeriesToWindowEnd(
+  seriesList: ReportBandSeries[],
+  windowEndYmd: string | undefined,
+): ReportBandSeries[] {
+  if (!windowEndYmd?.trim()) return seriesList
+  const end = windowEndYmd.trim().slice(0, 10)
+  if (!YMD_ISO.test(end)) return seriesList
+  return seriesList.map((s) => {
+    const pts = s.points
+    if (!pts.length) return s
+    const last = pts[pts.length - 1]
+    const lastD = String(last.date || '').slice(0, 10)
+    if (!YMD_ISO.test(lastD) || lastD >= end) return s
+    const out: ReportBandPoint[] = [...pts]
+    let d = addCalendarDaysUtcYmd(lastD, 1)
+    while (d <= end) {
+      out.push({
+        date: d,
+        min_rate: last.min_rate,
+        max_rate: last.max_rate,
+        mean_rate: last.mean_rate,
+      })
+      d = addCalendarDaysUtcYmd(d, 1)
+    }
+    return { ...s, points: out }
+  })
 }
 
 const TD_TERM_PREFERENCE = [12, 6, 24, 3, 18, 36, 9, 2, 1]
@@ -303,6 +353,7 @@ function meta(
     end_date: String(filters.endDate || ''),
     chart_window: filters.chartWindow ? String(filters.chartWindow) : null,
     resolved_term_months: resolvedTermMonths,
+    ...(mode === 'bands' ? { band_source_version: REPORT_BANDS_SOURCE_VERSION } : {}),
   }
 }
 
@@ -340,6 +391,14 @@ function buildHomeLoanWhere(filters: HomeLoanReportFilters): WhereClause {
   if (filters.startDate) { where.push('d.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('d.collection_date <= ?'); binds.push(filters.endDate) }
   if (!filters.includeRemoved) where.push('COALESCE(d.is_removed, 0) = 0')
+  where.push(`NOT EXISTS (
+    SELECT 1
+    FROM historical_loan_rates q
+    WHERE q.series_key = d.series_key
+      AND q.collection_date = d.collection_date
+      AND q.quarantine_reason IS NOT NULL
+      AND TRIM(q.quarantine_reason) != ''
+  )`)
   applyHomeLoanCompareEdgeExclusions(where, 'd.product_name', filters.excludeCompareEdgeCases)
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', binds }
 }
@@ -368,6 +427,14 @@ function buildSavingsWhere(filters: SavingsReportFilters): WhereClause {
   if (filters.startDate) { where.push('d.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('d.collection_date <= ?'); binds.push(filters.endDate) }
   if (!filters.includeRemoved) where.push('COALESCE(d.is_removed, 0) = 0')
+  where.push(`NOT EXISTS (
+    SELECT 1
+    FROM historical_savings_rates q
+    WHERE q.series_key = d.series_key
+      AND q.collection_date = d.collection_date
+      AND q.quarantine_reason IS NOT NULL
+      AND TRIM(q.quarantine_reason) != ''
+  )`)
   applySavingsCompareEdgeExclusions(where, 'd.product_name', filters.excludeCompareEdgeCases)
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', binds }
 }
@@ -400,6 +467,14 @@ function buildTdWhere(
   if (filters.startDate) { where.push('d.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('d.collection_date <= ?'); binds.push(filters.endDate) }
   if (!filters.includeRemoved) where.push('COALESCE(d.is_removed, 0) = 0')
+  where.push(`NOT EXISTS (
+    SELECT 1
+    FROM historical_term_deposit_rates q
+    WHERE q.series_key = d.series_key
+      AND q.collection_date = d.collection_date
+      AND q.quarantine_reason IS NOT NULL
+      AND TRIM(q.quarantine_reason) != ''
+  )`)
   applyTdCompareEdgeExclusions(where, 'd.product_name', 'd.min_deposit', filters.excludeCompareEdgeCases)
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', binds }
 }
@@ -413,6 +488,11 @@ function buildWhere(section: ReportPlotSection, filters: ReportFilters, override
 async function historyTableHasRows(db: D1Database, table: string): Promise<boolean> {
   const row = await db.prepare(`SELECT 1 AS ok FROM ${table} LIMIT 1`).first<{ ok: number }>()
   return Number(row?.ok || 0) === 1
+}
+
+async function tableHasColumn(db: D1Database, table: string, column: string): Promise<boolean> {
+  const result = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>()
+  return (result.results || []).some((row) => row.name === column)
 }
 
 export async function refreshReportDeltaTable(
@@ -460,6 +540,7 @@ export async function ensureReportDeltaTableReady(
 async function resolveTdTermMonths(
   db: D1Database,
   filters: TdReportFilters,
+  table = 'td_report_deltas',
 ): Promise<number | null> {
   const explicit = normalizeTermMonths(filters.termMonths)
   if (explicit != null) return explicit
@@ -467,7 +548,7 @@ async function resolveTdTermMonths(
   const result = await db
     .prepare(
       `SELECT DISTINCT d.term_months
-       FROM td_report_deltas d
+       FROM ${table} d
        ${where.clause}
        ORDER BY d.term_months ASC`,
     )
@@ -514,55 +595,85 @@ async function queryBandSeries(
   table: string,
   where: WhereClause,
   section: ReportPlotSection,
+  windowEndYmd: string | undefined,
 ): Promise<ReportBandSeries[]> {
-  // Omit interest_rate <= 0 from aggregates so placeholder/stale zero rows do not pin TD/savings ribbons to the baseline.
   const result = await db
     .prepare(
       `SELECT
          d.bank_name,
+         COALESCE(NULLIF(TRIM(d.series_key), ''), d.bank_name || '|' || d.product_id) AS series_key,
          d.collection_date AS date,
-         MIN(CASE WHEN d.interest_rate > 0 THEN d.interest_rate END) AS min_rate,
-         MAX(CASE WHEN d.interest_rate > 0 THEN d.interest_rate END) AS max_rate,
-         AVG(CASE WHEN d.interest_rate > 0 THEN d.interest_rate END) AS mean_rate
+         d.interest_rate
        FROM ${table} d
        ${where.clause}
-       GROUP BY d.bank_name, d.collection_date
-       ORDER BY LOWER(d.bank_name) ASC, d.collection_date ASC`,
+       ORDER BY LOWER(d.bank_name) ASC, d.collection_date ASC, series_key ASC`,
     )
     .bind(...where.binds)
-    .all<{
-      bank_name: string
-      date: string
-      min_rate: number
-      max_rate: number
-      mean_rate: number
-    }>()
+    .all<BandSourceRow>()
 
   const bounds = rateBoundsForReportSection(section)
-  const byBank = new Map<string, ReportBandSeries>()
+  const byBankRows = new Map<string, BandSourceRow[]>()
   for (const row of result.results || []) {
     const bankName = String(row.bank_name || '').trim()
     if (!bankName) continue
-    const lo = Number(row.min_rate)
-    const hi = Number(row.max_rate)
-    const mean = Number(row.mean_rate)
-    if (!isValidBandPoint(lo, hi, mean, bounds)) continue
-    const point: ReportBandPoint = {
-      date: String(row.date || ''),
-      min_rate: lo,
-      max_rate: hi,
-      mean_rate: mean,
+    const value = Number(row.interest_rate)
+    if (!Number.isFinite(value) || value <= 0 || value < bounds.min || value > bounds.max) continue
+    const sourceRow = {
+      bank_name: bankName,
+      series_key: String(row.series_key || '').trim() || `${bankName}|unknown`,
+      date: String(row.date || '').slice(0, 10),
+      interest_rate: value,
     }
-    if (!byBank.has(bankName)) {
-      byBank.set(bankName, {
-        bank_name: bankName,
-        color_key: bankName.toLowerCase(),
-        points: [],
-      })
-    }
-    byBank.get(bankName)?.points.push(point)
+    if (!sourceRow.date) continue
+    const rows = byBankRows.get(bankName) || []
+    rows.push(sourceRow)
+    byBankRows.set(bankName, rows)
   }
-  return Array.from(byBank.values())
+
+  const out: ReportBandSeries[] = []
+  for (const [bankName, rows] of byBankRows.entries()) {
+    const dates = Array.from(new Set(rows.map((row) => row.date))).sort((left, right) => left.localeCompare(right))
+    const valuesBySeries = new Map<string, Map<string, number>>()
+    for (const row of rows) {
+      const byDate = valuesBySeries.get(row.series_key) || new Map<string, number>()
+      byDate.set(row.date, row.interest_rate)
+      valuesBySeries.set(row.series_key, byDate)
+    }
+
+    const lastKnown = new Map<string, { date: string; value: number }>()
+    const points: ReportBandPoint[] = []
+    for (const date of dates) {
+      const values: number[] = []
+      for (const [seriesKey, byDate] of valuesBySeries.entries()) {
+        const exact = byDate.get(date)
+        if (exact != null) {
+          values.push(exact)
+          lastKnown.set(seriesKey, { date, value: exact })
+          continue
+        }
+        const previous = lastKnown.get(seriesKey)
+        if (!previous) continue
+        const gapDays = Math.round(
+          (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${previous.date}T00:00:00Z`)) / 86400000,
+        )
+        if (gapDays > 0 && gapDays <= BAND_PRODUCT_GAP_FILL_MAX_DAYS) values.push(previous.value)
+      }
+      if (!values.length) continue
+      const lo = Math.min(...values)
+      const hi = Math.max(...values)
+      const mean = values.reduce((sum, value) => sum + value, 0) / values.length
+      if (!isValidBandPoint(lo, hi, mean, bounds)) continue
+      const point: ReportBandPoint = {
+        date,
+        min_rate: lo,
+        max_rate: hi,
+        mean_rate: mean,
+      }
+      points.push(point)
+    }
+    if (points.length) out.push({ bank_name: bankName, color_key: bankName.toLowerCase(), points })
+  }
+  return forwardFillReportBandSeriesToWindowEnd(out, windowEndYmd)
 }
 
 export async function queryReportPlotPayload(
@@ -571,15 +682,15 @@ export async function queryReportPlotPayload(
   mode: ReportPlotMode,
   filters: ReportFilters,
 ): Promise<ReportPlotPayload> {
-  await ensureReportDeltaTableReady(db, section)
   const config = SECTION_CONFIG[section]
-  const resolvedTermMonths =
-    section === 'term_deposits'
-      ? await resolveTdTermMonths(db, filters as TdReportFilters)
-      : null
-  const where = buildWhere(section, filters, { termMonths: resolvedTermMonths })
 
   if (mode === 'moves') {
+    await ensureReportDeltaTableReady(db, section)
+    const resolvedTermMonths =
+      section === 'term_deposits'
+        ? await resolveTdTermMonths(db, filters as TdReportFilters)
+        : null
+    const where = buildWhere(section, filters, { termMonths: resolvedTermMonths })
     const points = await queryMovesRows(db, config.deltaTable, where)
     const payload: ReportMovesPayload = {
       mode,
@@ -589,7 +700,19 @@ export async function queryReportPlotPayload(
     return payload
   }
 
-  const series = await queryBandSeries(db, config.deltaTable, where, section)
+  const historyFilters = (await tableHasColumn(db, config.historyTable, 'is_removed'))
+    ? filters
+    : { ...filters, includeRemoved: true }
+  const resolvedTermMonths =
+    section === 'term_deposits'
+      ? await resolveTdTermMonths(db, historyFilters as TdReportFilters, config.historyTable)
+      : null
+  const where = buildWhere(section, historyFilters, { termMonths: resolvedTermMonths })
+  const windowEndYmd =
+    typeof historyFilters.endDate === 'string' && historyFilters.endDate.trim()
+      ? historyFilters.endDate.trim().slice(0, 10)
+      : undefined
+  const series = await queryBandSeries(db, config.historyTable, where, section, windowEndYmd)
   const payload: ReportBandsPayload = {
     mode,
     meta: meta(section, mode, filters, resolvedTermMonths),

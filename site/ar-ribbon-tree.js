@@ -47,6 +47,13 @@
             var num = Number(label);
             return Number.isFinite(num) ? num : Number.MAX_SAFE_INTEGER;
         }
+        if (field === 'account_type') {
+            var norm = String(label || '').trim().toLowerCase().replace(/\s+/g, '_');
+            if (norm === 'savings') return 0;
+            if (norm === 'transaction') return 1;
+            if (norm === 'at_call' || norm === 'atcall') return 2;
+            return Number.MAX_SAFE_INTEGER;
+        }
         return Number.MAX_SAFE_INTEGER;
     }
 

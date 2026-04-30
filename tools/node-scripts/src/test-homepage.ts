@@ -15,6 +15,8 @@ const CLARITY_SRC = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
 /** Tight defaults; override via env if production is slow or flaky. */
 const GOTO_TIMEOUT_MS = Number(process.env.TEST_GOTO_TIMEOUT_MS || 20000);
 const SEL_TIMEOUT_MS = Number(process.env.TEST_SELECTOR_TIMEOUT_MS || 10000);
+/** Longer wait only for hero vs /snapshot alignment (inline + deferred bundles). */
+const HERO_SNAPSHOT_WAIT_MS = Number(process.env.TEST_HERO_SNAPSHOT_WAIT_MS || 45000);
 const POST_NAV_SETTLE_MS = Number(process.env.TEST_POST_NAV_SETTLE_MS || 350);
 const ACTION_TIMEOUT_MS = Number(process.env.TEST_ACTION_TIMEOUT_MS || 45000);
 const EXPLORER_TABLE_TIMEOUT_MS = Number(process.env.TEST_EXPLORER_TABLE_TIMEOUT_MS || 16000);
@@ -96,6 +98,20 @@ function fail(results, message) {
 
 function warn(results, message) {
     results.warnings.push(`WARN ${message}`);
+}
+
+/** Calendar-day distance for YYYY-MM-DD strings (UTC date parts, no TZ shift). */
+function ymdUtcMs(ymd) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || '').trim());
+    if (!m) return NaN;
+    return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+function ymdCalendarDaysApart(a, b) {
+    const msA = ymdUtcMs(a);
+    const msB = ymdUtcMs(b);
+    if (!Number.isFinite(msA) || !Number.isFinite(msB)) return NaN;
+    return Math.round((msB - msA) / 86400000);
 }
 
 async function closeWithTimeout(label, action, timeoutMs = 6000) {
@@ -333,6 +349,7 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
         marketTerminal: !!document.querySelector('.market-terminal'),
         introSteps: Array.from(document.querySelectorAll('.market-intro-step-index')).map((el) => String(el.textContent || '').trim()),
         introActions: Array.from(document.querySelectorAll('.market-intro-actions .buttonish')).map((el) => String(el.textContent || '').trim()).filter(Boolean),
+        marketIntroTitle: String(document.querySelector('.market-intro-title')?.textContent || '').trim(),
         hasObjectStringLeak: String(document.body.textContent || '').indexOf('[object Object]') >= 0,
         chartViews: Array.from(document.querySelectorAll('[data-chart-view]')).map((el) => ({
             label: String(el.getAttribute('data-ui-label') || el.textContent || '').trim(),
@@ -360,11 +377,15 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
         (
             shell.introSteps.join(',') === '01,02,03'
             || (shell.introActions.length >= 2 && shell.introActions.every((entry) => entry.length >= 4))
+            || (shell.marketIntroTitle.length >= 4)
         )
     ) {
         pass(results, `${label}: hero workspace affordances render without object-string leakage`);
     } else {
-        fail(results, `${label}: hero workspace affordances are malformed (${shell.introActions.join(', ') || shell.introSteps.join(', ') || 'missing'})`);
+        fail(
+            results,
+            `${label}: hero workspace affordances are malformed (${shell.introActions.join(', ') || shell.introSteps.join(', ') || shell.marketIntroTitle || 'missing'})`,
+        );
     }
 
     const actualChartViews = shell.chartViews.map((view) => view.label);
@@ -451,6 +472,82 @@ async function verifyHeroStats(page, results, label) {
         pass(results, `${label}: summary stats loaded`);
     } else {
         fail(results, `${label}: summary stats incomplete (${stats.join(' | ') || 'none'})`);
+    }
+}
+
+/** Production: hero Updated must reflect snapshot filtersResolved.endDate (aligned with charts). */
+async function verifyHeroUpdatedAlignsWithSnapshot(page, results, label, apiBasePath, pathname = '/') {
+    const base = apiBasePath.replace(/\/?$/, '');
+    const basePageUrl = withSharedQuery(pathname, apiBasePath);
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0) {
+            const sep = basePageUrl.includes('?') ? '&' : '?';
+            const retryUrl = `${basePageUrl}${sep}e2e_snapshot_bust=${Date.now()}`;
+            await gotoPublic(page, retryUrl);
+        }
+
+        const bust = `_=${Date.now()}`;
+        const snapshotUrl = `${baseOrigin}${base}/snapshot?${bust}`;
+        let endYmd = '';
+        try {
+            const res = await fetch(snapshotUrl, { headers: { Accept: 'application/json', 'Cache-Control': 'no-store' } });
+            const body = await res.json();
+            const fr = body && body.ok && body.data && body.data.filtersResolved;
+            endYmd = fr ? String(fr.endDate || fr.end_date || '').trim().slice(0, 10) : '';
+        } catch (_) {
+            endYmd = '';
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(endYmd)) {
+            fail(results, `${label}: snapshot filtersResolved.endDate missing (${endYmd || 'empty'})`);
+            return;
+        }
+
+        await page
+            .waitForFunction(() => {
+                const d =
+                    window.AR && window.AR.snapshot && window.AR.snapshot.data && window.AR.snapshot.data.filtersResolved;
+                if (!d) return false;
+                const raw = String(d.endDate || d.end_date || '')
+                    .trim()
+                    .slice(0, 10);
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
+                const shown = document.querySelector('#stat-updated strong');
+                const t = shown ? String(shown.textContent || '').trim() : '';
+                return t.length > 0 && t !== 'Unavailable';
+            }, null, { timeout: HERO_SNAPSHOT_WAIT_MS })
+            .catch(() => null);
+
+        const state = await page.evaluate(() => {
+            const d =
+                window.AR && window.AR.snapshot && window.AR.snapshot.data && window.AR.snapshot.data.filtersResolved;
+            const dom = document.querySelector('#stat-updated strong');
+            return {
+                fr: d ? String(d.endDate || d.end_date || '').trim().slice(0, 10) : '',
+                text: dom ? String(dom.textContent || '').trim() : '',
+            };
+        });
+
+        const apart = ymdCalendarDaysApart(state.fr, endYmd);
+        const coherent =
+            state.fr === endYmd || (Number.isFinite(apart) && Math.abs(apart) === 1 && /^\d{4}-\d{2}-\d{2}$/.test(state.fr));
+        if (!coherent) {
+            if (attempt === 0) continue;
+            fail(results, `${label}: page filtersResolved.endDate (${state.fr || 'none'}) ≠ API (${endYmd}) after coherence reload`);
+            return;
+        }
+        if (state.fr !== endYmd && Number.isFinite(apart) && Math.abs(apart) === 1) {
+            warn(
+                results,
+                `${label}: filtersResolved.endDate differs by one calendar day (page=${state.fr} API=${endYmd}); tolerated at ingest window boundary.`,
+            );
+        }
+        if (!state.text || state.text === 'Unavailable') {
+            fail(results, `${label}: hero Updated text missing or unavailable`);
+            return;
+        }
+        pass(results, `${label}: hero Updated aligns with snapshot filtersResolved.endDate`);
+        return;
     }
 }
 
@@ -924,10 +1021,14 @@ async function verifyChartSmoke(page, results, label) {
     else fail(results, `${label}: chart summary did not populate after draw`);
 }
 
-async function verifyPivotLoad(page, results, label) {
-    const pivotAvailable = await page.evaluate(() => {
+async function isPivotWorkspaceAvailable(page) {
+    return await page.evaluate(() => {
         return !!(document.getElementById('tab-pivot') && document.getElementById('panel-pivot') && document.getElementById('load-pivot'));
     }).catch(() => false);
+}
+
+async function verifyPivotLoad(page, results, label) {
+    const pivotAvailable = await isPivotWorkspaceAvailable(page);
     if (!pivotAvailable) {
         pass(results, `${label}: pivot workspace removed from the public site`);
         return;
@@ -1138,6 +1239,11 @@ async function verifyTabsAndHash(page, results, label, baseUrl) {
     }
 
     await gotoPublic(page, baseUrl + '#pivot');
+    if (!(await isPivotWorkspaceAvailable(page))) {
+        pass(results, `${label}: #pivot deep link ignored because pivot workspace is removed from the public site`);
+        return;
+    }
+
     const restoredPivot = await page.evaluate(() => {
         const pivot = document.getElementById('panel-pivot');
         const button = document.getElementById('tab-pivot');
@@ -1548,6 +1654,7 @@ async function verifySectionSmoke(page, results, section, noscriptBatchPromise) 
     await verifyNoscriptFromBatch(noscriptBatchPromise, section.name, results);
     await verifyPublicTriggerRemoval(page, results, section.name);
     await verifyChartSmoke(page, results, section.name);
+    await verifyHeroUpdatedAlignsWithSnapshot(page, results, section.name, section.apiBasePath, section.path);
     await page.setViewportSize({ width: 1440, height: 1200 });
 }
 
@@ -1555,6 +1662,12 @@ async function runPivotSuite(page, results, phase, homeUrl) {
     const pivotUrl = `${homeUrl}#pivot`;
     await phase('homepage pivot: load');
     await gotoPublic(page, pivotUrl);
+
+    if (!(await isPivotWorkspaceAvailable(page))) {
+        pass(results, 'Homepage: #pivot deep link ignored because pivot workspace is removed from the public site');
+        await verifyPivotLoad(page, results, 'Homepage');
+        return;
+    }
 
     const restoredPivot = await page.evaluate(() => {
         const panel = document.getElementById('panel-pivot');
@@ -1677,6 +1790,7 @@ async function runTests() {
         await verifyExplorerHeading(page, results, 'Homepage');
         await verifyExplorerTable(page, results, 'Homepage', true);
         await verifyStartupSettled(page, results, 'Homepage');
+        await verifyHeroUpdatedAlignsWithSnapshot(page, results, 'Homepage', '/api/home-loan-rates');
         await verifyPublicFooter(page, results, 'Homepage');
         await verifyNoPublicAdminSurface(page, results, 'Homepage');
         await phase('homepage: noscript check (parallel fetch)');
