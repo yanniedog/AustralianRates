@@ -1,19 +1,15 @@
 ---
-description: "After making changes in this chat, commit and sync (push) automatically"
+description: "After making changes in this chat, commit and sync (push) automatically; then complete the full ship bar"
 alwaysApply: true
 ---
 
 # Auto Commit and Sync After Changes
 
-Whenever you make code or config changes in this Cursor chat, you must **commit and sync** before considering the task complete. **Production closeout** (confirm deploy/CI, verify https://www.australianrates.com) is **mandatory** for every such chat unless waived—see **`every-chat-commit-deploy-verify-production.mdc`**.
+After any code or config change: commit on a topic branch, push, open/update PR to `main`, and complete the full ship bar.
 
-1. **Branch (default)** – Before first commit for this task: sync `main`, then `git checkout -b agent/<slug>` (or `feat/…` / `fix/…`) per **`git-pr-workflow-default.mdc`**, unless you are already on an appropriate feature branch or the user ordered direct `main`.
-2. **After edits** – Once you have modified files in the repo:
-   - Stage: `git add` (relevant paths or `.` as appropriate).
-   - Commit: `git commit -m "brief description of change"`.
-   - Push: `git push -u origin HEAD` (feature branch) or `git push origin main` **only** for an explicit hotfix on `main`.
-3. **PR** – Open/update PR to **`main`**; CI green → **`git-pr-workflow-default.mdc`** (**wait gate** + replies **before** merge / first-time auto-merge).
-4. **Scope** – Commit only the changes made in this conversation; use a message that describes what was done.
-5. **No skip** – Do not leave the repo with uncommitted or unpushed changes unless the user explicitly asks you to stop before syncing.
+1. Branch: `git checkout -b agent/<slug>` from fresh `origin/main` (unless already on a topic branch or user ordered `main` hotfix).
+2. Stage and commit: `git add <paths> && git commit -m "<description>"`.
+3. Push: `git push -u origin HEAD`.
+4. Complete the full ship bar: `git-pr-workflow-default.mdc` (all 9 steps inline there).
 
-If the user explicitly requests work **only** on `main`, follow that exception in **`git-pr-workflow-default.mdc`**.
+Do not leave uncommitted or unpushed changes unless the user explicitly asks to stop before syncing.

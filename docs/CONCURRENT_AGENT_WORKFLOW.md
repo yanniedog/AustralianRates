@@ -28,9 +28,7 @@ After merge: `npm run git:graph-hygiene`; `git branch -d agent/...` when safe. P
 
 ## Per-agent routine (short)
 
-`git fetch origin && git checkout main && git pull` → `git checkout -b agent/<slug>` → commit → `git push -u origin HEAD` → `gh pr create --base main` → green **`ci_result`** → **wait gate + replies** (`.cursor/rules/git-pr-workflow-default.mdc`) → merge → **`npm run git:graph-hygiene`**.
-
-Before push/merge: `git fetch origin && git diff origin/main...HEAD --stat`; resolve clashes with **`origin/main`** and other **`agent/*`** branches when needed.
+Through merge: **`.cursor/rules/git-pr-workflow-default.mdc`**. Before push: **`git fetch origin && git diff origin/main...HEAD --stat`** (and clash checks above). After merge: **`npm run git:graph-hygiene`** (see **Graph hygiene**).
 
 ## Parallel work / previews
 

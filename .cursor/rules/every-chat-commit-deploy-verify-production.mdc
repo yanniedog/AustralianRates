@@ -1,38 +1,22 @@
 ---
-description: "Hard rule: every chat with repo changes — commit, push, confirm deploy & CI, verify www.australianrates.com"
+description: "Hard rule: every chat with repo changes — commit, PR, full ship bar, deploy, verify www.australianrates.com"
 alwaysApply: true
 ---
 
-# Every Chat: Commit, Push, Confirm Deploy, Verify Production (Hard Rule)
+# Every Chat: Commit → Full Ship Bar → Deploy → Verify Production
 
-For **every** conversation about this project that changes the repository (code, config, assets, or work that implies a deploy), you **MUST** complete the full closeout below before claiming the task is done.
+For every conversation with repo changes, complete the full ship bar before claiming done.
 
-**Waivers:** Only if the user **explicitly** instructs you not to commit, push, deploy, or verify production for that task.
+**Waiver:** only if the user explicitly instructs you not to commit, push, deploy, or verify for that task.
 
-## 1. Commit, push, and PR (default)
+## Required sequence (no shortcuts)
 
-- **Default:** **`git-pr-workflow-default.mdc`**: branch → PR → **`ci_result`** → **wait gate** + **threaded replies** → merge (**`main`** drives production deploy).
-- **Exception:** direct `git push origin main` only if the user explicitly asked for a **`main` hotfix**.
-- Do not leave uncommitted or unpushed work when the task implied shipping unless waived. If a PR cannot be merged from this environment, leave it open with the **PR URL** and state what remains after the user merges.
+1. **Commit + push** on a topic branch (see `git-pr-workflow-default.mdc` step 1–3 for branch setup).
+2. **PR to `main`** — keep fix-ups on the same PR.
+3. **CI** — fix forward until `ci_result` green.
+4. **Wait gate + thread closure** — `git-pr-workflow-default.mdc` steps 5–6; urgency never waives this.
+5. **Merge** — only after steps 4+ complete.
+6. **Deploy confirmed** — Cloudflare Pages/Workers finished (push ≠ deployed).
+7. **Verify production** — `npm run verify:prod -- --scope=auto --depth=smoke` from repo root; report exit code.
 
-## 2. Confirm deployment and CI succeeded
-
-A successful `git push` is **not** sufficient proof.
-
-- Wait for **Cloudflare Pages** (site) and/or **Workers** (API, archive) deploys to finish when this change triggers them.
-- Resolve **any CI or deploy failures** (GitHub Actions on the **PR** and/or `main`, pre-push checks, Cloudflare build/deploy errors): fix on the branch, recommit, repush, and re-check until green.
-- Use available tooling (e.g. `gh run watch` / Actions UI, Cloudflare dashboard, or project scripts). If something cannot be confirmed from this environment, state what was verified and what could not be.
-
-## 3. Confirm the intended result on production
-
-- Verify on **https://www.australianrates.com**. Do not treat localhost alone as acceptance for user-visible or API behaviour tied to Cloudflare.
-- From repo root, run the checks in **AGENTS.md** for the scope of the change: default to **`npm run verify:prod -- --scope=auto --depth=smoke`**. Use **`npm run verify:prod -- --scope=full --depth=full`** for shared/tooling/workflow/verification changes or explicit full sign-off. Use **`npm run doctor`** / **`npm run doctor:verify`** for incident triage or explicit holistic verification.
-- If a check fails: fix, commit, push, wait for deploy, verify again. Loop until pass or the user waives.
-
-## 4. Final response evidence
-
-For deploy- or production-impacting work, the final message must include what was run (commands), outcomes, and that production verification was performed—or an explicit note that it was waived or could not be run.
-
-- **Shipping tasks** while checked out on **`agent/`** / **`feat/`** / **`fix/`**: run **`npm run ship:closeout:strict`** immediately before claiming completion; it must exit **0**. **Exit 2** means continue **`AGENTS.md`** steps 5–9 (merge, deploy, **`verify:prod`**) or document a **blocker** with every remaining step.
-
-This rule overrides treating “pushed to the remote” as task completion without confirmed deploy and production verification.
+All 9 steps inline: `git-pr-workflow-default.mdc`. Closeout check: `npm run ship:closeout:strict`.

@@ -9,18 +9,13 @@ This repo is actively worked on by **multiple concurrent agents** (Cursor, Codex
 
 ## Multiagent Workflow (mandatory)
 
-1. **Always branch from fresh `main`.** Never commit directly to `main` unless the user explicitly requests a `main` hotfix. Follow `.cursor/rules/git-pr-workflow-default.mdc` strictly:
-   - `git fetch origin`, base the work branch on `origin/main` (e.g. `git checkout -b agent/<slug> origin/main`).
-   - One branch per task or agent stream; do **not** reuse another agent's in-flight branch.
-   - Choose a **distinctive slug** (include the session topic plus a short nonce like `-kj1` if the topic is generic) so parallel agents never clash on branch name.
-2. **Check for conflicts/clashes before opening the PR and before merging.**
-   - Before pushing: `git fetch origin && git diff origin/main...HEAD --stat` and rebase/merge `origin/main` in if it has moved.
-   - Inspect overlapping files against other active `agent/*` / `feat/*` / `fix/*` branches (e.g. `git log origin/agent/* --oneline --name-only`) and call out clashes in the PR body.
-   - If another agent has pushed to the branch name you picked, assume collision: move your work to a new branch (`git checkout -b agent/<slug>-v2 origin/main`) and reapply.
-   - Resolve conflicts deliberately — do not blindly accept either side. Preserve both agents' intent where possible.
-3. **CI + reviews.** `gh pr checks <num> --watch`; fix failures on the **same** PR (**@mention** re-review after pushes). **`ci_result` ≠ merge**: then **`.cursor/rules/git-pr-workflow-default.mdc`** (**wait gate** + **in-thread** replies to bots/humans)—unless bot closeout **waived in writing**. Do **not** claim shipped before that (waived excepted).
-4. **Complete the production closeout** from `.cursor/rules/every-chat-commit-deploy-verify-production.mdc` **after** merge and Cloudflare deploy — never treat a green PR alone as shipped.
-5. **Graph hygiene after merge:** **`npm run git:graph-hygiene`** + delete local topic branch when safe—**`docs/CONCURRENT_AGENT_WORKFLOW.md`**.
+Git branching, PR checks, and wait gate: **`.cursor/rules/git-pr-workflow-default.mdc`**. Additionally:
+
+1. **Fresh branch, distinctive slug** — Never push routine work straight to **`main`** unless the user ordered a **`main` hotfix** (**`git-pr-workflow-default.mdc`**). `git fetch origin`; base on **`origin/main`** (e.g. `git checkout -b agent/<slug> origin/main`). One branch per task; never reuse another agent’s in-flight branch. Include topic + short nonce (e.g. `-kj1`) when the slug is generic.
+2. **Clashes** — Before opening or merging a PR: `git fetch origin && git diff origin/main...HEAD --stat`; merge/rebase **`origin/main`** if needed. Scan overlapping paths vs other **`agent/*`** / **`feat/*`** / **`fix/*`** heads (e.g. `git log origin/agent/* --oneline --name-only`); note clashes in the PR body. If someone else owns your branch name, move to **`agent/<slug>-v2`** from **`origin/main`** and reapply. Resolve conflicts deliberately.
+3. **CI + reviews** — Fix failures on the **same** PR (**@mention** after pushes). **`ci_result` ≠ merge-ready**: **`git-pr-workflow-default.mdc`** wait gate + **in-thread** replies unless bot closeout **waived in writing**. Do **not** claim shipped before that (waived excepted).
+4. **Production closeout** — **`.cursor/rules/every-chat-commit-deploy-verify-production.mdc`** after merge + deploy; a green PR alone is not shipped.
+5. **Graph hygiene** — After merge: **`npm run git:graph-hygiene`**; delete local topic branch when safe (**`docs/CONCURRENT_AGENT_WORKFLOW.md`**).
 
 ## Modular Code (mandatory)
 

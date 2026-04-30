@@ -1,23 +1,14 @@
 # Assistant ship closeout (early-stop antidote)
 
-For **Cursor, Codex, Claude**, and similar automation: complements **`AGENTS.md`** with **why** models stop early and a **minimal completion checklist**.
+For **Cursor, Codex, Claude**, and similar automation: complements **`AGENTS.md`** with **why** models stop early, **forbidden phrasing**, and **`ship:closeout`** habits.
 
 ## Why “PR / CI green” feels like done
 
-Investigation → fix → push → green CI matches a natural narrative; **shipping** continues through merge, deploy, and **`verify:prod`**. **`pr-auto-merge.yml`** can merge on CI alone—policy still requires **wait gate + threaded replies** before you enable merge/auto-merge (**`.cursor/rules/git-pr-workflow-default.mdc`**). Scope phrases like “fix the bug” are often read as code-done, not **users see www**.
+Green CI ends a familiar story; **shipping** is merge → deploy → **`verify:prod`** (**AGENTS.md** steps 7–9). **`pr-auto-merge.yml`** can merge on CI alone—still complete **wait gate + threaded replies** (**`.cursor/rules/git-pr-workflow-default.mdc`**) before you enable merge/auto-merge.
 
 ## Completion (shipping to www.australianrates.com)
 
-Finished only when **all** apply **or** the user **waived that step in writing**:
-
-| Step | Gate |
-|------|------|
-| 1–3 | Branch from `origin/main` → commit + push → PR to `main` |
-| 4 | **`ci_result`** green (fix on same PR branch) |
-| 5–6 | **Wait gate + in-thread replies** per **`.cursor/rules/git-pr-workflow-default.mdc`** |
-| 7 | **Merge** to `main` |
-| 8 | **Deploy finished** (Pages / Workers as applicable) |
-| 9 | **`npm run verify:prod -- --scope=auto --depth=smoke`** exit **0** (or broader per **`AGENTS.md`**) |
+Done only when **AGENTS.md** ship-bar steps **1–9** are satisfied **or** the user **waived a step in writing** (see that doc for commands and exceptions).
 
 **Blocked on merge:** state the blocker; list remaining steps; do **not** imply production updated.
 

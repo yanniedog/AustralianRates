@@ -56,7 +56,10 @@ test-screenshots/
 .idea/
 .vs/
 # Claude Code / agent local state (not repo source)
-.claude/
+# Use .claude/* (not .claude/) so the negation below can override specific files
+.claude/*
+# Project-level Claude Code settings (hooks, permissions) — safe to commit
+!.claude/settings.json
 # Vim / Emacs swap and backup
 *.swp
 *.swo
