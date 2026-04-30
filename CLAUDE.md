@@ -8,7 +8,7 @@ Always:
 - After npm install, git pre-push may run verify; do not tell me to manually configure editor "user rules" for basic workflow.
 
 Git/GitHub:
-- **Default (mandatory unless the user waives or orders a `main` hotfix):** feature branch off `main` → commit → push branch → **PR to `main`** → merge when **PR CI** is green **and automated PR review (bot) feedback is fully addressed with replies on the PR**. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**), repo `AGENTS.md` (“Default git workflow”), and Cursor `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”). Use `gh pr create`, `gh pr checks watch`, `gh pr merge` (e.g. `--auto --squash`) when available.
+- **Default (mandatory unless the user waives or orders a `main` hotfix):** feature branch off `main` → commit → push branch → **PR to `main`** → after **`ci_result`** is green run the **Bot feedback wait gate** (late bot sweep **and** ~10–15 minute wait/re-poll unless waived), **reply on every PR review bot** thread → **merge**. Do **not** merge when CI alone is green. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**), `AGENTS.md` (“Default git workflow”), `.cursor/rules/git-pr-workflow-default.mdc` (**Bot feedback wait gate**). Use `gh pr create`, `gh pr checks watch`; use `gh pr merge` (**only** after gate + replies unless waived).
 - **Codex:** also read repo-root `CODEX.md` (same workflow pointer).
 
 Deployed app:

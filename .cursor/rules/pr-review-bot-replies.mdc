@@ -14,6 +14,10 @@ Treat output from repo-integrated **automated code-review bots** as **required f
 
 Analogous bots (similar summaries, inline file comments, or suggestion blocks) fall under this rule unless listed in **Exceptions**.
 
+## Wait before merge (hard)
+
+**Never** squash-merge or enable **auto-merge** in the instant **`ci_result` turns green.** Complete the **Bot feedback wait gate** in `.cursor/rules/git-pr-workflow-default.mdc` first: late-review sweep via `gh pr view` / GitHub UI / API; if no substantive bot comments yet, **wait ~10–15 minutes** after green CI then **re-check** (Gemini, Copilot, Codex, and others often arrive **after** Actions finish). Merge only after that pause **and** threaded replies—or after an explicit human **waiver**.
+
 ## Required (mechanical checklist)
 
 For each **substantive** bot point on a PR **you own**:

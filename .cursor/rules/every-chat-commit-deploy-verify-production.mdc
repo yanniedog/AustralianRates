@@ -11,7 +11,7 @@ For **every** conversation about this project that changes the repository (code,
 
 ## 1. Commit, push, and PR (default)
 
-- **Default:** follow **`git-pr-workflow-default.mdc`**: feature branch off `main`, commit, push branch, **open a PR to `main`**, merge when PR CI is green **and PR review bot feedback is fully handled (including replies on GitHub)**—then production deploys from `main`.
+- **Default:** follow **`git-pr-workflow-default.mdc`**: feature branch off `main`, commit, push branch, **open a PR to `main`**, merge **only after** **`ci_result`** plus the **Bot feedback wait gate** (late bot sweep **and ~10–15 minute** wait/re-poll unless waived) **and PR review bot feedback is fully handled (including replies on GitHub)**—then production deploys from `main`.
 - **Exception:** direct `git push origin main` only if the user explicitly asked for a **`main` hotfix**.
 - Do not leave uncommitted or unpushed work when the task implied shipping unless waived. If a PR cannot be merged from this environment, leave it open with the **PR URL** and state what remains after the user merges.
 
