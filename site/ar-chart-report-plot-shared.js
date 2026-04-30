@@ -63,6 +63,7 @@
     var buildBandSeries = SB.buildBandSeries;
     var buildProductOverlay = SB.buildProductOverlay;
     var buildRibbonCanvasProductModel = SB.buildRibbonCanvasProductModel;
+    var buildRibbonCanvasProductModelFromBandsPayload = SB.buildRibbonCanvasProductModelFromBandsPayload;
 
     var MP = window.AR.chartReportPlotMovesPane || {};
     var createMovesStrip = MP.createMovesStrip;
@@ -327,6 +328,14 @@
             ribbonCanvasModel = buildRibbonCanvasProductModel(dates, options.allSeries || [], options.bankColor, {
                 section: section,
             });
+            if (!ribbonCanvasModel.count && plotPayload && plotPayload.series && plotPayload.series.length) {
+                ribbonCanvasModel = buildRibbonCanvasProductModelFromBandsPayload(
+                    dates,
+                    plotPayload,
+                    options.bankColor,
+                    section
+                );
+            }
             useRibbonCanvas = false;
             productOverlay = [];
             series.push({
@@ -364,6 +373,11 @@
                 lineStyle: { width: 0, opacity: 0 },
                 data: [], silent: true, z: 3,
             });
+            series = series.concat(buildBandSeries({
+                dates: dates,
+                plotPayload: plotPayload,
+                bankColor: options.bankColor,
+            }));
         }
 
         var bandByDateByBank = {};
