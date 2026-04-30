@@ -223,6 +223,20 @@ export type ChartRibbonStyle = {
   inactive_z: number
   /** Forward-fill per-bank data gaps of ≤3 days; prevents short outages from breaking ribbon continuity or skewing mean. */
   gap_fill_enabled: boolean
+  /** Optional compact slice-move table under Min/Mean/Max in rate-report ribbon hover box (visible products vs prior chart day). */
+  slice_pair_table_enabled: boolean
+  /** Row font size (px); matches hover row text by default. */
+  slice_pair_font_px: number
+  /** Text colour #RRGGBB, or empty string to follow chart tooltip theme colour. */
+  slice_pair_text_color: string
+  slice_pair_text_alpha: number
+  /** Table panel background #RRGGBB, or empty for neutral dark base. */
+  slice_pair_table_bg_color: string
+  slice_pair_table_bg_alpha: number
+  /** Grid line colour #RRGGBB or empty for slate default. */
+  slice_pair_grid_color: string
+  slice_pair_grid_alpha: number
+  slice_pair_grid_width_px: number
 }
 
 const RIBBON_PRESETS: ReadonlySet<ChartRibbonPreset> = new Set(['glass', 'classic'])
@@ -250,6 +264,15 @@ export const DEFAULT_CHART_RIBBON_STYLE: ChartRibbonStyle = {
   active_z: 48,
   inactive_z: 2,
   gap_fill_enabled: true,
+  slice_pair_table_enabled: false,
+  slice_pair_font_px: 11,
+  slice_pair_text_color: '',
+  slice_pair_text_alpha: 1,
+  slice_pair_table_bg_color: '',
+  slice_pair_table_bg_alpha: 0.22,
+  slice_pair_grid_color: '',
+  slice_pair_grid_alpha: 0.35,
+  slice_pair_grid_width_px: 1,
 }
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -278,6 +301,13 @@ function numNonNeg(v: unknown, fallback: number, hi: number): number {
   const n = numLike(v)
   if (n === null) return fallback
   return clamp(n, 0, hi)
+}
+
+function optionalHex6(v: unknown): string {
+  if (v == null) return ''
+  const s = String(v).trim()
+  if (s === '') return ''
+  return /^#[0-9a-fA-F]{6}$/.test(s) ? s : ''
 }
 
 export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null | undefined): ChartRibbonStyle {
@@ -315,6 +345,19 @@ export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null
     active_z,
     inactive_z,
     gap_fill_enabled: raw.gap_fill_enabled === false ? false : d.gap_fill_enabled,
+    slice_pair_table_enabled: raw.slice_pair_table_enabled === true,
+    slice_pair_font_px: (() => {
+      const n = numLike(raw.slice_pair_font_px)
+      if (n === null) return d.slice_pair_font_px
+      return clamp(Math.round(n), 7, 18)
+    })(),
+    slice_pair_text_color: optionalHex6(raw.slice_pair_text_color),
+    slice_pair_text_alpha: num01(raw.slice_pair_text_alpha, d.slice_pair_text_alpha),
+    slice_pair_table_bg_color: optionalHex6(raw.slice_pair_table_bg_color),
+    slice_pair_table_bg_alpha: clamp(num01(raw.slice_pair_table_bg_alpha, d.slice_pair_table_bg_alpha), 0, 0.92),
+    slice_pair_grid_color: optionalHex6(raw.slice_pair_grid_color),
+    slice_pair_grid_alpha: num01(raw.slice_pair_grid_alpha, d.slice_pair_grid_alpha),
+    slice_pair_grid_width_px: numNonNeg(raw.slice_pair_grid_width_px, d.slice_pair_grid_width_px, 4),
   }
 }
 

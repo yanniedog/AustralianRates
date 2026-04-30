@@ -182,7 +182,7 @@
         return ss;
     }
 
-    /** Compact slice-pair glyphs: ↑→↓ ? * ! (calendar P vs D, proper ingests only). */
+    /** Compact slice-pair glyphs: ↑→↓ -x x- xx (calendar P vs D, proper ingests only). */
 
     function glyphNum(x) {
         var n = Number(x);
@@ -194,9 +194,9 @@
         return '\u2191' + String(glyphNum(stats.up_count))
             + ' \u2192' + String(glyphNum(stats.flat_count))
             + ' \u2193' + String(glyphNum(stats.down_count))
-            + ' ?' + String(glyphNum(stats.prev_missing_count))
-            + ' *' + String(glyphNum(stats.curr_missing_count))
-            + ' !' + String(glyphNum(stats.both_missing_count));
+            + ' -x' + String(glyphNum(stats.prev_missing_count))
+            + ' x-' + String(glyphNum(stats.curr_missing_count))
+            + ' xx' + String(glyphNum(stats.both_missing_count));
     }
 
     function slicePairAriaLabel(stats) {
