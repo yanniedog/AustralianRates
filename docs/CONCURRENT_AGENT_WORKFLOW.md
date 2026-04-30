@@ -31,11 +31,20 @@ For **non-draft** pull requests **into `main`** whose head branch starts with **
 
 ## CI vs PR review bots (same PR; different gates)
 
-Branch protection + **`ci_result`** control **whether GitHub allows a merge**. **`pr-auto-merge.yml`** triggers squash merge when that gate passes. Third-party review bots are usually **not** registered as required checks—so **CI can go green while bot threads are still open.**
+Branch protection + **`ci_result`** control **whether GitHub allows a merge**. **`pr-auto-merge.yml`** triggers squash merge when that gate passes. Third-party review bots are usually **not** registered as required checks—so **CI can go green while bot threads have not even been created yet** (many bots post **after** Actions finish).
 
-**Peer-review policy (assistants and humans):** treat bots as reviewers. **Order:** (1) **`ci_result`** green, (2) **every bot thread** answered with an **in-thread reply** on GitHub (fix + reply, or reply-only with rationale if not changing code), then conclude or resolve, (3) **then** enable auto-merge or squash-merge manually. Code-only fixes without replies are **not** sufficient. Skipping (2) before enabling auto-merge risks merging before bot feedback is handled visibly.
+**Assistants: hard rule — do not merge immediately when CI passes.** Treating **`gh pr checks --watch` success** as permission to **`gh pr merge`** in the same stretch of work is a **policy violation** unless the human **explicitly waived** bot closeout for that PR.
 
-Canonical wording: `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”).
+**Peer-review policy (assistants and humans):** treat bots as reviewers. **Order:**
+
+1. **`ci_result`** green.
+2. **Bot feedback wait gate** (full checklist: `.cursor/rules/git-pr-workflow-default.mdc`, **Bot feedback wait gate**): **late-review sweep** (`gh pr view`, UI, or API) for Gemini Code Assist, Copilot, Codex, CodeRabbit, Greptile, Sourcery, etc.; if no substantive threads yet, **wait ~10–15 minutes** after first green CI and **re-check** (late bot reviews are normal).
+3. **Every substantive bot thread:** **in-thread reply** (fix + reply, or reply-only with rationale).
+4. **Only then** enable auto-merge or **`gh pr merge --squash`**.
+
+Code-only fixes without replies are **not** sufficient. Skipping (2)–(3) risks merging before bot feedback exists on the PR—or before you have visibly handled it.
+
+Canonical wording: `.cursor/rules/git-pr-workflow-default.mdc` (**Bot feedback wait gate**, “PR review bots”).
 
 ## Keeping the Git graph readable (local clones)
 
@@ -67,8 +76,8 @@ So multiple agents “do not clash” in Git until the same **lines in the same 
    - `git push -u origin agent/chart-tooltips`
 4. **Open a PR** targeting `main` (GitHub website: “Compare & pull request”, or CLI):
    - `gh pr create --base main --title "..." --body "..."`
-5. **`ci_result`** green on the PR (`.github/workflows/ci.yml`). Each **PR review bot** thread must have an **in-thread GitHub reply** and be concluded (`docs/CONCURRENT_AGENT_WORKFLOW.md`, **CI vs PR review bots**).
-6. For **`agent/`** / **`feat/`** / **`fix/`**, **`pr-auto-merge.yml`** may enable **squash auto-merge** when the PR is not a draft; GitHub merges when **`ci_result`** passes, not when bots finish. Enable auto-merge **only after** step 5 is satisfied. If auto-merge was already on while bot feedback was pending, disable it until replies are done (push fixes first if needed).
+5. **`ci_result`** green on the PR (`.github/workflows/ci.yml`). Then complete the **Bot feedback wait gate** (late sweep + ~10–15 minute wait/re-poll) and threaded replies (`docs/CONCURRENT_AGENT_WORKFLOW.md`, **CI vs PR review bots**): **do not** merge or mark merge-ready solely because CI passed.
+6. For **`agent/`** / **`feat/`** / **`fix/`**, **`pr-auto-merge.yml`** may enable **squash auto-merge** when the PR is not a draft; GitHub merges when **`ci_result`** passes, **not when bots finish**. Enable auto-merge **only after** step 5 (wait gate **and** replies) is satisfied. If auto-merge was already on while bot feedback was pending, disable it until replies are done (push fixes first if needed).
 7. Optionally **`gh pr merge --auto --squash`** after create if you need auto-merge before the workflow runs; otherwise rely on **`pr-auto-merge.yml`**. Prefer merging one PR before starting heavy overlap on the same files in another branch, or rebase/merge `main` into the other branch before merge.
 
 ## Reducing clashes between agents
