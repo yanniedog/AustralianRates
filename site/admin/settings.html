@@ -821,7 +821,21 @@
                 ribbonPresetEl.addEventListener('change', function () {
                     var key = String(ribbonPresetEl.value || '').trim().toLowerCase();
                     var preset = RIBBON_PRESETS[key];
-                    if (preset) applyRibbonToForm(preset);
+                    if (!preset) return;
+                    var prev = collectRibbonObject();
+                    var merged = Object.assign({}, preset, {
+                        gap_fill_enabled: prev.gap_fill_enabled,
+                        slice_pair_table_enabled: prev.slice_pair_table_enabled,
+                        slice_pair_font_px: prev.slice_pair_font_px,
+                        slice_pair_text_color: prev.slice_pair_text_color,
+                        slice_pair_text_alpha: prev.slice_pair_text_alpha,
+                        slice_pair_table_bg_color: prev.slice_pair_table_bg_color,
+                        slice_pair_table_bg_alpha: prev.slice_pair_table_bg_alpha,
+                        slice_pair_grid_color: prev.slice_pair_grid_color,
+                        slice_pair_grid_alpha: prev.slice_pair_grid_alpha,
+                        slice_pair_grid_width_px: prev.slice_pair_grid_width_px
+                    });
+                    applyRibbonToForm(merged);
                 });
             }
             var doctorSaveBtn = document.getElementById('doctor-schedule-save-btn');
