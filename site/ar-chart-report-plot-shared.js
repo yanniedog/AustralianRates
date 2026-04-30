@@ -1045,7 +1045,7 @@
                 return;
             }
             reportHoverBox.innerHTML =
-                '<div style="font-weight:800;margin-bottom:2px;white-space:nowrap;overflow:visible;">' + escHtml(input.heading || 'Chart') + '</div>' +
+                '<div style="font-weight:800;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">' + escHtml(input.heading || 'Chart') + '</div>' +
                 '<div style="color:' + theme.muted + ';font-size:10px;margin-bottom:5px;white-space:nowrap;">' + escHtml(input.date || '') + '</div>' +
                 rows.map(function (row) {
                     return '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid rgba(148,163,184,0.14);padding-top:2px;margin-top:2px;white-space:nowrap;">' +
