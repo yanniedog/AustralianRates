@@ -82,7 +82,6 @@
         executiveSummaryPanel: document.getElementById('executive-summary-panel'),
         executiveSummaryStatus: document.getElementById('executive-summary-status'),
         executiveSummarySections: document.getElementById('executive-summary-sections'),
-        filterIncludeManual: document.getElementById('filter-include-manual'),
         refreshInterval: document.getElementById('refresh-interval'),
         lastRefreshed: document.getElementById('last-refreshed'),
         uiScaleDown: document.getElementById('ui-scale-down'),
