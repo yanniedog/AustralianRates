@@ -1,6 +1,7 @@
 import type { JSHandle, Page } from 'playwright'
 
-export async function waitForChartReady(page: Page, timeout = 30_000): Promise<void> {
+/** Default allows slow production chart JS + cold API; override per call or via TEST_CHART_READY_TIMEOUT_MS in test-homepage. */
+export async function waitForChartReady(page: Page, timeout = 60_000): Promise<void> {
   const handle: JSHandle<{ fatal?: string } | { ok: true } | null> = await page.waitForFunction(
     () => {
       const output = document.getElementById('chart-output')
@@ -51,7 +52,7 @@ export async function waitForChartReady(page: Page, timeout = 30_000): Promise<v
   await page.waitForTimeout(400)
 }
 
-export async function ensureChartReady(page: Page, timeout = 30_000): Promise<void> {
+export async function ensureChartReady(page: Page, timeout = 60_000): Promise<void> {
   const button = page.locator('#draw-chart')
   const count = await button.count().catch(() => 0)
   const visible = count > 0 && (await button.isVisible().catch(() => false))

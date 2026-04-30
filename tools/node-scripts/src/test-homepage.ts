@@ -15,6 +15,8 @@ const CLARITY_SRC = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
 /** Tight defaults; override via env if production is slow or flaky. */
 const GOTO_TIMEOUT_MS = Number(process.env.TEST_GOTO_TIMEOUT_MS || 20000);
 const SEL_TIMEOUT_MS = Number(process.env.TEST_SELECTOR_TIMEOUT_MS || 10000);
+/** Chart readiness (waitForFunction on #chart-output); production can exceed 30s under load. */
+const CHART_READY_TIMEOUT_MS = Number(process.env.TEST_CHART_READY_TIMEOUT_MS || 60000);
 /** Longer wait only for hero vs /snapshot alignment (inline + deferred bundles). */
 const HERO_SNAPSHOT_WAIT_MS = Number(process.env.TEST_HERO_SNAPSHOT_WAIT_MS || 45000);
 const POST_NAV_SETTLE_MS = Number(process.env.TEST_POST_NAV_SETTLE_MS || 350);
@@ -980,7 +982,7 @@ async function verifyChartSmoke(page, results, label) {
     await tabChart.click({ timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(250);
 
-    await ensureChartReady(page);
+    await ensureChartReady(page, CHART_READY_TIMEOUT_MS);
 
     const chart = await page.evaluate(() => {
         const out = document.getElementById('chart-output');
@@ -1715,7 +1717,7 @@ async function runTests() {
     if (process.env.TEST_QUIET !== '1') {
         console.log(
             `[test-homepage] Running the ${TEST_SUITE} suite against production. `
-            + 'Adjust timing with TEST_POST_NAV_SETTLE_MS / TEST_SELECTOR_TIMEOUT_MS / TEST_GOTO_TIMEOUT_MS as needed.',
+            + 'Adjust timing with TEST_POST_NAV_SETTLE_MS / TEST_SELECTOR_TIMEOUT_MS / TEST_GOTO_TIMEOUT_MS / TEST_CHART_READY_TIMEOUT_MS as needed.',
         );
     }
 
