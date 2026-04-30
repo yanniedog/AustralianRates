@@ -1,7 +1,22 @@
 import type { JSHandle, Page } from 'playwright'
 
-/** Default allows slow production chart JS + cold API; override per call or via TEST_CHART_READY_TIMEOUT_MS in test-homepage. */
-export async function waitForChartReady(page: Page, timeout = 60_000): Promise<void> {
+const DEFAULT_CHART_READY_MS = 60_000
+
+function resolveChartReadyTimeoutMs(timeout?: number): number {
+  if (typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0) {
+    return timeout
+  }
+  const fromEnv = Number(process.env.TEST_CHART_READY_TIMEOUT_MS)
+  if (Number.isFinite(fromEnv) && fromEnv > 0) {
+    return fromEnv
+  }
+  return DEFAULT_CHART_READY_MS
+}
+
+/** Default allows slow production chart JS + cold API (env `TEST_CHART_READY_TIMEOUT_MS`, else 60s); override with the `timeout` argument. */
+export async function waitForChartReady(page: Page, timeout?: number): Promise<void> {
+  const resolved = resolveChartReadyTimeoutMs(timeout)
+
   const handle: JSHandle<{ fatal?: string } | { ok: true } | null> = await page.waitForFunction(
     () => {
       const output = document.getElementById('chart-output')
@@ -39,7 +54,7 @@ export async function waitForChartReady(page: Page, timeout = 60_000): Promise<v
       return null
     },
     null,
-    { timeout },
+    { timeout: resolved },
   )
 
   const val = await handle.jsonValue()
@@ -52,7 +67,7 @@ export async function waitForChartReady(page: Page, timeout = 60_000): Promise<v
   await page.waitForTimeout(400)
 }
 
-export async function ensureChartReady(page: Page, timeout = 60_000): Promise<void> {
+export async function ensureChartReady(page: Page, timeout?: number): Promise<void> {
   const button = page.locator('#draw-chart')
   const count = await button.count().catch(() => 0)
   const visible = count > 0 && (await button.isVisible().catch(() => false))
@@ -69,5 +84,5 @@ export async function ensureChartReady(page: Page, timeout = 60_000): Promise<vo
       }
     })
   }
-  await waitForChartReady(page, timeout)
+  await waitForChartReady(page, resolveChartReadyTimeoutMs(timeout))
 }
