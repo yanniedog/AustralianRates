@@ -169,13 +169,6 @@
             ]
         },
         {
-            kind: 'toggle',
-            id: 'filter-include-manual',
-            label: 'Include manual runs',
-            icon: 'admin',
-            help: 'Include manually triggered runs in the result set.'
-        },
-        {
             kind: 'select',
             id: 'refresh-interval',
             label: 'Auto refresh',

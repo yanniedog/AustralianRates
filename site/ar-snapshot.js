@@ -172,7 +172,6 @@
         if (!params || typeof params !== 'object') return false;
         if (params.bank || params.banks) return false;
         if (params.include_removed === 'true') return false;
-        if (params.include_manual === 'true') return false;
         if (isDisabledCompareEdgeCasesVal(params.exclude_compare_edge_cases)) return false;
         if (params.start_date || params.end_date) return false;
         if (!isKnownChartWindowValue(params.chart_window)) return false;
