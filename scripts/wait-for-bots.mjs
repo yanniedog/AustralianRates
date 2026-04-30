@@ -51,11 +51,11 @@ function openPrNumber(branch) {
 }
 
 function ciGreenAt(prNumber) {
-  const json = ghOut(['pr', 'checks', String(prNumber), '--json', 'name,state,completedAt,conclusion']);
+  const json = ghOut(['pr', 'checks', String(prNumber), '--json', 'name,state,completedAt']);
   if (!json) return null;
   try {
     const arr = JSON.parse(json);
-    const ci = arr.find((c) => c.name === 'ci_result' && c.conclusion === 'SUCCESS');
+    const ci = arr.find((c) => c.name === 'ci_result' && c.state === 'SUCCESS');
     if (!ci || !ci.completedAt) return null;
     return new Date(ci.completedAt);
   } catch {
