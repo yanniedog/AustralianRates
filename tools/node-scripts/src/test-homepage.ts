@@ -1715,7 +1715,7 @@ async function runTests() {
     if (process.env.TEST_QUIET !== '1') {
         console.log(
             `[test-homepage] Running the ${TEST_SUITE} suite against production. `
-            + 'Adjust timing with TEST_POST_NAV_SETTLE_MS / TEST_SELECTOR_TIMEOUT_MS / TEST_GOTO_TIMEOUT_MS as needed.',
+            + 'Adjust timing with TEST_POST_NAV_SETTLE_MS / TEST_SELECTOR_TIMEOUT_MS / TEST_GOTO_TIMEOUT_MS / TEST_CHART_READY_TIMEOUT_MS as needed.',
         );
     }
 
