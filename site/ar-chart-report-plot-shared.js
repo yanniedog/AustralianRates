@@ -178,9 +178,9 @@
             'position:absolute',
             'top:8px',
             'left:10px',
-            'z-index:6',
+            'z-index:20',
             'display:none',
-            'max-width:min(360px, calc(100% - 24px))',
+            'max-width:min(520px, calc(100vw - 28px))',
             'padding:7px 9px',
             'border:1px solid ' + theme.ttBorder,
             'border-radius:6px',
@@ -940,22 +940,120 @@
             });
         }
 
+        function ribbonVisibleProductRateAt(prod, ymd) {
+            return positiveRibbonRateOrNull(prod && prod.byDate ? prod.byDate[String(ymd || '').slice(0, 10)] : null);
+        }
+
+        /**
+         * Movement counts for visible ribbon product lines: calendar previous chart day vs hovered day.
+         * Mirrors DB slice-pair classification on rounded basis points: ROUND((d-p)*100).
+         */
+        function buildRibbonVisibleSlicePairCounts(visibleProducts, anchorYmd, prevYmd) {
+            var anchor = String(anchorYmd || '').slice(0, 10);
+            var prev = String(prevYmd || '').slice(0, 10);
+            var out = {
+                up_count: 0,
+                flat_count: 0,
+                down_count: 0,
+                prev_missing_count: 0,
+                curr_missing_count: 0,
+                both_missing_count: 0,
+                universe_total: 0,
+            };
+            if (!anchor || !prev || !visibleProducts || !visibleProducts.length) return out;
+            visibleProducts.forEach(function (prod) {
+                var rp = ribbonVisibleProductRateAt(prod, prev);
+                var rd = ribbonVisibleProductRateAt(prod, anchor);
+                out.universe_total += 1;
+                if (rp == null && rd == null) {
+                    out.both_missing_count += 1;
+                } else if (rp == null && rd != null) {
+                    out.prev_missing_count += 1;
+                } else if (rd == null && rp != null) {
+                    out.curr_missing_count += 1;
+                } else {
+                    var deltaBp = Math.round((rd - rp) * 100);
+                    if (deltaBp > 0) out.up_count += 1;
+                    else if (deltaBp < 0) out.down_count += 1;
+                    else out.flat_count += 1;
+                }
+            });
+            return out;
+        }
+
+        function buildRibbonSlicePairTableHtml(visibleProducts, anchorYmd, prevYmd, rs) {
+            if (!rs || !rs.slice_pair_table_enabled) return '';
+            var stats = buildRibbonVisibleSlicePairCounts(visibleProducts, anchorYmd, prevYmd);
+            if (!stats.universe_total) return '';
+            var fw = Math.max(7, Math.min(18, Math.round(Number(rs.slice_pair_font_px) || 11)));
+            var tCol = String(rs.slice_pair_text_color || '').trim();
+            var textHex = /^#[0-9a-fA-F]{6}$/.test(tCol) ? tCol : String(theme.ttText || '#94a3b8');
+            var textA = Number(rs.slice_pair_text_alpha);
+            if (!Number.isFinite(textA)) textA = 1;
+            textA = Math.max(0, Math.min(1, textA));
+            var textRgba = hexToRgba(textHex, textA);
+            var bgCol = String(rs.slice_pair_table_bg_color || '').trim();
+            var bgHex = /^#[0-9a-fA-F]{6}$/.test(bgCol) ? bgCol : '#020617';
+            var bgA = Number(rs.slice_pair_table_bg_alpha);
+            if (!Number.isFinite(bgA)) bgA = 0.22;
+            bgA = Math.max(0, Math.min(0.92, bgA));
+            var bgRgba = hexToRgba(bgHex, bgA);
+            var gCol = String(rs.slice_pair_grid_color || '').trim();
+            var gHex = /^#[0-9a-fA-F]{6}$/.test(gCol) ? gCol : '#64748b';
+            var gA = Number(rs.slice_pair_grid_alpha);
+            if (!Number.isFinite(gA)) gA = 0.35;
+            gA = Math.max(0, Math.min(1, gA));
+            var gridRgba = hexToRgba(gHex, gA);
+            var gw = Number(rs.slice_pair_grid_width_px);
+            if (!Number.isFinite(gw)) gw = 1;
+            gw = Math.max(0, Math.min(4, gw));
+            var borderCss = gw > 0 ? (gw + 'px solid ' + gridRgba) : 'none';
+            var prev = String(prevYmd || '').slice(0, 10);
+            var em = '\u2014';
+            function cellVal(n) {
+                if (!prev) return em;
+                return String(Number.isFinite(n) ? n : 0);
+            }
+            var rows = [
+                { h: '\u2191', v: cellVal(stats.up_count) },
+                { h: '\u2192', v: cellVal(stats.flat_count) },
+                { h: '\u2193', v: cellVal(stats.down_count) },
+                { h: '-x', v: cellVal(stats.prev_missing_count) },
+                { h: 'x-', v: cellVal(stats.curr_missing_count) },
+                { h: 'xx', v: cellVal(stats.both_missing_count) },
+            ];
+            var title = prev
+                ? ('Visible products vs prior chart day ' + prev + ' (n=' + String(stats.universe_total) + ').')
+                : 'No prior day in range.';
+            var rowHtml = rows.map(function (r) {
+                return '<tr>' +
+                    '<th scope="row" style="text-align:left;font-weight:600;padding:1px 5px 1px 2px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.h) + '</th>' +
+                    '<td style="text-align:right;font-weight:700;padding:1px 2px 1px 5px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.v) + '</td>' +
+                    '</tr>';
+            }).join('');
+            return '<div role="region" aria-label="Slice pair counts" title="' + escHtml(title) + '" style="margin-top:5px;padding:3px 4px;border-radius:4px;background:' + bgRgba + ';color:' + textRgba + ';font-size:' + fw + 'px;line-height:1.2;width:max-content;max-width:100%;overflow:visible">' +
+                '<table style="border-collapse:collapse;table-layout:auto;width:auto;white-space:nowrap;color:inherit">' +
+                '<tbody>' + rowHtml + '</tbody></table></div>';
+        }
+
         function showReportHoverBox(input) {
             if (!reportHoverBox || !input) return;
             var rows = input.rows || [];
-            if (!rows.length) {
+            var sliceBlock = input.slicePairTableHtml || '';
+            if (!rows.length && !sliceBlock) {
                 reportHoverBox.style.display = 'none';
                 return;
             }
             reportHoverBox.innerHTML =
-                '<div style="font-weight:800;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(input.heading || 'Chart') + '</div>' +
-                '<div style="color:' + theme.muted + ';font-size:10px;margin-bottom:5px;">' + escHtml(input.date || '') + '</div>' +
+                '<div style="font-weight:800;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">' + escHtml(input.heading || 'Chart') + '</div>' +
+                '<div style="color:' + theme.muted + ';font-size:10px;margin-bottom:5px;white-space:nowrap;">' + escHtml(input.date || '') + '</div>' +
                 rows.map(function (row) {
-                    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid rgba(148,163,184,0.14);padding-top:2px;margin-top:2px;">' +
+                    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid rgba(148,163,184,0.14);padding-top:2px;margin-top:2px;white-space:nowrap;">' +
                         '<span style="color:' + theme.muted + ';">' + escHtml(row.label) + '</span>' +
-                        '<strong>' + escHtml(row.value) + '</strong>' +
+                        '<strong style="white-space:nowrap;">' + escHtml(row.value) + '</strong>' +
                     '</div>';
-                }).join('');
+                }).join('') +
+                sliceBlock;
             reportHoverBox.style.display = 'block';
         }
 
@@ -965,7 +1063,11 @@
                 if (reportHoverBox) reportHoverBox.style.display = 'none';
                 return;
             }
+            var rs = getRibbonStyleResolved();
+            var idx = dates.indexOf(anchor);
+            var prevYmd = idx > 0 ? dates[idx - 1] : '';
             var visibleProducts = visibleRibbonProducts();
+            var sliceHtml = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs);
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
                 var rate = prod && prod.byDate ? prod.byDate[anchor] : null;
@@ -973,6 +1075,7 @@
                     heading: reportProductLabel(prod),
                     date: fmtReportDateYmd(anchor),
                     rows: [{ label: 'Rate', value: fmtHoverRate(rate) }],
+                    slicePairTableHtml: sliceHtml,
                 });
                 return;
             }
@@ -982,6 +1085,19 @@
                 if (Number.isFinite(v) && v > 0) values.push(v);
             });
             if (!values.length) {
+                if (sliceHtml && rs && rs.slice_pair_table_enabled) {
+                    showReportHoverBox({
+                        heading: 'Visible ribbon',
+                        date: fmtReportDateYmd(anchor),
+                        rows: [
+                            { label: 'Min', value: '\u2014' },
+                            { label: 'Mean', value: '\u2014' },
+                            { label: 'Max', value: '\u2014' },
+                        ],
+                        slicePairTableHtml: sliceHtml,
+                    });
+                    return;
+                }
                 if (reportHoverBox) reportHoverBox.style.display = 'none';
                 return;
             }
@@ -1001,6 +1117,7 @@
                     { label: 'Mean', value: fmtHoverRate(sum / values.length) },
                     { label: 'Max', value: fmtHoverRate(max) },
                 ],
+                slicePairTableHtml: sliceHtml,
             });
         }
 

@@ -104,6 +104,16 @@
             others_grey_mix: 0.62,
             active_z: 48,
             inactive_z: 2,
+            gap_fill_enabled: true,
+            slice_pair_table_enabled: true,
+            slice_pair_font_px: 11,
+            slice_pair_text_color: '',
+            slice_pair_text_alpha: 1,
+            slice_pair_table_bg_color: '',
+            slice_pair_table_bg_alpha: 0.22,
+            slice_pair_grid_color: '',
+            slice_pair_grid_alpha: 0.35,
+            slice_pair_grid_width_px: 1,
         };
     }
 
