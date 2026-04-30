@@ -61,6 +61,7 @@
     "verify:prod": "node scripts/verify-prod.mjs",
     "ship:closeout": "node scripts/ship-closeout-remind.mjs",
     "ship:closeout:strict": "node scripts/ship-closeout-remind.mjs --strict",
+    "wait-for-bots": "node scripts/wait-for-bots.mjs",
     "test:verify-prod": "node --test scripts/test/verify-prod.test.mjs",
     "verify:ubank-savings-gap": "node verify-ubank-savings-gap.mjs",
     "fix:cloudflare-dns-tls": "node scripts/fix-cloudflare-dns-tls.js",
