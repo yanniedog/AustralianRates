@@ -118,7 +118,13 @@
     function parseDate(value) {
         var match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
         if (!match) return null;
-        return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Math.min(Number(match[3]), 28)));
+        var y = Number(match[1]);
+        var m = Number(match[2]) - 1;
+        var d = Number(match[3]);
+        var dt = new Date(Date.UTC(y, m, d));
+        if (!Number.isFinite(dt.getTime())) return null;
+        if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m || dt.getUTCDate() !== d) return null;
+        return dt;
     }
     /** ECharts time-axis label formatter receives ms timestamps; series data may be YYYY-MM-DD strings. */
     function coerceChartDate(value) {
@@ -134,10 +140,19 @@
         return Number.isFinite(date.getTime()) ? date : null;
     }
     function addMonthsYmd(dateText, months) {
-        var date = parseDate(dateText);
-        if (!date) return '';
-        date.setUTCMonth(date.getUTCMonth() + Number(months || 0));
-        return date.toISOString().slice(0, 10);
+        var match = String(dateText || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!match) return '';
+        var y = Number(match[1]);
+        var m0 = Number(match[2]) - 1;
+        var d = Number(match[3]);
+        var add = Number(months || 0);
+        var total = m0 + add;
+        var ty = y + Math.floor(total / 12);
+        var tm = ((total % 12) + 12) % 12;
+        var lastDay = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+        var dd = Math.min(d, lastDay);
+        var mm = tm + 1;
+        return ty + '-' + (mm < 10 ? '0' : '') + mm + '-' + (dd < 10 ? '0' : '') + dd;
     }
     function termLabel(months) {
         var n = Number(months);
