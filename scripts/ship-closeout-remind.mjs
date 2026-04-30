@@ -34,16 +34,26 @@ function isTopicBranch(branch) {
 }
 
 function openPrForHead(branch) {
-  if (!branch) return null;
-  const json = ghOut(['pr', 'list', '--head', branch, '--state', 'open', '--json', 'number,url', '--limit', '1']);
-  if (!json) return null;
+  if (!branch) return null
+  const json = ghOut([
+    'pr',
+    'list',
+    '--state',
+    'open',
+    '--limit',
+    '100',
+    '--json',
+    'number,url,headRefName',
+  ])
+  if (!json) return null
   try {
-    const arr = JSON.parse(json);
-    if (Array.isArray(arr) && arr.length > 0) return arr[0];
+    const arr = JSON.parse(json)
+    if (!Array.isArray(arr)) return null
+    const hit = arr.find((row) => String(row.headRefName || '') === branch)
+    return hit && hit.url ? { number: hit.number, url: hit.url } : null
   } catch {
-    return null;
+    return null
   }
-  return null;
 }
 
 const lines = [
