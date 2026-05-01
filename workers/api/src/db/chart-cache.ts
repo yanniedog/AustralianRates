@@ -4,6 +4,7 @@
  */
 
 import type { EnvBindings } from '../types'
+import { getMelbourneNowParts } from '../utils/time'
 import { parseOptionalPublicMinRate } from '../routes/public-query'
 import { queryHomeLoanCollectionDateRange } from './home-loans/paginated'
 import type { LatestFilters } from './home-loans/shared'
@@ -54,7 +55,7 @@ function toYmd(d: Date): string {
 }
 
 function clampChartDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } {
-  const today = toYmd(new Date())
+  const today = getMelbourneNowParts().date
   const cappedEndDate = endDate && endDate > today ? today : endDate || today
   const cappedStartDate = startDate && startDate <= cappedEndDate ? startDate : cappedEndDate
   return { startDate: cappedStartDate, endDate: cappedEndDate }
@@ -225,7 +226,7 @@ export async function resolveChartDateRangeFromDb(
     range = await queryTdCollectionDateRange(db, filters as Parameters<typeof queryTdCollectionDateRange>[1])
   }
   range = await bumpHistoricalRangeEndWithLatestTable(db, section, filters, range)
-  const fallback = toYmd(new Date())
+  const fallback = getMelbourneNowParts().date
   const baseRange = clampChartDateRange(range?.startDate || fallback, range?.endDate || fallback)
   const rangeStart = baseRange.startDate
   const rangeEnd = baseRange.endDate
