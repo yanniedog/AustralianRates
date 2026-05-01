@@ -72,7 +72,8 @@ type SectionConfig = {
   refreshSql: string
 }
 
-const BAND_PRODUCT_GAP_FILL_MAX_DAYS = 3
+// Write-optimisation skips unchanged-rate rows indefinitely; fill the entire practical query window.
+const BAND_PRODUCT_GAP_FILL_MAX_DAYS = 365
 export const REPORT_BANDS_SOURCE_VERSION = 3
 
 function rateBoundsForReportSection(section: ReportPlotSection): { min: number; max: number } {
@@ -708,10 +709,12 @@ export async function queryReportPlotPayload(
       ? await resolveTdTermMonths(db, historyFilters as TdReportFilters, config.historyTable)
       : null
   const where = buildWhere(section, historyFilters, { termMonths: resolvedTermMonths })
+  // Default to today so forward-fill always extends the ribbon to the current date even when
+  // no rows were written (write-optimisation skipped unchanged rates or ingest hasn't run yet).
   const windowEndYmd =
     typeof historyFilters.endDate === 'string' && historyFilters.endDate.trim()
       ? historyFilters.endDate.trim().slice(0, 10)
-      : undefined
+      : new Date().toISOString().slice(0, 10)
   const series = await queryBandSeries(db, config.historyTable, where, section, windowEndYmd)
   const payload: ReportBandsPayload = {
     mode,
