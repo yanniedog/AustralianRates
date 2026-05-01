@@ -2,73 +2,22 @@
 
 Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two Workers (API, archive).
 
-## Ship bar (do not say “done” until every step)
+## Ship bar
 
-**CI green ≠ merge-ready, shipped, or production updated.** Steps 5–7 below are **policy** (wait gate + threaded replies + merge); user tone and “merge everything” wording **never** waive them unless **explicit written waiver of bot closeout for that PR**—**`.cursor/rules/workflow-rules-never-overridden.mdc`**.
+Full 9-step procedure — branch, commit, PR, CI, bot wait, feedback synthesis, thread closure, merge, deploy, production verify — all steps required unless user explicitly waives in writing for that PR. **`WORKFLOW.md`** (repo root). Read it in full before opening a PR.
 
-**Anti–early-stop:** **`docs/ASSISTANT_SHIP_CLOSEOUT.md`**, **`npm run ship:closeout`** (on topic branches use **`npm run ship:closeout:strict`** before claiming ship-complete), **`.cursor/rules/no-early-stop-after-pr.mdc`**. Full procedure (**wait gate** checklist): **`.cursor/rules/git-pr-workflow-default.mdc`**.
+Anti-early-stop: `npm run ship:closeout:strict` before claiming complete; exit 2 = continue steps 5–9. Docs: **`docs/ASSISTANT_SHIP_CLOSEOUT.md`**, **`docs/CONCURRENT_AGENT_WORKFLOW.md`**.
 
-When landing on production, finish **in order** (unless that step is **waived in writing**):
-
-1. **Branch** — From `origin/main` (`main` push only if user ordered hotfix).
-2. **Commit + push** — On the topic branch only.
-3. **PR** — Into `main`.
-4. **CI** — `ci_result` green; fix forward on **this** PR (**@mention** re-review after pushes).
-5. **Wait gate** — **`.cursor/rules/git-pr-workflow-default.mdc`** (full checklist).
-6. **Threaded closure** — In-thread replies on substantive bot/human threads (**implemented / deferred / declined**).
-7. **Merge** — Only after 5–6; do **not** enable auto-merge before then (**`pr-auto-merge.yml`** merges on CI only).
-8. **Deploy confirmed** — Pages/Workers finished (push ≠ deployed).
-9. **Production verify** — Default **`npm run verify:prod -- --scope=auto --depth=smoke`** vs **https://www.australianrates.com**; report commands + exit codes or waiver/block.
-
-If a step cannot run here, say so and list **remaining** steps—do not imply cleared.
-
-**Concurrency / automation:** `docs/CONCURRENT_AGENT_WORKFLOW.md`.
-
-## Hard Enforcement Rules (Must Always Be Followed)
-
-These rules are mandatory and override any conflicting preference.
-
-### Mandatory closeout (every chat with repo changes)
-
-**MUST ALWAYS** (any assistant, any chat about this repo): after making changes, **commit and push**; **confirm deployment and CI completed successfully** and fix any failures until green; then **confirm the intended result on https://www.australianrates.com** using the commands below—not push alone. Applies to **every** conversation unless the user explicitly waives commit, push, deploy, or production verification. Cursor rule: `.cursor/rules/every-chat-commit-deploy-verify-production.mdc`.
-
-### Multiagent workflow and modular code
+## Multiagent workflow and modular code
 
 This repo has multiple concurrent agents working in parallel. Every agent MUST:
 
 - **Always branch off fresh `origin/main`** with a **distinctive slug** (include the session topic plus a short nonce like `-kj1` if the topic is generic) — never reuse another agent's in-flight branch, and if collision is detected, move work to `agent/<slug>-v2` and reapply.
 - **Check for clashes** with other active `agent/*` / `feat/*` / `fix/*` branches before pushing and before merging; rebase/merge `origin/main` and resolve conflicts deliberately.
-- **Watch CI** (`gh pr checks <num> --watch`); fix on the **same** branch. **`ci_result` alone is not merge OK**—then **`.cursor/rules/git-pr-workflow-default.mdc`** (wait gate + threaded replies).
+- **Watch CI** (`gh pr checks <num> --watch`); fix on the **same** branch. `ci_result` alone is not merge OK — follow **`WORKFLOW.md`** (wait gate + synthesis + threaded replies).
 - **Keep every file under ~800 LOC (hard ceiling 1000 LOC).** When a change would push a file past the soft target, split it along natural seams in the same PR or file a follow-up in `docs/REFACTOR_BACKLOG.md`. Exempt generated files, configs (`wrangler.*`, `tsconfig*`, `vite.config.*`, `vitest.config.*`), migrations, lockfiles, real-data test fixtures, and `node_modules`.
 
 Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.
-
-### Default git workflow (Cursor, Codex, Claude)
-
-Procedure, wait gate, and merge timing: **`.cursor/rules/git-pr-workflow-default.mdc`**. **`docs/CONCURRENT_AGENT_WORKFLOW.md`** — Actions, auto-merge, stale-branch cleanup.
-
-**Follow-ups stay on one PR:** commit on **that** branch; do **not** open a duplicate PR unless instructed. After fix pushes, **`@mention`** using handles from **`gh pr view -c`**.
-
-**Exception:** user orders **`main` hotfix** — push **`main`**, then deployment confirmation and verification below.
-
-1. Before claiming any deploy-related task is complete, run from repo root:
-   - `npm run verify:prod -- --scope=auto --depth=smoke`
-   - For shared/tooling/workflow/verification changes or explicit full sign-off: `npm run verify:prod -- --scope=full --depth=full`
-2. If any command exits non-zero:
-   - Do not mark the task complete.
-   - Fix the failure, redeploy the affected subproject, and rerun the failing test(s).
-   - Repeat until all commands exit `0`.
-3. In the final response for deploy-related tasks, include evidence:
-   - Exact commands run.
-   - Exit codes.
-   - Brief pass/fail summary.
-4. Deploy or production-impacting changes are not complete unless all required checks pass or the user explicitly instructs to skip checks.
-5. Never present assumptions as verification.
-   - If a check was not run, state it was not run.
-6. Reinforces the mandatory closeout above: commit and push; confirm deployment completed successfully; fix any CI/deployment issues; confirm the intended result on https://www.australianrates.com before claiming the task is complete.
-   - Applies to every chat about this project unless the user explicitly instructs the assistant not to commit, push, deploy, or verify production.
-   - If deployment is triggered by Cloudflare Pages on git push, confirm the Pages deployment completed rather than treating the push itself as proof.
-   - If the API or archive Worker is affected, deploy the affected Worker with the repo deployment command and verify the production endpoint/result.
 
 ## Production and Hosting
 
