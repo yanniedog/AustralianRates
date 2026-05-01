@@ -582,6 +582,75 @@
         return { flat: flat, byBank: byBank, count: flat.length };
     }
 
+    /**
+     * When per-product history (`allSeries`) is empty but the bands report payload has lenders,
+     * build one synthetic product per bank from daily min/mean/max so hierarchy and scoped ribbon
+     * overlays still have geometry (aggregated mean or midpoint when mean is absent).
+     */
+    function buildRibbonCanvasProductModelFromBandsPayload(dates, plotPayload, bankColor, sectionStr) {
+        var flat = [];
+        var byBank = {};
+        var sec = String(sectionStr || '');
+        if (!dates || !dates.length || !plotPayload || plotPayload.mode !== 'bands' || !Array.isArray(plotPayload.series)) {
+            return { flat: flat, byBank: byBank, count: 0 };
+        }
+        var bankIndexMap = {};
+        var bankCount = 0;
+        plotPayload.series.forEach(function (bankSeries) {
+            var bn = String(bankSeries && bankSeries.bank_name || '').trim();
+            if (!bn) return;
+            var bk = bn.toLowerCase();
+            if (bankIndexMap[bk] == null) {
+                bankIndexMap[bk] = bankCount++;
+            }
+            var baseHex = bankColor(bn, bankIndexMap[bk]);
+            var byDateRaw = {};
+            (bankSeries.points || []).forEach(function (p) {
+                var d = String(p.date || '').slice(0, 10);
+                if (!d) return;
+                var lo = positiveRibbonRateOrNull(p.min_rate);
+                var hi = positiveRibbonRateOrNull(p.max_rate);
+                var mn = positiveRibbonRateOrNull(p.mean_rate);
+                if (lo == null && mn != null) lo = mn;
+                if (hi == null && mn != null) hi = mn;
+                var v = mn;
+                if (v == null && lo != null && hi != null) v = (lo + hi) / 2;
+                if (v == null || !Number.isFinite(v) || v <= 0) return;
+                if (sec === 'savings' && v < 1.0) return;
+                byDateRaw[d] = v;
+            });
+            var hasData = false;
+            for (var di = 0; di < dates.length; di++) {
+                if (byDateRaw[dates[di]] != null) {
+                    hasData = true;
+                    break;
+                }
+            }
+            if (!hasData) return;
+            var byDate = forwardFillRibbonScalarByDate(dates, byDateRaw, sec);
+            var row = {
+                bank_name: bn,
+                product_name: 'Lender range',
+                product_id: 'band:' + bk,
+            };
+            var pseudoSeries = { key: 'band:' + bk, points: [], latestRow: row };
+            var pn = 'Lender range';
+            var key = ribbonProductSeriesKey(pseudoSeries, bn, pn, row);
+            var entry = {
+                key: key,
+                bankName: bn,
+                productName: pn,
+                baseHex: baseHex,
+                byDate: byDate,
+                row: row,
+            };
+            flat.push(entry);
+            if (!byBank[bn]) byBank[bn] = [];
+            byBank[bn].push(entry);
+        });
+        return { flat: flat, byBank: byBank, count: flat.length };
+    }
+
     window.AR.chartReportPlotSeries = {
         buildRibbonBankSummaryData: buildRibbonBankSummaryData,
         getRibbonStyleResolved: getRibbonStyleResolved,
@@ -592,5 +661,6 @@
         buildBandSeries: buildBandSeries,
         buildProductOverlay: buildProductOverlay,
         buildRibbonCanvasProductModel: buildRibbonCanvasProductModel,
+        buildRibbonCanvasProductModelFromBandsPayload: buildRibbonCanvasProductModelFromBandsPayload,
     };
 })();
