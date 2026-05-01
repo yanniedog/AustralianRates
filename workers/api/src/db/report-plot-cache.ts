@@ -11,7 +11,7 @@ import {
 import type { ReportPlotMode, ReportPlotPayload, ReportPlotSection } from './report-plot-types'
 
 const REPORT_PLOT_CACHE_TABLE = 'report_plot_request_cache'
-const REPORT_PLOT_PAYLOAD_VERSION = 3
+const REPORT_PLOT_PAYLOAD_VERSION = 4
 const D1_CACHE_FRESH_MINUTES = 90
 
 type ReportPlotCacheRow = {
