@@ -44,6 +44,17 @@ f. Note ALL bots that commented after your last push: Gemini Code Assist, Codex,
 
 **The 20-minute minimum wait is unconditional — it applies even when early bot threads already exist. Bots post in waves; early threads do not mean all bots have finished. Calling "no more feedback" before 20 min is a policy violation.**
 
+### Step 5b — Synthesize all feedback before responding (hard; DO NOT skip)
+
+After `wait-for-bots` exits 0, and BEFORE replying to any thread:
+
+1. Fetch ALL threads (steps a–f above).
+2. **Read every thread before replying to any of them.**
+3. Post ONE `## Feedback plan` comment on the PR: list every thread → implement / defer / decline + reason; note dependencies.
+4. Only after posting the plan: make code changes (single push), then reply in-thread to each bot/reviewer.
+
+Do NOT claim "no actionable feedback" from a top-level summary without also checking all inline file-level threads — top-level text is often generic while file comments carry P1/P2 items.
+
 ### Step 6 — Thread closure (hard; DO NOT skip)
 For **every** substantive thread (bot or human):
 - Enumerate all distinct threads.
