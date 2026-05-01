@@ -9,6 +9,7 @@ import {
   type ChartCacheScope,
 } from './chart-cache'
 import type { ReportPlotMode, ReportPlotPayload, ReportPlotSection } from './report-plot-types'
+import { getMelbourneNowParts } from '../utils/time'
 
 const REPORT_PLOT_CACHE_TABLE = 'report_plot_request_cache'
 const REPORT_PLOT_PAYLOAD_VERSION = 4
@@ -148,9 +149,11 @@ export async function getCachedOrComputeReportPlot(
   compute: () => Promise<ReportPlotPayload>,
   options?: { allowLiveCompute?: boolean },
 ): Promise<ReportPlotPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
-  const key = buildReportPlotCacheKey(section, mode, params)
+  // Include Melbourne date in KV key so entries don't serve across day boundaries.
+  // D1 cache uses scope (date-agnostic) with a 90-min TTL — no change needed there.
+  const kvKey = buildReportPlotCacheKey(section, mode, { ...params, _d: getMelbourneNowParts().date })
   if (env.CHART_CACHE_KV) {
-    const kvCached = await env.CHART_CACHE_KV.get(key)
+    const kvCached = await env.CHART_CACHE_KV.get(kvKey)
     if (kvCached) {
       try {
         return { ...(JSON.parse(kvCached) as ReportPlotPayload), fromCache: 'kv' }
@@ -164,7 +167,7 @@ export async function getCachedOrComputeReportPlot(
   if (scope) {
     const d1Cached = await readD1ReportPlotCache(env.DB, section, mode, scope)
     if (d1Cached) {
-      await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, key, d1Cached)
+      await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, kvKey, d1Cached)
       return { ...d1Cached, fromCache: 'd1' }
     }
   }
@@ -181,6 +184,6 @@ export async function getCachedOrComputeReportPlot(
       /* ignore D1 cache write failure */
     }
   }
-  await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, key, payload)
+  await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, kvKey, payload)
   return { ...payload, fromCache: 'live' }
 }
