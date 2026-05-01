@@ -373,11 +373,6 @@
                 lineStyle: { width: 0, opacity: 0 },
                 data: [], silent: true, z: 3,
             });
-            series = series.concat(buildBandSeries({
-                dates: dates,
-                plotPayload: plotPayload,
-                bankColor: options.bankColor,
-            }));
         }
 
         var bandByDateByBank = {};
