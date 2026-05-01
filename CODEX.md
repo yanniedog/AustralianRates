@@ -31,12 +31,14 @@ Commit only on the topic branch. `git push -u origin HEAD`.
 
 **Do NOT merge in the same breath as CI green. Stop. Then:**
 
-a. `gh pr view <n> --comments`
-b. `gh api repos/<owner>/<repo>/pulls/<n>/reviews`
-c. `gh api repos/<owner>/<repo>/pulls/<n>/comments`
-d. On github.com: scan Conversation + Files until in-flight bot activity settles.
-e. Note all bots that commented after your last push: Gemini Code Assist, Codex, Copilot, CodeRabbit, Greptile, Sourcery, security scanners.
-f. **If no substantive threads yet: wait ~10–15 minutes from first green CI, then re-sweep.** Calling "no feedback" immediately at green CI is a policy violation.
+a. Run `npm run wait-for-bots` — exits 2 with time remaining if < 20 min since `ci_result` green. Do not proceed until it exits 0.
+b. `gh pr view <n> --comments`
+c. `gh api repos/<owner>/<repo>/pulls/<n>/reviews`
+d. `gh api repos/<owner>/<repo>/pulls/<n>/comments`
+e. On github.com: scan Conversation + Files until in-flight bot activity settles.
+f. Note all bots that commented after your last push: Gemini Code Assist, Codex, Copilot, CodeRabbit, Greptile, Sourcery, security scanners.
+
+**The 20-minute minimum wait is unconditional — even when early threads exist. Bots post in waves; early threads do not mean all bots have finished.**
 
 ### 6 — Thread closure (hard; never skip)
 
@@ -66,13 +68,14 @@ From repo root. Report exit code. Use `--scope=full --depth=full` for shared/too
 
 ---
 
-## Closeout check (run before claiming task complete on a topic branch)
+## Closeout checks (run before claiming task complete on a topic branch)
 
 ```sh
-npm run ship:closeout:strict
+npm run ship:closeout:strict && npm run wait-for-bots
 ```
 
-Exit 0 = clear. Exit 2 = open PR still exists → continue steps 5–9.
+- `ship:closeout:strict` exit 2 = open PR still exists → continue steps 5–9.
+- `wait-for-bots` exit 2 = < 20 min since `ci_result` green → wait and re-sweep bots.
 
 ---
 
