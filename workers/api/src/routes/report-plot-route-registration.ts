@@ -11,6 +11,7 @@ import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
 import type { ChartWindow } from '../utils/chart-window'
 import { isPublicLiveD1FallbackDisabled } from '../utils/d1-budget'
+import { getMelbourneNowParts } from '../utils/time'
 
 const REPORT_PLOT_CACHE_MAX_AGE = 300
 
@@ -35,7 +36,7 @@ function toQueryParams(input: QueryRecord): QueryRecord {
 }
 
 export function todayYmd(): string {
-  return new Date().toISOString().slice(0, 10)
+  return getMelbourneNowParts().date
 }
 
 export function clampFiltersToToday<TFilters extends ReportFilters>(filters: TFilters): TFilters {
