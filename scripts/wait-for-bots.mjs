@@ -39,12 +39,11 @@ function isTopicBranch(b) {
 }
 
 function openPrNumber(branch) {
-  const json = ghOut(['pr', 'list', '--state', 'open', '--limit', '100', '--json', 'number,headRefName']);
+  const json = ghOut(['pr', 'list', '--state', 'open', '--head', branch, '--json', 'number']);
   if (!json) return null;
   try {
     const arr = JSON.parse(json);
-    const hit = arr.find((r) => r.headRefName === branch);
-    return hit ? hit.number : null;
+    return arr.length > 0 ? arr[0].number : null;
   } catch {
     return null;
   }

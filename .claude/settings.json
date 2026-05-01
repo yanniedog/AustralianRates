@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npm run ship:closeout:strict && npm run wait-for-bots",
+            "command": "npm run wait-for-bots && npm run ship:closeout:strict",
             "timeout": 30
           }
         ]
