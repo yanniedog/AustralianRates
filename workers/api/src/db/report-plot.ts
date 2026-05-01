@@ -1,4 +1,5 @@
 import type { ChartWindow } from '../utils/chart-window'
+import { getMelbourneNowParts } from '../utils/time'
 import { runSourceWhereClause, type SourceMode } from '../utils/source-mode'
 import {
   addBalanceBandOverlapWhere,
@@ -74,7 +75,7 @@ type SectionConfig = {
 
 // Write-optimisation skips unchanged-rate rows indefinitely; fill the entire practical query window.
 const BAND_PRODUCT_GAP_FILL_MAX_DAYS = 365
-export const REPORT_BANDS_SOURCE_VERSION = 3
+export const REPORT_BANDS_SOURCE_VERSION = 4
 
 function rateBoundsForReportSection(section: ReportPlotSection): { min: number; max: number } {
   switch (section) {
@@ -631,6 +632,28 @@ async function queryBandSeries(
     byBankRows.set(bankName, rows)
   }
 
+  // Fetch the earliest date each series was marked removed so carry-forward stops at removal.
+  // A removed product's is_removed=1 rows are filtered from the main query, so without this
+  // the 365-day fill would keep stale rates in the band long after a product was discontinued.
+  const seriesRemovedAt = new Map<string, string>()
+  try {
+    const removedResult = await db
+      .prepare(
+        `SELECT
+           COALESCE(NULLIF(TRIM(series_key), ''), bank_name || '|' || product_id) AS sk,
+           MIN(collection_date) AS removed_at
+         FROM ${table}
+         WHERE COALESCE(is_removed, 0) = 1
+         GROUP BY COALESCE(NULLIF(TRIM(series_key), ''), bank_name || '|' || product_id)`,
+      )
+      .all<{ sk: string; removed_at: string }>()
+    for (const row of removedResult.results ?? []) {
+      if (row.sk && row.removed_at) seriesRemovedAt.set(String(row.sk), String(row.removed_at).slice(0, 10))
+    }
+  } catch {
+    // is_removed column absent on older schema versions — skip removal gating
+  }
+
   const out: ReportBandSeries[] = []
   for (const [bankName, rows] of byBankRows.entries()) {
     const dates = Array.from(new Set(rows.map((row) => row.date))).sort((left, right) => left.localeCompare(right))
@@ -654,6 +677,8 @@ async function queryBandSeries(
         }
         const previous = lastKnown.get(seriesKey)
         if (!previous) continue
+        const removedAt = seriesRemovedAt.get(seriesKey)
+        if (removedAt && date >= removedAt) continue
         const gapDays = Math.round(
           (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${previous.date}T00:00:00Z`)) / 86400000,
         )
@@ -709,12 +734,12 @@ export async function queryReportPlotPayload(
       ? await resolveTdTermMonths(db, historyFilters as TdReportFilters, config.historyTable)
       : null
   const where = buildWhere(section, historyFilters, { termMonths: resolvedTermMonths })
-  // Default to today so forward-fill always extends the ribbon to the current date even when
-  // no rows were written (write-optimisation skipped unchanged rates or ingest hasn't run yet).
+  // Default to Melbourne today so forward-fill always extends the ribbon to the current local date
+  // even when no rows were written (write-optimisation skipped unchanged rates or ingest hasn't run yet).
   const windowEndYmd =
     typeof historyFilters.endDate === 'string' && historyFilters.endDate.trim()
       ? historyFilters.endDate.trim().slice(0, 10)
-      : new Date().toISOString().slice(0, 10)
+      : getMelbourneNowParts().date
   const series = await queryBandSeries(db, config.historyTable, where, section, windowEndYmd)
   const payload: ReportBandsPayload = {
     mode,
