@@ -1115,12 +1115,12 @@
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
                 var rate = prod && prod.byDate ? prod.byDate[anchor] : null;
-                var sliceHtml1 = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs,
-                    [{ label: 'Rate', value: fmtHoverRate(rate) }]);
+                var rateRow = [{ label: 'Rate', value: fmtHoverRate(rate) }];
+                var sliceHtml1 = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, rateRow);
                 showReportHoverBox({
                     heading: reportProductLabel(prod),
                     date: fmtReportDateYmd(anchor),
-                    rows: [],
+                    rows: sliceHtml1 ? [] : rateRow,
                     slicePairTableHtml: sliceHtml1,
                 });
                 return;
@@ -1130,22 +1130,20 @@
                 var v = prod && prod.byDate ? Number(prod.byDate[anchor]) : NaN;
                 if (Number.isFinite(v) && v > 0) values.push(v);
             });
+            var emDash = '\u2014';
+            var rateRowsEmpty = [
+                { label: 'Min', value: emDash },
+                { label: 'Mean', value: emDash },
+                { label: 'Max', value: emDash },
+            ];
             if (!values.length) {
-                var sliceHtmlEmpty = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, [
-                    { label: 'Min', value: '\u2014' },
-                    { label: 'Mean', value: '\u2014' },
-                    { label: 'Max', value: '\u2014' },
-                ]);
-                if (sliceHtmlEmpty && rs && rs.slice_pair_table_enabled) {
-                    showReportHoverBox({
-                        heading: 'Visible ribbon',
-                        date: fmtReportDateYmd(anchor),
-                        rows: [],
-                        slicePairTableHtml: sliceHtmlEmpty,
-                    });
-                    return;
-                }
-                if (reportHoverBox) reportHoverBox.style.display = 'none';
+                var sliceHtmlEmpty = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, rateRowsEmpty);
+                showReportHoverBox({
+                    heading: 'Visible ribbon',
+                    date: fmtReportDateYmd(anchor),
+                    rows: sliceHtmlEmpty ? [] : rateRowsEmpty,
+                    slicePairTableHtml: sliceHtmlEmpty,
+                });
                 return;
             }
             var min = values[0];
@@ -1156,15 +1154,16 @@
                 if (v > max) max = v;
                 sum += v;
             });
-            var sliceHtml = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, [
+            var rateRows = [
                 { label: 'Min', value: fmtHoverRate(min) },
                 { label: 'Mean', value: fmtHoverRate(sum / values.length) },
                 { label: 'Max', value: fmtHoverRate(max) },
-            ]);
+            ];
+            var sliceHtml = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, rateRows);
             showReportHoverBox({
                 heading: 'Visible ribbon',
                 date: fmtReportDateYmd(anchor),
-                rows: [],
+                rows: sliceHtml ? [] : rateRows,
                 slicePairTableHtml: sliceHtml,
             });
         }
