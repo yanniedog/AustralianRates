@@ -1008,9 +1008,17 @@
             var latestYmd = dates.length ? dates[dates.length - 1] : '';
             var prevYmd = dates.length >= 2 ? dates[dates.length - 2] : '';
             if (!latestYmd || !prevYmd) return;
-            var stats = buildRibbonVisibleSlicePairCounts(visibleRibbonProducts(), latestYmd, prevYmd);
-            stats.d = latestYmd;
-            stats.p = prevYmd;
+            pushSlicePairStatsForDate(latestYmd, prevYmd);
+        }
+
+        function pushSlicePairStatsForDate(anchorYmd, prevYmd, visibleProducts) {
+            var anchor = String(anchorYmd || '').slice(0, 10);
+            var prev = String(prevYmd || '').slice(0, 10);
+            if (!anchor || !prev) return;
+            var products = visibleProducts || visibleRibbonProducts();
+            var stats = buildRibbonVisibleSlicePairCounts(products, anchor, prev);
+            stats.d = anchor;
+            stats.p = prev;
             var heroMod = window.AR && window.AR.hero;
             if (heroMod && typeof heroMod.setSlicePairStats === 'function') {
                 heroMod.setSlicePairStats(stats);
@@ -1018,67 +1026,7 @@
         }
 
         function buildRibbonSlicePairTableHtml(visibleProducts, anchorYmd, prevYmd, rs, rateRows) {
-            if (!rs || !rs.slice_pair_table_enabled) return '';
-            var stats = buildRibbonVisibleSlicePairCounts(visibleProducts, anchorYmd, prevYmd);
-            if (!stats.universe_total) return '';
-            var fw = Math.max(7, Math.min(18, Math.round(Number(rs.slice_pair_font_px) || 11)));
-            var tCol = String(rs.slice_pair_text_color || '').trim();
-            var textHex = /^#[0-9a-fA-F]{6}$/.test(tCol) ? tCol : String(theme.ttText || '#94a3b8');
-            var textA = Number(rs.slice_pair_text_alpha);
-            if (!Number.isFinite(textA)) textA = 1;
-            textA = Math.max(0, Math.min(1, textA));
-            var textRgba = hexToRgba(textHex, textA);
-            var bgCol = String(rs.slice_pair_table_bg_color || '').trim();
-            var bgHex = /^#[0-9a-fA-F]{6}$/.test(bgCol) ? bgCol : '#020617';
-            var bgA = Number(rs.slice_pair_table_bg_alpha);
-            if (!Number.isFinite(bgA)) bgA = 0.22;
-            bgA = Math.max(0, Math.min(0.92, bgA));
-            var bgRgba = hexToRgba(bgHex, bgA);
-            var gCol = String(rs.slice_pair_grid_color || '').trim();
-            var gHex = /^#[0-9a-fA-F]{6}$/.test(gCol) ? gCol : '#64748b';
-            var gA = Number(rs.slice_pair_grid_alpha);
-            if (!Number.isFinite(gA)) gA = 0.35;
-            gA = Math.max(0, Math.min(1, gA));
-            var gridRgba = hexToRgba(gHex, gA);
-            var gw = Number(rs.slice_pair_grid_width_px);
-            if (!Number.isFinite(gw)) gw = 1;
-            gw = Math.max(0, Math.min(4, gw));
-            var borderCss = gw > 0 ? (gw + 'px solid ' + gridRgba) : 'none';
-            var prev = String(prevYmd || '').slice(0, 10);
-            var em = '\u2014';
-            function cellVal(n) {
-                if (!prev) return em;
-                return String(Number.isFinite(n) ? n : 0);
-            }
-            var rows = [
-                { h: '\u2191', v: cellVal(stats.up_count) },
-                { h: '\u2192', v: cellVal(stats.flat_count) },
-                { h: '\u2193', v: cellVal(stats.down_count) },
-                { h: '-x', v: cellVal(stats.prev_missing_count) },
-                { h: 'x-', v: cellVal(stats.curr_missing_count) },
-                { h: 'xx', v: cellVal(stats.both_missing_count) },
-            ];
-            var title = prev
-                ? ('Visible products vs prior chart day ' + prev + ' (n=' + String(stats.universe_total) + ').')
-                : 'No prior day in range.';
-            var rowHtml = rows.map(function (r) {
-                return '<tr>' +
-                    '<th scope="row" style="text-align:left;font-weight:600;padding:1px 5px 1px 2px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.h) + '</th>' +
-                    '<td style="text-align:right;font-weight:700;padding:1px 2px 1px 5px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.v) + '</td>' +
-                    '</tr>';
-            }).join('');
-            if (rateRows && rateRows.length) {
-                rowHtml += rateRows.map(function (r, i) {
-                    var pt = i === 0 ? '4px' : '1px';
-                    return '<tr>' +
-                        '<th scope="row" style="text-align:left;font-weight:400;padding:' + pt + ' 5px 1px 2px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.label) + '</th>' +
-                        '<td style="text-align:right;font-weight:700;padding:' + pt + ' 2px 1px 5px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.value) + '</td>' +
-                        '</tr>';
-                }).join('');
-            }
-            return '<div role="region" aria-label="Slice pair counts" title="' + escHtml(title) + '" style="margin-top:5px;padding:3px 4px;border-radius:4px;background:' + bgRgba + ';color:' + textRgba + ';font-size:' + fw + 'px;line-height:1.2;width:max-content;max-width:100%;overflow:visible">' +
-                '<table style="border-collapse:collapse;table-layout:auto;width:auto;white-space:nowrap;color:inherit">' +
-                '<tbody>' + rowHtml + '</tbody></table></div>';
+            return '';
         }
 
         function showReportHoverBox(input) {
@@ -1112,6 +1060,7 @@
             var idx = dates.indexOf(anchor);
             var prevYmd = idx > 0 ? dates[idx - 1] : '';
             var visibleProducts = visibleRibbonProducts();
+            pushSlicePairStatsForDate(anchor, prevYmd, visibleProducts);
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
                 var rate = prod && prod.byDate ? prod.byDate[anchor] : null;

@@ -53,6 +53,7 @@
         tdCurveFrames: [],
         economicOverlayIds: [],
         economicOverlaySeries: [],
+        previewRows: [],
         reportProductHistory: null,
         reportPlots: { moves: null, bands: null },
         mainChart: null,
@@ -645,8 +646,16 @@
                 chartState,
                 baseParams || buildBaseParams()
             );
-            previewModel.reportPlots = reportPlots || { moves: null, bands: null };
-            return previewModel;
+            if (previewModel && Array.isArray(previewModel.allSeries) && previewModel.allSeries.length > 0) {
+                previewModel.reportPlots = reportPlots || { moves: null, bands: null };
+                return previewModel;
+            }
+        }
+        var previewRows = Array.isArray(chartState.previewRows) ? chartState.previewRows : [];
+        if (previewRows.length && chartData.buildChartModel) {
+            var latestModel = chartData.buildChartModel(previewRows, currentFields || fields(), chartState);
+            latestModel.reportPlots = reportPlots || { moves: null, bands: null };
+            return latestModel;
         }
         var bands = reportPlots && reportPlots.bands && Array.isArray(reportPlots.bands.series)
             ? reportPlots.bands.series
@@ -797,6 +806,7 @@
             chartData.fetchReportPlot('moves', baseParams),
             chartData.fetchReportPlot('bands', baseParams),
             chartData.fetchReportProductHistory ? chartData.fetchReportProductHistory(baseParams) : Promise.resolve(null),
+            chartData.fetchLatestPreviewRows ? chartData.fetchLatestPreviewRows(baseParams) : Promise.resolve([]),
         ]).then(function (results) {
             return {
                 reportPlots: {
@@ -804,6 +814,7 @@
                     bands: results[1] || null,
                 },
                 reportProductHistory: results[2] || null,
+                previewRows: Array.isArray(results[3]) ? results[3] : [],
             };
         }).catch(function (error) {
             clientLog('warn', 'Report range preview fetch failed', {
@@ -827,6 +838,7 @@
 
         chartState.reportPlots = reportData.reportPlots;
         chartState.reportProductHistory = reportData.reportProductHistory || null;
+        chartState.previewRows = reportData.previewRows || [];
         return renderReportPreview(currentFields, baseParams);
     }
 
@@ -851,6 +863,7 @@
             chartState.truncated = false;
             chartState.reportPlots = { moves: null, bands: null };
             chartState.reportProductHistory = null;
+            chartState.previewRows = [];
             chartState.economicOverlaySeries = [];
             chartState.rbaHistory = [];
             chartState.cpiHistory = [];
@@ -860,6 +873,7 @@
             chartState.fallbackReason = '';
             chartState.reportPlots = { moves: null, bands: null };
             chartState.reportProductHistory = null;
+            chartState.previewRows = [];
             chartState.economicOverlaySeries = [];
             chartState.stale = true;
             chartUi.setStatus('SYNC');
@@ -914,6 +928,19 @@
                     return null;
                 })
                 : Promise.resolve(null);
+            var previewRowsPromise = wantsReportPlots && chartData.fetchLatestPreviewRows
+                ? chartData.fetchLatestPreviewRows(baseParams).then(function (rows) {
+                    chartState.previewRows = Array.isArray(rows) ? rows : [];
+                    return chartState.previewRows;
+                }).catch(function (error) {
+                    chartState.previewRows = [];
+                    clientLog('warn', 'Preview rows fetch failed', {
+                        message: String(error && error.message || 'Preview rows fetch failed'),
+                        view: currentView,
+                    });
+                    return [];
+                })
+                : Promise.resolve([]);
 
             var rowsError = null;
             var rowsPromise = wantsReportPlots
@@ -940,11 +967,13 @@
                     reportPlotPromise,
                     historyPromise,
                     reportProductHistoryPromise,
+                    previewRowsPromise,
                 ]);
                 chartState.reportPlots = reportPreviewData[0];
                 chartState.rbaHistory = reportPreviewData[1][0];
                 chartState.cpiHistory = reportPreviewData[1][1];
                 chartState.reportProductHistory = reportPreviewData[2] || null;
+                chartState.previewRows = Array.isArray(reportPreviewData[3]) ? reportPreviewData[3] : [];
                 if (chartState.loadSerial !== loadSerial) return;
                 try {
                     reportPreviewRendered = await renderReportPreview(currentFields, baseParams);
