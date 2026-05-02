@@ -12,6 +12,8 @@
     // take much longer on larger public datasets.
     var CHART_SERIES_TIMEOUT_MS = 65000;
     var CHART_REPORT_TIMEOUT_MS = 12000;
+    var CHART_PREVIEW_TIMEOUT_MS = 12000;
+    var CHART_PREVIEW_ROWS_LIMIT = 5000;
     var CHART_RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
     var REPORT_PLOT_WARM_WINDOWS = ['30D', '90D', '180D', '1Y', 'ALL'];
     var chartResponseCache = {};
@@ -1121,6 +1123,43 @@
         });
     }
 
+    function fetchLatestPreviewRows(params) {
+        var queryParams = {};
+        Object.keys(params || {}).forEach(function (key) {
+            queryParams[key] = params[key];
+        });
+        delete queryParams.representation;
+        delete queryParams.sort;
+        delete queryParams.dir;
+        delete queryParams.chart_window;
+        delete queryParams.start_date;
+        delete queryParams.end_date;
+        queryParams.limit = String(CHART_PREVIEW_ROWS_LIMIT);
+
+        var fetcher = function () {
+            var policy = buildRequestPolicy('/latest-all', queryParams, 'latest-all');
+            return fetchJsonWithPolicy(policy, '/latest-all', {
+                requestLabel: 'Current products',
+                timeoutMs: CHART_PREVIEW_TIMEOUT_MS,
+                retryCount: 0,
+                cache: policy.fetchCache,
+                skipCacheBust: policy.skipCacheBust,
+                sortQuery: policy.sortQuery,
+                snapshotWaitMs: 2500,
+            }, function (result) {
+                var body = result && result.data ? result.data : result;
+                return Array.isArray(body && body.rows) ? body.rows : [];
+            });
+        };
+
+        if (chartLocalData && typeof chartLocalData.getLatestPreviewRows === 'function') {
+            return Promise.resolve(chartLocalData.getLatestPreviewRows(queryParams)).then(function (localRows) {
+                return Array.isArray(localRows) ? localRows : fetcher();
+            });
+        }
+        return fetcher();
+    }
+
     function buildReportPlotWarmKey(params) {
         var queryParams = {};
         Object.keys(params || {}).forEach(function (key) {
@@ -1304,6 +1343,7 @@
         buildChartModelFromReportProductHistory: buildChartModelFromReportProductHistory,
         buildSlopeModel: buildSlopeModel,
         fetchAllRateRows: fetchAllRateRows,
+        fetchLatestPreviewRows: fetchLatestPreviewRows,
         fetchReportPlot: fetchReportPlot,
         fetchSlicePairStats: fetchSlicePairStats,
         fetchReportProductHistory: fetchReportProductHistory,
