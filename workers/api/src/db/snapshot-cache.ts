@@ -66,8 +66,16 @@ export async function writeSnapshotKvBundles(
   payload: SnapshotPayload,
 ): Promise<void> {
   if (!kv) return
-  const mainKey = buildSnapshotKvKey(section, scope)
-  const inlineKey = buildSnapshotInlineKvKey(section, scope)
+  // Use the payload's own filtersResolved.endDate as the KV key date so that
+  // snapshots built across Melbourne midnight don't land on the wrong day's key.
+  const payloadEndDate = (payload.data as { filtersResolved?: { endDate?: unknown } } | undefined)
+    ?.filtersResolved?.endDate
+  const dateOverride =
+    typeof payloadEndDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payloadEndDate)
+      ? payloadEndDate
+      : undefined
+  const mainKey = buildSnapshotKvKey(section, scope, dateOverride)
+  const inlineKey = buildSnapshotInlineKvKey(section, scope, dateOverride)
   const serialized = JSON.stringify(payload)
   const byteLength =
     typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(serialized).length : serialized.length
