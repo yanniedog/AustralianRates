@@ -1292,6 +1292,92 @@
             return out;
         }
 
+        /** Synthetic per-bank row when `allSeries` is empty but bands payload exists (see buildRibbonCanvasProductModelFromBandsPayload). */
+        function ribbonCanvasProductIsBandsFallback(prod) {
+            if (!prod) return false;
+            var pid = String(prod.row && prod.row.product_id || '');
+            if (pid.indexOf('band:') === 0) return true;
+            return String(prod.productName || '').trim() === 'Lender range';
+        }
+
+        /**
+         * Min/max/mean ribbon geometry for one lender from the bands report map (matches buildBandSeries gap-fill).
+         * Used when the canvas model has only the scalar fallback product so scoped overlay is not collapsed to one line.
+         */
+        function buildScopedRibbonFromBandMap(bankName) {
+            var rawBn = String(bankName || '').trim();
+            if (!rawBn || !dates || !dates.length) return null;
+            var canonBn = canonicalBandsBankFromUi(rawBn);
+            var mapKey = '';
+            if (canonBn && bandByDateByBank[canonBn] && Object.keys(bandByDateByBank[canonBn]).length) {
+                mapKey = canonBn;
+            } else if (bandByDateByBank[rawBn] && Object.keys(bandByDateByBank[rawBn]).length) {
+                mapKey = rawBn;
+            } else {
+                var want = normRibbonBankName(canonBn || rawBn);
+                for (var cand in bandByDateByBank) {
+                    if (!Object.prototype.hasOwnProperty.call(bandByDateByBank, cand)) continue;
+                    if (normRibbonBankName(cand) !== want) continue;
+                    if (Object.keys(bandByDateByBank[cand]).length) {
+                        mapKey = cand;
+                        break;
+                    }
+                }
+            }
+            var byDate = mapKey ? bandByDateByBank[mapKey] : null;
+            if (!byDate || !Object.keys(byDate).length) return null;
+            var rsLocal = getRibbonStyleResolved();
+            var gapFillEnabled = rsLocal.gap_fill_enabled !== false;
+            var GAP_FILL_MAX_MS = 3 * 86400000;
+            var lastKnownPoint = null;
+            var lastKnownDate = null;
+            var filledByDate = {};
+            dates.forEach(function (date) {
+                var point = byDate[date];
+                if (point != null) {
+                    filledByDate[date] = point;
+                    lastKnownPoint = point;
+                    lastKnownDate = date;
+                } else if (gapFillEnabled && lastKnownPoint != null) {
+                    var gapMs = new Date(date).getTime() - new Date(lastKnownDate).getTime();
+                    if (gapMs > 0 && gapMs <= GAP_FILL_MAX_MS) {
+                        filledByDate[date] = lastKnownPoint;
+                    }
+                }
+            });
+            var minData = [];
+            var maxData = [];
+            var deltaData = [];
+            var meanData = [];
+            var any = false;
+            dates.forEach(function (date) {
+                var point = filledByDate[date];
+                if (point == null) {
+                    minData.push([date, null]);
+                    maxData.push([date, null]);
+                    deltaData.push([date, null]);
+                    meanData.push([date, null]);
+                    return;
+                }
+                var lo = positiveRibbonRateOrNull(point.min_rate);
+                var hi = positiveRibbonRateOrNull(point.max_rate);
+                var mn = positiveRibbonRateOrNull(point.mean_rate);
+                if (lo == null || hi == null || hi < lo) {
+                    minData.push([date, null]);
+                    maxData.push([date, null]);
+                    deltaData.push([date, null]);
+                    meanData.push([date, null]);
+                    return;
+                }
+                any = true;
+                minData.push([date, lo]);
+                maxData.push([date, hi]);
+                deltaData.push([date, Math.max(0, hi - lo)]);
+                meanData.push([date, mn != null ? mn : (lo + hi) / 2]);
+            });
+            return any ? { minData: minData, maxData: maxData, deltaData: deltaData, meanData: meanData } : null;
+        }
+
         function applyRibbonBankHighlightState() {
             if (!isBandsMode) return;
             var keys = currentScopedProductKeys();
@@ -1302,36 +1388,47 @@
             });
             var minData = [], maxData = [], deltaData = [], meanData = [], lineData = [];
             var sec = String(section || '');
-            dates.forEach(function (d) {
-                var vs = [];
-                for (var pi = 0; pi < prods.length; pi++) {
-                    var v = prods[pi].byDate[d];
-                    if (v == null || !Number.isFinite(v) || v <= 0) continue;
-                    if (sec === 'savings' && v < 1.0) continue;
-                    vs.push(v);
-                }
-                if (!vs.length) {
-                    minData.push([d, null]);
-                    maxData.push([d, null]);
-                    deltaData.push([d, null]);
-                    meanData.push([d, null]);
-                    lineData.push([d, null]);
-                    return;
-                }
-                var lo = vs[0], hi = vs[0], sum = 0;
-                for (var i = 0; i < vs.length; i++) {
-                    if (vs[i] < lo) lo = vs[i];
-                    if (vs[i] > hi) hi = vs[i];
-                    sum += vs[i];
-                }
-                var mean = sum / vs.length;
-                minData.push([d, lo]);
-                maxData.push([d, hi]);
-                deltaData.push([d, Math.max(0, hi - lo)]);
-                meanData.push([d, mean]);
-                lineData.push([d, prods.length === 1 ? mean : null]);
-            });
-            var single = prods.length === 1;
+            var bandScoped = prods.length === 1 && prods[0] && ribbonCanvasProductIsBandsFallback(prods[0])
+                ? buildScopedRibbonFromBandMap(prods[0].bankName)
+                : null;
+            if (bandScoped) {
+                minData = bandScoped.minData;
+                maxData = bandScoped.maxData;
+                deltaData = bandScoped.deltaData;
+                meanData = bandScoped.meanData;
+                lineData = [];
+            } else {
+                dates.forEach(function (d) {
+                    var vs = [];
+                    for (var pi = 0; pi < prods.length; pi++) {
+                        var v = prods[pi].byDate[d];
+                        if (v == null || !Number.isFinite(v) || v <= 0) continue;
+                        if (sec === 'savings' && v < 1.0) continue;
+                        vs.push(v);
+                    }
+                    if (!vs.length) {
+                        minData.push([d, null]);
+                        maxData.push([d, null]);
+                        deltaData.push([d, null]);
+                        meanData.push([d, null]);
+                        lineData.push([d, null]);
+                        return;
+                    }
+                    var lo = vs[0], hi = vs[0], sum = 0;
+                    for (var i = 0; i < vs.length; i++) {
+                        if (vs[i] < lo) lo = vs[i];
+                        if (vs[i] > hi) hi = vs[i];
+                        sum += vs[i];
+                    }
+                    var mean = sum / vs.length;
+                    minData.push([d, lo]);
+                    maxData.push([d, hi]);
+                    deltaData.push([d, Math.max(0, hi - lo)]);
+                    meanData.push([d, mean]);
+                    lineData.push([d, prods.length === 1 ? mean : null]);
+                });
+            }
+            var single = bandScoped ? false : prods.length === 1;
             var utilsRibbon = window.AR && window.AR.utils;
             var ribbonColor = utilsRibbon && typeof utilsRibbon.resolveSectionRibbonAccentHex === 'function'
                 ? utilsRibbon.resolveSectionRibbonAccentHex()
