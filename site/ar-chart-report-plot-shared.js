@@ -1002,7 +1002,7 @@
             return out;
         }
 
-        function buildRibbonSlicePairTableHtml(visibleProducts, anchorYmd, prevYmd, rs) {
+        function buildRibbonSlicePairTableHtml(visibleProducts, anchorYmd, prevYmd, rs, rateRows) {
             if (!rs || !rs.slice_pair_table_enabled) return '';
             var stats = buildRibbonVisibleSlicePairCounts(visibleProducts, anchorYmd, prevYmd);
             if (!stats.universe_total) return '';
@@ -1052,6 +1052,15 @@
                     '<td style="text-align:right;font-weight:700;padding:1px 2px 1px 5px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.v) + '</td>' +
                     '</tr>';
             }).join('');
+            if (rateRows && rateRows.length) {
+                rowHtml += rateRows.map(function (r, i) {
+                    var pt = i === 0 ? '4px' : '1px';
+                    return '<tr>' +
+                        '<th scope="row" style="text-align:left;font-weight:400;padding:' + pt + ' 5px 1px 2px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.label) + '</th>' +
+                        '<td style="text-align:right;font-weight:700;padding:' + pt + ' 2px 1px 5px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.value) + '</td>' +
+                        '</tr>';
+                }).join('');
+            }
             return '<div role="region" aria-label="Slice pair counts" title="' + escHtml(title) + '" style="margin-top:5px;padding:3px 4px;border-radius:4px;background:' + bgRgba + ';color:' + textRgba + ';font-size:' + fw + 'px;line-height:1.2;width:max-content;max-width:100%;overflow:visible">' +
                 '<table style="border-collapse:collapse;table-layout:auto;width:auto;white-space:nowrap;color:inherit">' +
                 '<tbody>' + rowHtml + '</tbody></table></div>';
@@ -1088,15 +1097,16 @@
             var idx = dates.indexOf(anchor);
             var prevYmd = idx > 0 ? dates[idx - 1] : '';
             var visibleProducts = visibleRibbonProducts();
-            var sliceHtml = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs);
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
                 var rate = prod && prod.byDate ? prod.byDate[anchor] : null;
+                var sliceHtml1 = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs,
+                    [{ label: 'Rate', value: fmtHoverRate(rate) }]);
                 showReportHoverBox({
                     heading: reportProductLabel(prod),
                     date: fmtReportDateYmd(anchor),
-                    rows: [{ label: 'Rate', value: fmtHoverRate(rate) }],
-                    slicePairTableHtml: sliceHtml,
+                    rows: [],
+                    slicePairTableHtml: sliceHtml1,
                 });
                 return;
             }
@@ -1106,16 +1116,17 @@
                 if (Number.isFinite(v) && v > 0) values.push(v);
             });
             if (!values.length) {
-                if (sliceHtml && rs && rs.slice_pair_table_enabled) {
+                var sliceHtmlEmpty = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, [
+                    { label: 'Min', value: '\u2014' },
+                    { label: 'Mean', value: '\u2014' },
+                    { label: 'Max', value: '\u2014' },
+                ]);
+                if (sliceHtmlEmpty && rs && rs.slice_pair_table_enabled) {
                     showReportHoverBox({
                         heading: 'Visible ribbon',
                         date: fmtReportDateYmd(anchor),
-                        rows: [
-                            { label: 'Min', value: '\u2014' },
-                            { label: 'Mean', value: '\u2014' },
-                            { label: 'Max', value: '\u2014' },
-                        ],
-                        slicePairTableHtml: sliceHtml,
+                        rows: [],
+                        slicePairTableHtml: sliceHtmlEmpty,
                     });
                     return;
                 }
@@ -1130,14 +1141,15 @@
                 if (v > max) max = v;
                 sum += v;
             });
+            var sliceHtml = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, [
+                { label: 'Min', value: fmtHoverRate(min) },
+                { label: 'Mean', value: fmtHoverRate(sum / values.length) },
+                { label: 'Max', value: fmtHoverRate(max) },
+            ]);
             showReportHoverBox({
                 heading: 'Visible ribbon',
                 date: fmtReportDateYmd(anchor),
-                rows: [
-                    { label: 'Min', value: fmtHoverRate(min) },
-                    { label: 'Mean', value: fmtHoverRate(sum / values.length) },
-                    { label: 'Max', value: fmtHoverRate(max) },
-                ],
+                rows: [],
                 slicePairTableHtml: sliceHtml,
             });
         }
