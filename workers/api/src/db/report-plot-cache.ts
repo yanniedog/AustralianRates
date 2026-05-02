@@ -92,7 +92,11 @@ export async function readD1ReportPlotCache(
 
   const cutoff = new Date()
   cutoff.setMinutes(cutoff.getMinutes() - D1_CACHE_FRESH_MINUTES)
-  if (new Date(row.built_at) < cutoff) return null
+  const builtAt = new Date(row.built_at)
+  if (builtAt < cutoff) return null
+  // Reject entries built on a different Melbourne day to prevent cross-midnight seeding into today's KV key.
+  const builtAtMelbourneDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(builtAt)
+  if (builtAtMelbourneDate !== getMelbourneNowParts().date) return null
 
   try {
     const payloadText = row.payload_json.startsWith(GZIP_PREFIX)
@@ -151,7 +155,7 @@ export async function getCachedOrComputeReportPlot(
 ): Promise<ReportPlotPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   // Include Melbourne date in KV key so entries don't serve across day boundaries.
   // D1 cache uses scope (date-agnostic) with a 90-min TTL — no change needed there.
-  const kvKey = buildReportPlotCacheKey(section, mode, { ...params, _d: getMelbourneNowParts().date })
+  const kvKey = buildReportPlotCacheKey(section, mode, { ...params, __kvDay: getMelbourneNowParts().date })
   if (env.CHART_CACHE_KV) {
     const kvCached = await env.CHART_CACHE_KV.get(kvKey)
     if (kvCached) {
