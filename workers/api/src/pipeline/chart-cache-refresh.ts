@@ -59,10 +59,17 @@ async function isFreshPublicSnapshotPackage(
     const builtAt = new Date(String(parsed.builtAt || '')).getTime()
     if (!Number.isFinite(builtAt) || Date.now() - builtAt >= PUBLIC_PACKAGE_REFRESH_FRESH_MS) return false
     if (latestRunFinishedMs != null && latestRunFinishedMs > builtAt) return false
-    // Reject snapshots whose endDate doesn't match today's Melbourne date — these
-    // were built across Melbourne midnight and landed on the wrong day's KV key.
+    // Reject snapshots whose endDate is more than one Melbourne day old. Allow
+    // previous-day endDate for early-morning hours (after Melbourne midnight but
+    // before today's data is ingested) to avoid cron rebuilding every cycle.
     const endDate = parsed.data?.filtersResolved?.endDate
-    if (endDate && endDate !== getMelbourneNowParts().date) return false
+    if (endDate) {
+      const melbourneToday = getMelbourneNowParts().date
+      const melbourneYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(
+        new Date(Date.now() - 86400000),
+      )
+      if (endDate !== melbourneToday && endDate !== melbourneYesterday) return false
+    }
     return true
   } catch {
     return false

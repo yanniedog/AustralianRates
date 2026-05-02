@@ -68,53 +68,63 @@ export async function writeSnapshotKvBundles(
   if (!kv) return
   // Use the payload's own filtersResolved.endDate as the KV key date so that
   // snapshots built across Melbourne midnight don't land on the wrong day's key.
+  // Also write under the current Melbourne date key so the middleware can find
+  // the snapshot during early-morning hours (after Melbourne midnight but before
+  // the day's data is ingested), when endDate is still the previous day.
   const payloadEndDate = (payload.data as { filtersResolved?: { endDate?: unknown } } | undefined)
     ?.filtersResolved?.endDate
   const dateOverride =
     typeof payloadEndDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payloadEndDate)
       ? payloadEndDate
       : undefined
-  const mainKey = buildSnapshotKvKey(section, scope, dateOverride)
-  const inlineKey = buildSnapshotInlineKvKey(section, scope, dateOverride)
+  const melbourneNow = getMelbourneNowParts().date
+  const datesToWrite = dateOverride ? Array.from(new Set([dateOverride, melbourneNow])) : [melbourneNow]
   const serialized = JSON.stringify(payload)
   const byteLength =
     typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(serialized).length : serialized.length
   if (byteLength > KV_VALUE_BYTE_LIMIT) {
     log.error('snapshot_cache', 'snapshot KV bundle exceeds 25 MiB limit', {
       code: 'snapshot_kv_value_too_large',
-      context: `key=${mainKey} bytes=${byteLength} limit=${KV_VALUE_BYTE_LIMIT} chars=${serialized.length}`,
+      context: `section=${section} scope=${scope} bytes=${byteLength} limit=${KV_VALUE_BYTE_LIMIT} chars=${serialized.length}`,
     })
     return
   }
-  try {
-    await kv.put(mainKey, serialized, { expirationTtl: CHART_CACHE_KV_TTL })
-  } catch (error) {
-    log.error('snapshot_cache', 'snapshot KV put failed', {
-      code: 'snapshot_kv_put_failed',
-      error,
-      context: `key=${mainKey} bytes=${byteLength}`,
-    })
-    return
-  }
-  try {
-    const trimmed = trimSnapshotDataForHtmlInline(
-      payload.section,
-      String(payload.scope),
-      payload.builtAt,
-      payload.data as Record<string, unknown>,
-    )
-    if (trimmed) {
-      const inlinePayload: SnapshotPayload = { ...payload, data: trimmed }
-      await kv.put(inlineKey, JSON.stringify(inlinePayload), { expirationTtl: CHART_CACHE_KV_TTL })
-    } else {
-      await kv.delete(inlineKey)
+  let trimmed: ReturnType<typeof trimSnapshotDataForHtmlInline> | undefined
+  for (const date of datesToWrite) {
+    const key = buildSnapshotKvKey(section, scope, date)
+    try {
+      await kv.put(key, serialized, { expirationTtl: CHART_CACHE_KV_TTL })
+    } catch (error) {
+      log.error('snapshot_cache', 'snapshot KV put failed', {
+        code: 'snapshot_kv_put_failed',
+        error,
+        context: `key=${key} bytes=${byteLength}`,
+      })
+      continue
     }
-  } catch (error) {
-    log.warn('snapshot_cache', 'snapshot inline KV write failed', {
-      code: 'snapshot_inline_kv_write_failed',
-      error,
-      context: `key=${inlineKey}`,
-    })
+    try {
+      if (trimmed === undefined) {
+        trimmed = trimSnapshotDataForHtmlInline(
+          payload.section,
+          String(payload.scope),
+          payload.builtAt,
+          payload.data as Record<string, unknown>,
+        )
+      }
+      const inlineKey = buildSnapshotInlineKvKey(section, scope, date)
+      if (trimmed) {
+        const inlinePayload: SnapshotPayload = { ...payload, data: trimmed }
+        await kv.put(inlineKey, JSON.stringify(inlinePayload), { expirationTtl: CHART_CACHE_KV_TTL })
+      } else {
+        await kv.delete(inlineKey)
+      }
+    } catch (error) {
+      log.warn('snapshot_cache', 'snapshot inline KV write failed', {
+        code: 'snapshot_inline_kv_write_failed',
+        error,
+        context: `date=${date}`,
+      })
+    }
   }
 }
 
@@ -153,11 +163,17 @@ export async function readD1SnapshotCache(
       : row.payload_json
     const parsed = JSON.parse(payloadText) as { v?: number; payload?: SnapshotPayload }
     if (!parsed || parsed.v !== SNAPSHOT_PAYLOAD_VERSION || !parsed.payload) return null
-    // Reject entries whose endDate doesn't match today's Melbourne date — same guard as KV freshness check.
-    // Also reject absent/non-string endDate: those are pre-format or malformed payloads.
+    // Reject absent/non-string endDate (malformed payloads) and entries more than
+    // one Melbourne day old. Allow previous-day endDate for early-morning hours
+    // (after Melbourne midnight but before today's data is ingested).
     const endDate = (parsed.payload.data as { filtersResolved?: { endDate?: unknown } } | undefined)
       ?.filtersResolved?.endDate
-    if (typeof endDate !== 'string' || endDate !== getMelbourneNowParts().date) return null
+    if (typeof endDate !== 'string') return null
+    const melbourneToday = getMelbourneNowParts().date
+    const melbourneYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(
+      new Date(Date.now() - 86400000),
+    )
+    if (endDate !== melbourneToday && endDate !== melbourneYesterday) return null
     return parsed.payload
   } catch {
     return null
