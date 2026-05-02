@@ -500,12 +500,18 @@
     }
 
     /**
-     * Carry each product's last quoted rate forward across calendar gaps ≤3 days (aligned with buildBandSeries
-     * on band payloads) so aggregated ribbon geometry matches the declared chart window after sparse ingest points.
+     * Carry each product's last quoted rate forward across calendar gaps so ribbon geometry matches
+     * the declared chart window after sparse ingest points.
+     * Home-loan daily ingest skips unchanged rows (write-optimisation), so a product whose rate has
+     * been stable for months has no row for recent dates even though it is actively offered.
+     * Use 365-day fill for home loans (matching server-side BAND_PRODUCT_GAP_FILL_MAX_DAYS=365) so
+     * stable products correctly show as flat (→) instead of both-missing (xx) in the ribbon tooltip.
+     * Savings/TD write every day so the shorter 3-day fill is sufficient.
      */
     function forwardFillRibbonScalarByDate(dates, byDate, sectionStr) {
         var sec = String(sectionStr || '');
-        var GAP_FILL_MAX_MS = 3 * 86400000;
+        var isHomeLoan = sec === 'home-loans' || sec === 'home_loans';
+        var GAP_FILL_MAX_MS = isHomeLoan ? 365 * 86400000 : 3 * 86400000;
         var out = {};
         Object.keys(byDate || {}).forEach(function (k) {
             var raw = byDate[k];
