@@ -15,6 +15,7 @@ import {
   type ChartCacheScope,
   type ChartCacheSection,
 } from './chart-cache'
+import { getMelbourneNowParts } from '../utils/time'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
 /** Bump when snapshot payload shape changes so stale rows are ignored. v11 aligns chart window end with latest_* max collection_date; v10 adds slicePairStats; v9 raised the inline snapshot budget for raw home-loan report bundles. */
@@ -31,14 +32,16 @@ export type SnapshotPayload = {
   data: Record<string, unknown>
 }
 
-export function buildSnapshotKvKey(section: ChartCacheSection, scope: SnapshotScope): string {
-  // Include payload version so bumping SNAPSHOT_PAYLOAD_VERSION instantly invalidates all KV keys.
-  return `snapshot:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}`
+export function buildSnapshotKvKey(section: ChartCacheSection, scope: SnapshotScope, melbourneDate?: string): string {
+  // Include Melbourne date so snapshots don't serve across day boundaries (stale endDate → missing today-slice).
+  const day = melbourneDate ?? getMelbourneNowParts().date
+  return `snapshot:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}:d${day}`
 }
 
 /** Slim KV entry for Pages HTML inlining (same payload version as full `snapshot:v*` keys). */
-export function buildSnapshotInlineKvKey(section: ChartCacheSection, scope: SnapshotScope): string {
-  return `snapshot-inline:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}`
+export function buildSnapshotInlineKvKey(section: ChartCacheSection, scope: SnapshotScope, melbourneDate?: string): string {
+  const day = melbourneDate ?? getMelbourneNowParts().date
+  return `snapshot-inline:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}:d${day}`
 }
 
 function isNoSuchTableError(error: unknown, table: string): boolean {
@@ -130,7 +133,11 @@ export async function readD1SnapshotCache(
 
   const cutoff = new Date()
   cutoff.setMinutes(cutoff.getMinutes() - D1_CACHE_FRESH_MINUTES)
-  if (new Date(row.built_at) < cutoff) return null
+  const builtAt = new Date(row.built_at)
+  if (builtAt < cutoff) return null
+  // Reject entries built on a different Melbourne day to prevent cross-midnight stale endDate.
+  const builtAtMelbourneDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(builtAt)
+  if (builtAtMelbourneDate !== getMelbourneNowParts().date) return null
 
   try {
     const payloadText = row.payload_json.startsWith(GZIP_PREFIX)
