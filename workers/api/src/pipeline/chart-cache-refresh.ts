@@ -9,6 +9,7 @@ import { getLatestCompletedDailyRunFinishedAt } from '../db/run-reports'
 import { buildSnapshotKvKey, writeD1SnapshotCache, writeSnapshotKvBundles } from '../db/snapshot-cache'
 import { buildSnapshotPayload } from '../routes/snapshot-public'
 import type { EnvBindings } from '../types'
+import { getMelbourneNowParts } from '../utils/time'
 import {
   collectHomeLoanAnalyticsRowsResolved,
   collectSavingsAnalyticsRowsResolved,
@@ -49,12 +50,19 @@ async function isFreshPublicSnapshotPackage(
   try {
     const parsed = JSON.parse(raw) as {
       builtAt?: string
-      data?: { reportPlotBands?: { meta?: { band_source_version?: number } } }
+      data?: {
+        reportPlotBands?: { meta?: { band_source_version?: number } }
+        filtersResolved?: { endDate?: string }
+      }
     }
     if (parsed.data?.reportPlotBands?.meta?.band_source_version !== REPORT_BANDS_SOURCE_VERSION) return false
     const builtAt = new Date(String(parsed.builtAt || '')).getTime()
     if (!Number.isFinite(builtAt) || Date.now() - builtAt >= PUBLIC_PACKAGE_REFRESH_FRESH_MS) return false
     if (latestRunFinishedMs != null && latestRunFinishedMs > builtAt) return false
+    // Reject snapshots whose endDate doesn't match today's Melbourne date — these
+    // were built across Melbourne midnight and landed on the wrong day's KV key.
+    const endDate = parsed.data?.filtersResolved?.endDate
+    if (endDate && endDate !== getMelbourneNowParts().date) return false
     return true
   } catch {
     return false

@@ -16,6 +16,10 @@ const MAX_INLINE_BYTES = 500000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
 const SNAPSHOT_KV_VERSION = 11;
+
+function melbourneDateYmd() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(new Date());
+}
 const SECTION_KV_KEY = {
     'home-loan-rates': 'home_loans',
     'savings-rates': 'savings',
@@ -207,8 +211,9 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
     const dbSection = SECTION_KV_KEY[sectionApiName];
     if (!dbSection) return null;
     const scope = buildScope(chartWindow, preset);
-    const inlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
-    const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
+    const melbDate = melbourneDateYmd();
+    const inlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + melbDate;
+    const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + melbDate;
     try {
         const body = await env.CHART_CACHE_KV.get(inlineKey);
         if (body) {
