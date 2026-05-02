@@ -64,6 +64,8 @@
     var buildProductOverlay = SB.buildProductOverlay;
     var buildRibbonCanvasProductModel = SB.buildRibbonCanvasProductModel;
     var buildRibbonCanvasProductModelFromBandsPayload = SB.buildRibbonCanvasProductModelFromBandsPayload;
+    var RIBBON_BANDS_FALLBACK_PRODUCT_NAME = SB.RIBBON_BANDS_FALLBACK_PRODUCT_NAME;
+    var RIBBON_BANDS_PRODUCT_ID_PREFIX = SB.RIBBON_BANDS_PRODUCT_ID_PREFIX;
 
     var MP = window.AR.chartReportPlotMovesPane || {};
     var createMovesStrip = MP.createMovesStrip;
@@ -1296,8 +1298,27 @@
         function ribbonCanvasProductIsBandsFallback(prod) {
             if (!prod) return false;
             var pid = String(prod.row && prod.row.product_id || '');
-            if (pid.indexOf('band:') === 0) return true;
-            return String(prod.productName || '').trim() === 'Lender range';
+            if (RIBBON_BANDS_PRODUCT_ID_PREFIX && pid.indexOf(RIBBON_BANDS_PRODUCT_ID_PREFIX) === 0) return true;
+            return String(prod.productName || '').trim() === RIBBON_BANDS_FALLBACK_PRODUCT_NAME;
+        }
+
+        /** Pick a `bandByDateByBank` key that has at least one date entry (canonical, raw, or normalized match). */
+        function resolveNonEmptyBandBankKey(bankMap, canonBn, rawBn) {
+            if (canonBn && bankMap[canonBn] && Object.keys(bankMap[canonBn]).length) {
+                return canonBn;
+            }
+            if (bankMap[rawBn] && Object.keys(bankMap[rawBn]).length) {
+                return rawBn;
+            }
+            var want = normRibbonBankName(canonBn || rawBn);
+            for (var cand in bankMap) {
+                if (!Object.prototype.hasOwnProperty.call(bankMap, cand)) continue;
+                if (normRibbonBankName(cand) !== want) continue;
+                if (Object.keys(bankMap[cand]).length) {
+                    return cand;
+                }
+            }
+            return '';
         }
 
         /**
@@ -1308,39 +1329,24 @@
             var rawBn = String(bankName || '').trim();
             if (!rawBn || !dates || !dates.length) return null;
             var canonBn = canonicalBandsBankFromUi(rawBn);
-            var mapKey = '';
-            if (canonBn && bandByDateByBank[canonBn] && Object.keys(bandByDateByBank[canonBn]).length) {
-                mapKey = canonBn;
-            } else if (bandByDateByBank[rawBn] && Object.keys(bandByDateByBank[rawBn]).length) {
-                mapKey = rawBn;
-            } else {
-                var want = normRibbonBankName(canonBn || rawBn);
-                for (var cand in bandByDateByBank) {
-                    if (!Object.prototype.hasOwnProperty.call(bandByDateByBank, cand)) continue;
-                    if (normRibbonBankName(cand) !== want) continue;
-                    if (Object.keys(bandByDateByBank[cand]).length) {
-                        mapKey = cand;
-                        break;
-                    }
-                }
-            }
+            var mapKey = resolveNonEmptyBandBankKey(bandByDateByBank, canonBn, rawBn);
             var byDate = mapKey ? bandByDateByBank[mapKey] : null;
             if (!byDate || !Object.keys(byDate).length) return null;
             var rsLocal = getRibbonStyleResolved();
             var gapFillEnabled = rsLocal.gap_fill_enabled !== false;
-            var GAP_FILL_MAX_MS = 3 * 86400000;
+            var GAP_FILL_MAX_DAYS = 3;
             var lastKnownPoint = null;
-            var lastKnownDate = null;
+            var lastKnownIdx = -1;
             var filledByDate = {};
-            dates.forEach(function (date) {
+            dates.forEach(function (date, idx) {
                 var point = byDate[date];
                 if (point != null) {
                     filledByDate[date] = point;
                     lastKnownPoint = point;
-                    lastKnownDate = date;
-                } else if (gapFillEnabled && lastKnownPoint != null) {
-                    var gapMs = new Date(date).getTime() - new Date(lastKnownDate).getTime();
-                    if (gapMs > 0 && gapMs <= GAP_FILL_MAX_MS) {
+                    lastKnownIdx = idx;
+                } else if (gapFillEnabled && lastKnownPoint != null && lastKnownIdx >= 0) {
+                    var gapDays = idx - lastKnownIdx;
+                    if (gapDays > 0 && gapDays <= GAP_FILL_MAX_DAYS) {
                         filledByDate[date] = lastKnownPoint;
                     }
                 }

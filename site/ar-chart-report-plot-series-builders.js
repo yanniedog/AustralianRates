@@ -16,6 +16,9 @@
     var E = window.AR.chartReportPlotExtent || {};
     var latestRibbonPointForSeries = E.latestRibbonPointForSeries;
     var RIBBON_STEP_MODE = E.RIBBON_STEP_MODE;
+    /** Synthetic bands fallback pseudo-product (must match ribbonCanvasProductIsBandsFallback). */
+    var RIBBON_BANDS_FALLBACK_PRODUCT_NAME = 'Lender range';
+    var RIBBON_BANDS_PRODUCT_ID_PREFIX = 'band:';
 
     function buildRibbonBankSummaryData(plotPayload, allSeries, viewStart, ctxMax) {
         var summaries = {};
@@ -636,11 +639,11 @@
             var byDate = forwardFillRibbonScalarByDate(dates, byDateRaw, sec);
             var row = {
                 bank_name: bn,
-                product_name: 'Lender range',
-                product_id: 'band:' + bk,
+                product_name: RIBBON_BANDS_FALLBACK_PRODUCT_NAME,
+                product_id: RIBBON_BANDS_PRODUCT_ID_PREFIX + bk,
             };
-            var pseudoSeries = { key: 'band:' + bk, points: [], latestRow: row };
-            var pn = 'Lender range';
+            var pseudoSeries = { key: RIBBON_BANDS_PRODUCT_ID_PREFIX + bk, points: [], latestRow: row };
+            var pn = RIBBON_BANDS_FALLBACK_PRODUCT_NAME;
             var key = ribbonProductSeriesKey(pseudoSeries, bn, pn, row);
             var entry = {
                 key: key,
@@ -658,6 +661,8 @@
     }
 
     window.AR.chartReportPlotSeries = {
+        RIBBON_BANDS_FALLBACK_PRODUCT_NAME: RIBBON_BANDS_FALLBACK_PRODUCT_NAME,
+        RIBBON_BANDS_PRODUCT_ID_PREFIX: RIBBON_BANDS_PRODUCT_ID_PREFIX,
         buildRibbonBankSummaryData: buildRibbonBankSummaryData,
         getRibbonStyleResolved: getRibbonStyleResolved,
         ribbonFlowGradientFill: ribbonFlowGradientFill,
