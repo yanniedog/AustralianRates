@@ -17,6 +17,7 @@ import {
   type ChartCacheSection,
 } from './chart-cache'
 import { parseChartWindow, type ChartWindow } from '../utils/chart-window'
+import { getMelbourneNowParts } from '../utils/time'
 
 const DEFAULT_CACHE_LOOKBACK_DAYS = 365
 
@@ -48,7 +49,7 @@ export type ScopedFilters = {
 }
 
 function todayYmd(): string {
-  return new Date().toISOString().slice(0, 10)
+  return getMelbourneNowParts().date
 }
 
 function boundedLookbackStartDate(endDate: string): string {
