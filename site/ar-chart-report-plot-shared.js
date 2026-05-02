@@ -1002,6 +1002,19 @@
             return out;
         }
 
+        function pushLiveSlicePairStats() {
+            var latestYmd = dates.length ? dates[dates.length - 1] : '';
+            var prevYmd = dates.length >= 2 ? dates[dates.length - 2] : '';
+            if (!latestYmd || !prevYmd) return;
+            var stats = buildRibbonVisibleSlicePairCounts(visibleRibbonProducts(), latestYmd, prevYmd);
+            stats.d = latestYmd;
+            stats.p = prevYmd;
+            var heroMod = window.AR && window.AR.hero;
+            if (heroMod && typeof heroMod.setSlicePairStats === 'function') {
+                heroMod.setSlicePairStats(stats);
+            }
+        }
+
         function buildRibbonSlicePairTableHtml(visibleProducts, anchorYmd, prevYmd, rs, rateRows) {
             if (!rs || !rs.slice_pair_table_enabled) return '';
             var stats = buildRibbonVisibleSlicePairCounts(visibleProducts, anchorYmd, prevYmd);
@@ -2158,6 +2171,7 @@
                     ribbonUnderchartSyncedOnFinish = true;
                     refreshRibbonUnderChartPanel();
                 }
+                pushLiveSlicePairStats();
             });
 
             siteUiRibbonListener = function () {
@@ -2170,6 +2184,7 @@
                 updateProductVisibility();
                 scheduleRibbonRedraw();
                 syncRibbonTrayUi();
+                pushLiveSlicePairStats();
             };
             window.addEventListener('ar:site-ui-settings', siteUiRibbonListener);
             syncRibbonTrayUi();
