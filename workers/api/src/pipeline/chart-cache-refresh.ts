@@ -65,8 +65,9 @@ async function isFreshPublicSnapshotPackage(
     const endDate = parsed.data?.filtersResolved?.endDate
     if (endDate) {
       const melbourneToday = getMelbourneNowParts().date
-      const yesterday = new Date(new Date(melbourneToday + 'T00:00:00+10:00').getTime() - 86400000)
-      const melbourneYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(yesterday)
+      const melbourneYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(
+        new Date(Date.now() - 86400000),
+      )
       if (endDate !== melbourneToday && endDate !== melbourneYesterday) return false
     }
     return true

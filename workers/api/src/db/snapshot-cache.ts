@@ -79,14 +79,13 @@ export async function writeSnapshotKvBundles(
       : undefined
   const melbourneNow = getMelbourneNowParts().date
   const datesToWrite = dateOverride ? Array.from(new Set([dateOverride, melbourneNow])) : [melbourneNow]
-  const mainKey = buildSnapshotKvKey(section, scope, datesToWrite[0])
   const serialized = JSON.stringify(payload)
   const byteLength =
     typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(serialized).length : serialized.length
   if (byteLength > KV_VALUE_BYTE_LIMIT) {
     log.error('snapshot_cache', 'snapshot KV bundle exceeds 25 MiB limit', {
       code: 'snapshot_kv_value_too_large',
-      context: `key=${mainKey} bytes=${byteLength} limit=${KV_VALUE_BYTE_LIMIT} chars=${serialized.length}`,
+      context: `section=${section} scope=${scope} bytes=${byteLength} limit=${KV_VALUE_BYTE_LIMIT} chars=${serialized.length}`,
     })
     return
   }
@@ -171,8 +170,9 @@ export async function readD1SnapshotCache(
       ?.filtersResolved?.endDate
     if (typeof endDate !== 'string') return null
     const melbourneToday = getMelbourneNowParts().date
-    const yesterday = new Date(new Date(melbourneToday + 'T00:00:00+10:00').getTime() - 86400000)
-    const melbourneYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(yesterday)
+    const melbourneYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(
+      new Date(Date.now() - 86400000),
+    )
     if (endDate !== melbourneToday && endDate !== melbourneYesterday) return null
     return parsed.payload
   } catch {
