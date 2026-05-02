@@ -7,7 +7,7 @@ import type { SlicePairStatsPayload } from './slice-pair-stats'
 
 /** Bump when response JSON shape changes. */
 
-export const SLICE_PAIR_STATS_PAYLOAD_VERSION = 1
+export const SLICE_PAIR_STATS_PAYLOAD_VERSION = 2
 
 function normalizeScopeParams(
   params: Record<string, string | undefined>,

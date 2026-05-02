@@ -24,10 +24,14 @@ export type SlicePairStatsPayload = SlicePairStatsCounts & {
   p: string
 }
 
-const PROPER_INGEST_ROWS = `
-  retrieval_type = 'present_scrape_same_date'
-  AND (data_quality_flag IS NULL OR data_quality_flag NOT LIKE 'parsed_from_wayback%')
-`
+/**
+ * How far back to scan for each product's most-recent proper-scrape row.
+ * Home-loan ingest skips unchanged rows (write-optimisation), so a product whose
+ * rate has been stable for months has no row for the comparison dates even though
+ * it is actively offered.  400 days covers any realistic rate-stability window
+ * while keeping the index scan bounded.
+ */
+const CARRY_FORWARD_WINDOW_DAYS = 400
 
 function qcHomeLoanHistorical(): string {
   return `NOT EXISTS (
@@ -56,16 +60,6 @@ function qcTdHistorical(): string {
   )`
 }
 
-function rowNumbersOverHist(): string {
-  return `
-    ROW_NUMBER() OVER (
-      PARTITION BY h.series_key, h.collection_date
-      ORDER BY CASE WHEN COALESCE(h.run_source, 'scheduled') = 'scheduled' THEN 0 ELSE 1 END,
-        h.parsed_at DESC
-    ) AS rn
-  `
-}
-
 export function summarizeSlicePairStatsRow(row: Record<string, unknown>): SlicePairStatsCounts {
   const universe_total = Number(row.universe_total ?? 0)
   const up_count = Number(row.up_count ?? 0)
@@ -89,48 +83,61 @@ export function summarizeSlicePairStatsRow(row: Record<string, unknown>): SliceP
   }
 }
 
-export async function queryHomeLoanSlicePairStats(
-  db: D1Database,
-  filters: LatestFilters,
-  pYmd: string,
-  dYmd: string,
-): Promise<SlicePairStatsCounts> {
-  const lw = buildHomeLoanLatestWhere(filters)
-  const sql = `
-    WITH uni AS (
-      SELECT l.series_key
-      FROM latest_home_loan_series l
-      ${lw.clause}
-    ),
+/**
+ * Build the p_use / d_use portion of the slice-pair query.
+ *
+ * Rather than requiring a row on exactly pYmd / dYmd, carry each product's most
+ * recent proper-scrape rate forward.  This eliminates false both_missing counts
+ * caused by write-optimisation (daily home-loan ingest skips unchanged rows, so
+ * a stable product has no row for the comparison dates even though it is active).
+ *
+ * Binds appended (in order): dYmd, dYmd (window lower bound), pYmd, dYmd
+ */
+function buildCarryForwardCtes(histTable: string, qcCheck: string): string {
+  return `
     ranked AS (
       SELECT
         h.series_key,
         h.collection_date,
         h.interest_rate,
-        h.retrieval_type,
-        h.data_quality_flag,
-        ${rowNumbersOverHist()}
-      FROM historical_loan_rates h
+        ROW_NUMBER() OVER (
+          PARTITION BY h.series_key, h.collection_date
+          ORDER BY CASE WHEN COALESCE(h.run_source, 'scheduled') = 'scheduled' THEN 0 ELSE 1 END,
+            h.parsed_at DESC
+        ) AS rn
+      FROM ${histTable} h
       INNER JOIN uni ON uni.series_key = h.series_key
-      WHERE h.collection_date IN (?, ?)
-      AND (${qcHomeLoanHistorical()})
+      WHERE h.collection_date <= ?
+        AND h.collection_date >= date(?, '-${CARRY_FORWARD_WINDOW_DAYS} days')
+        AND h.retrieval_type = 'present_scrape_same_date'
+        AND (h.data_quality_flag IS NULL OR h.data_quality_flag NOT LIKE 'parsed_from_wayback%')
+        AND (${qcCheck})
     ),
-    picked AS (
-      SELECT series_key, collection_date, interest_rate, retrieval_type, data_quality_flag
-      FROM ranked WHERE rn = 1
+    deduped AS (
+      SELECT series_key, collection_date, interest_rate FROM ranked WHERE rn = 1
     ),
     p_use AS (
       SELECT series_key, interest_rate AS ir
-      FROM picked
-      WHERE collection_date = ?
-        AND (${PROPER_INGEST_ROWS})
+      FROM (
+        SELECT series_key, interest_rate,
+          ROW_NUMBER() OVER (PARTITION BY series_key ORDER BY collection_date DESC) AS rn2
+        FROM deduped
+        WHERE collection_date <= ?
+      ) WHERE rn2 = 1
     ),
     d_use AS (
       SELECT series_key, interest_rate AS ir
-      FROM picked
-      WHERE collection_date = ?
-        AND (${PROPER_INGEST_ROWS})
+      FROM (
+        SELECT series_key, interest_rate,
+          ROW_NUMBER() OVER (PARTITION BY series_key ORDER BY collection_date DESC) AS rn2
+        FROM deduped
+        WHERE collection_date <= ?
+      ) WHERE rn2 = 1
     )
+  `
+}
+
+const FINAL_SELECT = `
     SELECT
       (SELECT COUNT(*) FROM uni) AS universe_total,
       COALESCE(SUM(CASE
@@ -148,8 +155,27 @@ export async function queryHomeLoanSlicePairStats(
     FROM uni
     LEFT JOIN p_use ON p_use.series_key = uni.series_key
     LEFT JOIN d_use ON d_use.series_key = uni.series_key
+`
+
+export async function queryHomeLoanSlicePairStats(
+  db: D1Database,
+  filters: LatestFilters,
+  pYmd: string,
+  dYmd: string,
+): Promise<SlicePairStatsCounts> {
+  const lw = buildHomeLoanLatestWhere(filters)
+  const sql = `
+    WITH uni AS (
+      SELECT l.series_key
+      FROM latest_home_loan_series l
+      ${lw.clause}
+    ),
+    ${buildCarryForwardCtes('historical_loan_rates', qcHomeLoanHistorical())}
+    ${FINAL_SELECT}
   `
-  const binds = [...lw.binds, pYmd, dYmd, pYmd, dYmd]
+  // ranked: dYmd (upper bound), dYmd (window lower bound)
+  // p_use: pYmd; d_use: dYmd
+  const binds = [...lw.binds, dYmd, dYmd, pYmd, dYmd]
   const result = await db.prepare(sql).bind(...binds).first<Record<string, unknown>>()
   return summarizeSlicePairStatsRow(result ?? {})
 }
@@ -167,54 +193,10 @@ export async function querySavingsSlicePairStats(
       FROM latest_savings_series l
       ${lw.clause}
     ),
-    ranked AS (
-      SELECT
-        h.series_key,
-        h.collection_date,
-        h.interest_rate,
-        h.retrieval_type,
-        h.data_quality_flag,
-        ${rowNumbersOverHist()}
-      FROM historical_savings_rates h
-      INNER JOIN uni ON uni.series_key = h.series_key
-      WHERE h.collection_date IN (?, ?)
-      AND (${qcSavingsHistorical()})
-    ),
-    picked AS (
-      SELECT series_key, collection_date, interest_rate, retrieval_type, data_quality_flag
-      FROM ranked WHERE rn = 1
-    ),
-    p_use AS (
-      SELECT series_key, interest_rate AS ir
-      FROM picked
-      WHERE collection_date = ?
-        AND (${PROPER_INGEST_ROWS})
-    ),
-    d_use AS (
-      SELECT series_key, interest_rate AS ir
-      FROM picked
-      WHERE collection_date = ?
-        AND (${PROPER_INGEST_ROWS})
-    )
-    SELECT
-      (SELECT COUNT(*) FROM uni) AS universe_total,
-      COALESCE(SUM(CASE
-        WHEN p_use.ir IS NOT NULL AND d_use.ir IS NOT NULL
-          AND ROUND((d_use.ir - p_use.ir) * 100.0) > 0 THEN 1 ELSE 0 END), 0) AS up_count,
-      COALESCE(SUM(CASE
-        WHEN p_use.ir IS NOT NULL AND d_use.ir IS NOT NULL
-          AND ROUND((d_use.ir - p_use.ir) * 100.0) = 0 THEN 1 ELSE 0 END), 0) AS flat_count,
-      COALESCE(SUM(CASE
-        WHEN p_use.ir IS NOT NULL AND d_use.ir IS NOT NULL
-          AND ROUND((d_use.ir - p_use.ir) * 100.0) < 0 THEN 1 ELSE 0 END), 0) AS down_count,
-      COALESCE(SUM(CASE WHEN p_use.ir IS NULL AND d_use.ir IS NOT NULL THEN 1 ELSE 0 END), 0) AS prev_missing_count,
-      COALESCE(SUM(CASE WHEN p_use.ir IS NOT NULL AND d_use.ir IS NULL THEN 1 ELSE 0 END), 0) AS curr_missing_count,
-      COALESCE(SUM(CASE WHEN p_use.ir IS NULL AND d_use.ir IS NULL THEN 1 ELSE 0 END), 0) AS both_missing_count
-    FROM uni
-    LEFT JOIN p_use ON p_use.series_key = uni.series_key
-    LEFT JOIN d_use ON d_use.series_key = uni.series_key
+    ${buildCarryForwardCtes('historical_savings_rates', qcSavingsHistorical())}
+    ${FINAL_SELECT}
   `
-  const binds = [...lw.binds, pYmd, dYmd, pYmd, dYmd]
+  const binds = [...lw.binds, dYmd, dYmd, pYmd, dYmd]
   const result = await db.prepare(sql).bind(...binds).first<Record<string, unknown>>()
   return summarizeSlicePairStatsRow(result ?? {})
 }
@@ -232,54 +214,10 @@ export async function queryTdSlicePairStats(
       FROM latest_td_series l
       ${lw.clause}
     ),
-    ranked AS (
-      SELECT
-        h.series_key,
-        h.collection_date,
-        h.interest_rate,
-        h.retrieval_type,
-        h.data_quality_flag,
-        ${rowNumbersOverHist()}
-      FROM historical_term_deposit_rates h
-      INNER JOIN uni ON uni.series_key = h.series_key
-      WHERE h.collection_date IN (?, ?)
-      AND (${qcTdHistorical()})
-    ),
-    picked AS (
-      SELECT series_key, collection_date, interest_rate, retrieval_type, data_quality_flag
-      FROM ranked WHERE rn = 1
-    ),
-    p_use AS (
-      SELECT series_key, interest_rate AS ir
-      FROM picked
-      WHERE collection_date = ?
-        AND (${PROPER_INGEST_ROWS})
-    ),
-    d_use AS (
-      SELECT series_key, interest_rate AS ir
-      FROM picked
-      WHERE collection_date = ?
-        AND (${PROPER_INGEST_ROWS})
-    )
-    SELECT
-      (SELECT COUNT(*) FROM uni) AS universe_total,
-      COALESCE(SUM(CASE
-        WHEN p_use.ir IS NOT NULL AND d_use.ir IS NOT NULL
-          AND ROUND((d_use.ir - p_use.ir) * 100.0) > 0 THEN 1 ELSE 0 END), 0) AS up_count,
-      COALESCE(SUM(CASE
-        WHEN p_use.ir IS NOT NULL AND d_use.ir IS NOT NULL
-          AND ROUND((d_use.ir - p_use.ir) * 100.0) = 0 THEN 1 ELSE 0 END), 0) AS flat_count,
-      COALESCE(SUM(CASE
-        WHEN p_use.ir IS NOT NULL AND d_use.ir IS NOT NULL
-          AND ROUND((d_use.ir - p_use.ir) * 100.0) < 0 THEN 1 ELSE 0 END), 0) AS down_count,
-      COALESCE(SUM(CASE WHEN p_use.ir IS NULL AND d_use.ir IS NOT NULL THEN 1 ELSE 0 END), 0) AS prev_missing_count,
-      COALESCE(SUM(CASE WHEN p_use.ir IS NOT NULL AND d_use.ir IS NULL THEN 1 ELSE 0 END), 0) AS curr_missing_count,
-      COALESCE(SUM(CASE WHEN p_use.ir IS NULL AND d_use.ir IS NULL THEN 1 ELSE 0 END), 0) AS both_missing_count
-    FROM uni
-    LEFT JOIN p_use ON p_use.series_key = uni.series_key
-    LEFT JOIN d_use ON d_use.series_key = uni.series_key
+    ${buildCarryForwardCtes('historical_term_deposit_rates', qcTdHistorical())}
+    ${FINAL_SELECT}
   `
-  const binds = [...lw.binds, pYmd, dYmd, pYmd, dYmd]
+  const binds = [...lw.binds, dYmd, dYmd, pYmd, dYmd]
   const result = await db.prepare(sql).bind(...binds).first<Record<string, unknown>>()
   return summarizeSlicePairStatsRow(result ?? {})
 }
