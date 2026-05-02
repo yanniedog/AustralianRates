@@ -153,6 +153,10 @@ export async function readD1SnapshotCache(
       : row.payload_json
     const parsed = JSON.parse(payloadText) as { v?: number; payload?: SnapshotPayload }
     if (!parsed || parsed.v !== SNAPSHOT_PAYLOAD_VERSION || !parsed.payload) return null
+    // Reject entries whose endDate doesn't match today's Melbourne date — same guard as KV freshness check.
+    const endDate = (parsed.payload.data as { filtersResolved?: { endDate?: unknown } } | undefined)
+      ?.filtersResolved?.endDate
+    if (typeof endDate === 'string' && endDate !== getMelbourneNowParts().date) return null
     return parsed.payload
   } catch {
     return null
