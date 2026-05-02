@@ -1011,14 +1011,12 @@
             pushSlicePairStatsForDate(latestYmd, prevYmd);
         }
 
-        function pushSlicePairStatsForDate(anchorYmd, prevYmd) {
+        function pushSlicePairStatsForDate(anchorYmd, prevYmd, visibleProducts) {
             var anchor = String(anchorYmd || '').slice(0, 10);
             var prev = String(prevYmd || '').slice(0, 10);
             if (!anchor || !prev) return;
-            var stats = buildRibbonVisibleSlicePairCounts(visibleRibbonProducts(), anchor, prev);
-            var movementTotal = Number(stats.up_count || 0) + Number(stats.flat_count || 0) + Number(stats.down_count || 0);
-            var missingTotal = Number(stats.prev_missing_count || 0) + Number(stats.curr_missing_count || 0) + Number(stats.both_missing_count || 0);
-            if (!movementTotal && missingTotal) return;
+            var products = visibleProducts || visibleRibbonProducts();
+            var stats = buildRibbonVisibleSlicePairCounts(products, anchor, prev);
             stats.d = anchor;
             stats.p = prev;
             var heroMod = window.AR && window.AR.hero;
@@ -1062,7 +1060,7 @@
             var idx = dates.indexOf(anchor);
             var prevYmd = idx > 0 ? dates[idx - 1] : '';
             var visibleProducts = visibleRibbonProducts();
-            pushSlicePairStatsForDate(anchor, prevYmd);
+            pushSlicePairStatsForDate(anchor, prevYmd, visibleProducts);
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
                 var rate = prod && prod.byDate ? prod.byDate[anchor] : null;
