@@ -131,12 +131,11 @@ async function historicalRowCountForCollectionDate(
 /**
  * Scheduled runs can mark every lender_dataset_run as "complete" (e.g. zero expected TD details) while
  * the historical table still has no rows for that collection_date. Post-ingest assurance then fails.
- * When no savings/TD lenders are pending but counts are zero, re-pick all lenders with force and
- * enqueue only the datasets that are still empty.
+ * Call only when `pendingSavingsLenders.length === 0` and savings or term deposits are selected; returns
+ * whether to force-repick all lenders and which datasets to enqueue (only empty historical tables).
  */
-export function planSavingsTdEnqueueDatasets(input: {
+export function planSavingsTdEnqueueDatasetsForEmptyPending(input: {
   selection: DailyDatasetSelection
-  pendingSavingsLendersCount: number
   historicalSavingsCount: number
   historicalTdCount: number
 }): { repickAllSavingsLendersWithForce: boolean; datasets: Array<'savings' | 'term_deposits'> } {
@@ -144,9 +143,6 @@ export function planSavingsTdEnqueueDatasets(input: {
     ...(input.selection.savings ? ['savings' as const] : []),
     ...(input.selection.termDeposits ? ['term_deposits' as const] : []),
   ]
-  if (input.pendingSavingsLendersCount > 0) {
-    return { repickAllSavingsLendersWithForce: false, datasets: full }
-  }
   const needSavings = input.selection.savings && input.historicalSavingsCount === 0
   const needTd = input.selection.termDeposits && input.historicalTdCount === 0
   if (!needSavings && !needTd) {
@@ -250,15 +246,15 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
     }
 
     if (pendingSavingsLenders.length === 0 && (datasetSelection.savings || datasetSelection.termDeposits)) {
-      const histSavings = datasetSelection.savings
-        ? await historicalRowCountForCollectionDate(env.DB, 'historical_savings_rates', collectionDate)
-        : -1
-      const histTd = datasetSelection.termDeposits
-        ? await historicalRowCountForCollectionDate(env.DB, 'historical_term_deposit_rates', collectionDate)
-        : -1
-      const plan = planSavingsTdEnqueueDatasets({
+      const savingsCountPromise = datasetSelection.savings
+        ? historicalRowCountForCollectionDate(env.DB, 'historical_savings_rates', collectionDate)
+        : Promise.resolve(-1)
+      const tdCountPromise = datasetSelection.termDeposits
+        ? historicalRowCountForCollectionDate(env.DB, 'historical_term_deposit_rates', collectionDate)
+        : Promise.resolve(-1)
+      const [histSavings, histTd] = await Promise.all([savingsCountPromise, tdCountPromise])
+      const plan = planSavingsTdEnqueueDatasetsForEmptyPending({
         selection: datasetSelection,
-        pendingSavingsLendersCount: 0,
         historicalSavingsCount: histSavings,
         historicalTdCount: histTd,
       })
