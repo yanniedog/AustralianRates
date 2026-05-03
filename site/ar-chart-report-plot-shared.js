@@ -716,9 +716,26 @@
             var candidates = [];
             Object.keys(knownBanks).forEach(function (bn) {
                 var p = bandByDateByBank[bn] && bandByDateByBank[bn][dateStr];
-                if (!p) return;
-                var lo = positiveRibbonRateOrNull(p.min_rate);
-                var hi = positiveRibbonRateOrNull(p.max_rate);
+                var lo = p ? positiveRibbonRateOrNull(p.min_rate) : null;
+                var hi = p ? positiveRibbonRateOrNull(p.max_rate) : null;
+                if ((lo == null || hi == null) && ribbonCanvasModel && ribbonCanvasModel.count) {
+                    var vals = [];
+                    var bankKey = normRibbonBankName(canonicalBandsBankFromUi(bn));
+                    visibleRibbonProducts().filter(function (prod) {
+                        return normRibbonBankName(prod && prod.bankName) === bankKey;
+                    }).forEach(function (prod) {
+                        var v = ribbonVisibleProductRateAt(prod, dateStr);
+                        if (v != null) vals.push(v);
+                    });
+                    if (vals.length) {
+                        lo = vals[0];
+                        hi = vals[0];
+                        vals.forEach(function (v) {
+                            if (v < lo) lo = v;
+                            if (v > hi) hi = v;
+                        });
+                    }
+                }
                 if (lo == null || hi == null || hi < lo) return;
                 if (yVal >= lo && yVal <= hi) {
                     var w = hi - lo;
@@ -963,6 +980,16 @@
             });
         }
 
+        function visibleRibbonProductsForBank(bankName) {
+            var bank = canonicalBandsBankFromUi(String(bankName || '').trim());
+            if (!bank) return visibleRibbonProducts();
+            var bankKey = normRibbonBankName(bank);
+            var filtered = visibleRibbonProducts().filter(function (prod) {
+                return normRibbonBankName(prod && prod.bankName) === bankKey;
+            });
+            return filtered.length ? filtered : visibleRibbonProducts();
+        }
+
         function ribbonVisibleProductRateAt(prod, ymd) {
             return positiveRibbonRateOrNull(prod && prod.byDate ? prod.byDate[String(ymd || '').slice(0, 10)] : null);
         }
@@ -1025,6 +1052,15 @@
             }
         }
 
+        function syncRibbonSlicePairStat(anchorYmd, bankName) {
+            var fallback = dates.length ? dates[dates.length - 1] : '';
+            var anchor = String(anchorYmd || lastPointerDate || fallback).slice(0, 10);
+            var idx = dates.indexOf(anchor);
+            if (idx <= 0) return;
+            var products = bankName ? visibleRibbonProductsForBank(bankName) : visibleRibbonProducts();
+            pushSlicePairStatsForDate(anchor, dates[idx - 1], products);
+        }
+
         function buildRibbonSlicePairTableHtml(visibleProducts, anchorYmd, prevYmd, rs, rateRows) {
             return '';
         }
@@ -1056,10 +1092,11 @@
                 if (reportHoverBox) reportHoverBox.style.display = 'none';
                 return;
             }
+            var bank = canonicalBandsBankFromUi(String(bankName || '').trim());
             var rs = getRibbonStyleResolved();
             var idx = dates.indexOf(anchor);
             var prevYmd = idx > 0 ? dates[idx - 1] : '';
-            var visibleProducts = visibleRibbonProducts();
+            var visibleProducts = bank ? visibleRibbonProductsForBank(bank) : visibleRibbonProducts();
             pushSlicePairStatsForDate(anchor, prevYmd, visibleProducts);
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
@@ -1088,7 +1125,7 @@
             if (!values.length) {
                 var sliceHtmlEmpty = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, rateRowsEmpty);
                 showReportHoverBox({
-                    heading: 'Visible ribbon',
+                    heading: bank || 'Visible ribbon',
                     date: fmtReportDateYmd(anchor),
                     rows: sliceHtmlEmpty ? [] : rateRowsEmpty,
                     slicePairTableHtml: sliceHtmlEmpty,
@@ -1110,7 +1147,7 @@
             ];
             var sliceHtml = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, rateRows);
             showReportHoverBox({
-                heading: 'Visible ribbon',
+                heading: bank || 'Visible ribbon',
                 date: fmtReportDateYmd(anchor),
                 rows: sliceHtml ? [] : rateRows,
                 slicePairTableHtml: sliceHtml,
@@ -1861,7 +1898,7 @@
             var anchor = resolveDateFromAxisValue(ax0.value);
             if (!anchor) return;
             setRibbonAnchorDate(anchor);
-            syncReportHoverBox(anchor, ribbonChartHighlightBank());
+            syncReportHoverBox(anchor, hoveredBank || ribbonPanelBank());
             if (isBandsMode) refreshRibbonUnderChartPanel();
         });
 
@@ -2089,6 +2126,7 @@
                 hoveredBank = '';
                 ribbonTrayHoverBank = bn;
                 if (!lastPointerDate && dates.length) lastPointerDate = dates[dates.length - 1];
+                syncRibbonSlicePairStat(null, bn);
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
                 refreshRibbonUnderChartPanel();
@@ -2111,6 +2149,7 @@
                     return;
                 }
                 ribbonTrayHoverBank = '';
+                syncRibbonSlicePairStat();
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
                 refreshRibbonUnderChartPanel();
@@ -2137,6 +2176,7 @@
                     if (!keys || !keys.length) return;
                     ribbonListHoverKeys = keys.slice();
                     ribbonListHoverPath = String(row.getAttribute('data-ribbon-tree-path') || '');
+                    syncRibbonSlicePairStat();
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     updateProductVisibility();
                     scheduleRibbonRedraw();
@@ -2158,6 +2198,7 @@
                     var n = ribbonListHoverKeys.length;
                     ribbonListHoverKeys = null;
                     ribbonListHoverPath = '';
+                    syncRibbonSlicePairStat();
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     updateProductVisibility();
                     scheduleRibbonRedraw();
@@ -2200,8 +2241,10 @@
                     if (!dataCoord || dataCoord.length < 2) return;
                     var anchor = resolveDateFromAxisValue(dataCoord[0]);
                     if (!anchor) return;
+                    var bank = pickBankFromRibbonBand(anchor, Number(dataCoord[1]));
+                    if (bank) hoveredBank = bank;
                     setRibbonAnchorDate(anchor);
-                    syncReportHoverBox(anchor);
+                    syncReportHoverBox(anchor, bank || hoveredBank || ribbonPanelBank());
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     if (isBandsMode) refreshRibbonUnderChartPanel();
                     syncRibbonTrayUi();
@@ -2209,6 +2252,13 @@
                 };
                 var onRibbonChartOut = function () {
                     if (reportHoverBox) reportHoverBox.style.display = 'none';
+                    if (hoveredBank && !ribbonProductBank && !ribbonTrayHoverBank) {
+                        hoveredBank = '';
+                        applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                        refreshRibbonUnderChartPanel();
+                        syncRibbonTrayUi();
+                        if (useRibbonCanvas) scheduleRibbonRedraw();
+                    }
                 };
                 zr.on('mousemove', onRibbonChartMove);
                 zr.on('globalout', onRibbonChartOut);
