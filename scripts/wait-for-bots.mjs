@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 /**
- * Pre-merge bot wait enforcer.
- * Auto-detects the open PR for the current topic branch, finds when ci_result
- * turned green, and exits 2 (with time remaining) if MIN_WAIT_MINUTES haven't
+ * Pre-merge new-PR bot wait enforcer.
+ * Auto-detects the open PR for the current topic branch, finds when it was
+ * created, and exits 2 (with time remaining) if MIN_WAIT_MINUTES haven't
  * elapsed yet. Exits 0 when the wait is satisfied or the check doesn't apply.
+ *
+ * This covers the "new PR" wait trigger. After tagging bots in PR comments or
+ * review replies, agents must manually wait 7 minutes before the next sweep.
  *
  * Usage: node scripts/wait-for-bots.mjs
  * Or:    npm run wait-for-bots
  */
 import { execSync, spawnSync } from 'node:child_process';
 
-const MIN_WAIT_MINUTES = 20;
+const MIN_WAIT_MINUTES = 7;
 
 function sh(cmd) {
   try {
@@ -38,25 +41,12 @@ function isTopicBranch(b) {
   return /^(agent|feat|fix)\//.test(b);
 }
 
-function openPrNumber(branch) {
-  const json = ghOut(['pr', 'list', '--state', 'open', '--head', branch, '--json', 'number']);
+function openPr(branch) {
+  const json = ghOut(['pr', 'list', '--state', 'open', '--head', branch, '--json', 'number,createdAt']);
   if (!json) return null;
   try {
     const arr = JSON.parse(json);
-    return arr.length > 0 ? arr[0].number : null;
-  } catch {
-    return null;
-  }
-}
-
-function ciGreenAt(prNumber) {
-  const json = ghOut(['pr', 'checks', String(prNumber), '--json', 'name,state,completedAt']);
-  if (!json) return null;
-  try {
-    const arr = JSON.parse(json);
-    const ci = arr.find((c) => c.name === 'ci_result' && c.state === 'SUCCESS');
-    if (!ci || !ci.completedAt) return null;
-    return new Date(ci.completedAt);
+    return arr.length > 0 ? arr[0] : null;
   } catch {
     return null;
   }
@@ -69,30 +59,30 @@ if (!hasGh()) {
   process.exit(0);
 }
 
-const prNumber = openPrNumber(branch);
-if (!prNumber) process.exit(0);
+const pr = openPr(branch);
+if (!pr || !pr.number || !pr.createdAt) process.exit(0);
 
-const greenAt = ciGreenAt(prNumber);
-if (!greenAt) process.exit(0);
+const createdAt = new Date(pr.createdAt);
+if (!Number.isFinite(createdAt.getTime())) process.exit(0);
 
-const elapsedMs = Date.now() - greenAt.getTime();
+const elapsedMs = Date.now() - createdAt.getTime();
 const elapsedMin = elapsedMs / 60000;
 const remainingMin = Math.ceil(MIN_WAIT_MINUTES - elapsedMin);
 
 if (elapsedMin < MIN_WAIT_MINUTES) {
-  const readyAt = new Date(greenAt.getTime() + MIN_WAIT_MINUTES * 60000);
+  const readyAt = new Date(createdAt.getTime() + MIN_WAIT_MINUTES * 60000);
   console.log(
-    `>>> BOT WAIT: ci_result green ${Math.floor(elapsedMin)} min ago — ` +
+    `>>> BOT WAIT: PR created ${Math.floor(elapsedMin)} min ago - ` +
       `wait ${remainingMin} more min before sweeping (minimum: ${MIN_WAIT_MINUTES} min).`,
   );
-  console.log(`>>> PR #${prNumber} — re-sweep bots after ${readyAt.toISOString()}`);
+  console.log(`>>> PR #${pr.number} - re-sweep bots after ${readyAt.toISOString()}`);
   console.log(
-    '>>> This wait is unconditional — early bot threads do not mean all bots have finished.',
+    '>>> This wait applies to new PR creation. Do not restart it only because you pushed code.',
   );
   process.exit(2);
 }
 
 console.log(
-  `Bot wait satisfied: ci_result green ${Math.floor(elapsedMin)} min ago (minimum: ${MIN_WAIT_MINUTES} min). Clear to sweep.`,
+  `Bot wait satisfied: PR created ${Math.floor(elapsedMin)} min ago (minimum: ${MIN_WAIT_MINUTES} min). Clear to sweep.`,
 );
 process.exit(0);

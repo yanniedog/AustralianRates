@@ -32,23 +32,25 @@ Commit only on the topic branch. `git push -u origin HEAD`.
 ### Step 4 — CI green
 `gh pr checks <n> --watch` until `ci_result` passes. Fix forward on **this** PR. After fix pushes, `@mention` reviewers using handles from `gh pr view -c` (not display names).
 
-### Step 5 — Wait gate (hard; DO NOT skip)
+### Step 5 - Wait gate (hard; DO NOT skip when triggered)
 **Do NOT merge in the same breath as CI green. Stop. Then:**
 
-a. Run `npm run wait-for-bots` — exits 2 with time remaining if < 20 min since `ci_result` green. **Do not proceed until it exits 0.**
-b. `gh pr view <n> --comments`
-c. `gh api repos/<owner>/<repo>/pulls/<n>/reviews`
-d. `gh api repos/<owner>/<repo>/pulls/<n>/comments`
-e. On github.com: scan Conversation + Files tabs until in-flight bot activity (reactions, pending review) settles.
-f. Note ALL bots that commented after your last push: Gemini Code Assist, Codex, Copilot, CodeRabbit, Greptile, Sourcery, security scanners, etc.
+a. Run `npm run wait-for-bots` after creating a new PR - exits 2 with time remaining if < 7 min since PR creation. **Do not proceed until it exits 0.**
+b. If you tag bots in PR comments or review replies, wait 7 minutes, then re-sweep before merging.
+c. Do **not** restart a wait cycle just because you pushed a code change. Fix-up pushes stay on the same PR branch and go straight to CI, feedback synthesis, and thread closure unless you tagged bots.
+d. `gh pr view <n> --comments`
+e. `gh api repos/<owner>/<repo>/pulls/<n>/reviews`
+f. `gh api repos/<owner>/<repo>/pulls/<n>/comments`
+g. On github.com: scan Conversation + Files tabs until in-flight bot activity (reactions, pending review) settles.
+h. Note ALL bots that commented after your last push: Gemini Code Assist, Codex, Copilot, CodeRabbit, Greptile, Sourcery, security scanners, etc.
 
-**The 20-minute minimum wait is unconditional — it applies even when early bot threads already exist. Bots post in waves; early threads do not mean all bots have finished. Calling "no more feedback" before 20 min is a policy violation.**
+**The wait trigger is limited to new PR creation and bot-tag response cycles. Code pushes alone do not create a fresh wait requirement.**
 
 ### Step 5b — Synthesize all feedback before responding (hard; DO NOT skip)
 
 After `wait-for-bots` exits 0, and BEFORE replying to any thread:
 
-1. Fetch ALL threads (steps a–f above).
+1. Fetch ALL threads (steps d-h above).
 2. **Read every thread before replying to any of them.**
 3. Post ONE `## Feedback plan` comment on the PR: list every thread → implement / defer / decline + reason; note dependencies.
 4. Only after posting the plan: make code changes (single push), then reply in-thread to each bot/reviewer.
@@ -86,7 +88,7 @@ npm run ship:closeout:strict && npm run wait-for-bots
 ```
 
 - `ship:closeout:strict` exit 2 = open PR still exists → continue steps 5–9.
-- `wait-for-bots` exit 2 = < 20 min since `ci_result` green → wait and re-sweep bots.
+- `wait-for-bots` exit 2 = < 7 min since PR creation -> wait and re-sweep bots.
 
 ---
 

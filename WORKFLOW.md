@@ -29,15 +29,15 @@ Commit only on the topic branch. `git push -u origin HEAD`.
 
 `gh pr checks <n> --watch` until `ci_result` passes. Fix forward on this PR. After fix pushes, `@mention` reviewers using handles from `gh pr view -c` (not display names).
 
-### 5. Bot wait (unconditional — never skip, never shorten)
+### 5. Bot wait trigger
 
 ```sh
 npm run wait-for-bots
 ```
 
-Exits 2 with time remaining if < 20 min since `ci_result` green. **Do not proceed until exit 0.**
+Run this after creating a new PR. It exits 2 with time remaining if < 7 minutes since PR creation. **Do not proceed until exit 0.**
 
-The 20-minute minimum is unconditional — it applies even when early bot threads already exist. Bots post in waves. Early threads ≠ all bots finished. Calling "no feedback" before 20 min is a policy violation.
+Also wait 7 minutes after tagging bots in PR comments or review replies, then re-sweep comments before merging. Do **not** restart a wait cycle just because you pushed a code change. Fix-up pushes stay on the same branch and go straight to CI, feedback synthesis, and thread closure unless you tagged bots.
 
 ### 5b. Synthesize all feedback before responding
 
@@ -83,7 +83,7 @@ npm run ship:closeout:strict && npm run wait-for-bots
 ```
 
 - `ship:closeout:strict` exit 2 → open PR still exists; continue steps 5–9.
-- `wait-for-bots` exit 2 → < 20 min since CI green; wait and re-sweep.
+- `wait-for-bots` exit 2 -> < 7 min since PR creation; wait and re-sweep.
 
 ---
 
@@ -92,8 +92,8 @@ npm run ship:closeout:strict && npm run wait-for-bots
 Phrases that do NOT waive the wait gate, the synthesis step, or thread closure:
 
 - "merge everything" / "batch merge" / "just merge" / "urgency" / "ASAP" / frustration
-- "CI green" / "checks passed" (< 20 min elapsed or threads unsettled)
-- "no bot feedback" (before 20 min has elapsed)
+- "CI green" / "checks passed" while new-PR or bot-tag wait is still active, or threads are unsettled
+- "no bot feedback" before the required 7-minute new-PR or bot-tag wait has elapsed
 
 Only an explicit written waiver for that specific PR waives bot closeout for that PR.
 
