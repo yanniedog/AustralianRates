@@ -18,7 +18,7 @@ Without auto-merge + required **`ci_result`**, the automation below cannot self-
 
 ## CI vs review bots
 
-**Mechanical gate:** **`ci_result`**. **Policy gate:** substantive bot/human threads need **in-thread replies** before merge/first-time auto-merge. Bots often comment **after** Actions finish—the full sweep, UI settle check, ~10–15 minute re-poll, and reply rules live only in **`.cursor/rules/git-pr-workflow-default.mdc`** (do not duplicate here).
+**Mechanical gate:** **`ci_result`**. **Policy gate:** substantive bot/human threads need **in-thread replies** before merge/first-time auto-merge. Bots often comment **after** Actions finish; the full sweep, 7-minute new-PR or bot-tag wait trigger, and reply rules live only in **`.cursor/rules/git-pr-workflow-default.mdc`** (do not duplicate here).
 
 Fix forward on the **same** PR branch; discover `@handles` via `gh pr view -c`.
 
