@@ -95,6 +95,9 @@
         var plotPayload = options.plotPayload;
         var range = options.range;
         var section = options.section;
+        var slicePairFetchBaseParams = options.slicePairParams && typeof options.slicePairParams === 'object'
+            ? options.slicePairParams
+            : null;
         var bankList = options.bankList || [];
         var ribbonSummaryData = plotPayload && plotPayload.mode === 'bands'
             ? buildRibbonBankSummaryData(plotPayload, options.allSeries || [], range.viewStart, range.ctxMax)
@@ -112,6 +115,8 @@
         var lastRibbonScrubLogAt = 0;
         var lastRibbonVisualSig = '';
         var lastSiteUiRibbonLogAt = 0;
+        var slicePairFetchCache = {};
+        var slicePairFetchPending = {};
         var ribbonChromeHandlers = {
             onChipClick: function () {},
             onChipPointerEnter: function () {},
@@ -1025,6 +1030,57 @@
             }
         }
 
+        function slicePairCacheKey(params) {
+            return Object.keys(params || {}).sort().map(function (key) {
+                return key + '=' + String(params[key] == null ? '' : params[key]);
+            }).join('&');
+        }
+
+        function slicePairParamsForDate(anchorYmd) {
+            var anchor = String(anchorYmd || '').slice(0, 10);
+            if (!anchor || !slicePairFetchBaseParams) return null;
+            var params = {};
+            Object.keys(slicePairFetchBaseParams).forEach(function (key) {
+                params[key] = slicePairFetchBaseParams[key];
+            });
+            params.end_date = anchor;
+            delete params.endDate;
+            return params;
+        }
+
+        function refreshSlicePairStatsForAnchor(anchorYmd) {
+            var anchor = String(anchorYmd || '').slice(0, 10);
+            var chartData = window.AR && window.AR.chartData;
+            var heroMod = window.AR && window.AR.hero;
+            if (!anchor || !chartData || typeof chartData.fetchSlicePairStats !== 'function') return;
+            if (!heroMod || typeof heroMod.setSlicePairStats !== 'function') return;
+            var params = slicePairParamsForDate(anchor);
+            if (!params) return;
+            var key = slicePairCacheKey(params);
+            if (slicePairFetchCache[key]) {
+                heroMod.setSlicePairStats(slicePairFetchCache[key]);
+                return;
+            }
+            if (slicePairFetchPending[key]) return;
+            slicePairFetchPending[key] = true;
+            chartData.fetchSlicePairStats(params).then(function (payload) {
+                delete slicePairFetchPending[key];
+                if (!payload) return;
+                slicePairFetchCache[key] = payload;
+                if (String(lastPointerDate || '').slice(0, 10) !== anchor) return;
+                heroMod.setSlicePairStats(payload);
+            }).catch(function (err) {
+                delete slicePairFetchPending[key];
+                if (clientLog) {
+                    clientLog('warn', 'Chart ribbon slice-pair hover fetch failed', {
+                        section: String(section || ''),
+                        anchorDate: anchor,
+                        message: String(err && err.message || err || ''),
+                    });
+                }
+            });
+        }
+
         function buildRibbonSlicePairTableHtml(visibleProducts, anchorYmd, prevYmd, rs, rateRows) {
             return '';
         }
@@ -1061,6 +1117,7 @@
             var prevYmd = idx > 0 ? dates[idx - 1] : '';
             var visibleProducts = visibleRibbonProducts();
             pushSlicePairStatsForDate(anchor, prevYmd, visibleProducts);
+            refreshSlicePairStatsForAnchor(anchor);
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
                 var rate = prod && prod.byDate ? prod.byDate[anchor] : null;
