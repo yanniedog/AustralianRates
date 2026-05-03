@@ -62,6 +62,11 @@ function hasExplicitEndDate(query: QueryRecord): boolean {
   return typeof query.end_date === 'string' && query.end_date.trim().length > 0
 }
 
+function addCalendarDaysUtcYmd(ymd: string, deltaDays: number): string {
+  const t = Date.parse(`${ymd}T00:00:00Z`) + deltaDays * 86400000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
 function alignImplicitBandEndDateToToday<TFilters extends ReportFilters>(
   filters: TFilters,
   mode: ReportPlotMode,
@@ -70,9 +75,15 @@ function alignImplicitBandEndDateToToday<TFilters extends ReportFilters>(
 ): TFilters {
   if (mode !== 'bands' || hasExplicitEndDate(query)) return filters
   if (filters.endDate === today) return filters
-  const startDate = typeof filters.startDate === 'string' && filters.startDate.trim()
-    ? filters.startDate.trim()
+  const endDate = typeof filters.endDate === 'string' && filters.endDate.trim()
+    ? filters.endDate.trim()
     : today
+  const rawStartDate = typeof filters.startDate === 'string' && filters.startDate.trim()
+    ? filters.startDate.trim()
+    : endDate
+  const deltaMs = Date.parse(`${today}T00:00:00Z`) - Date.parse(`${endDate}T00:00:00Z`)
+  const deltaDays = Math.max(0, Math.round(deltaMs / 86400000))
+  const startDate = addCalendarDaysUtcYmd(rawStartDate, deltaDays)
   return {
     ...filters,
     startDate: startDate <= today ? startDate : today,
