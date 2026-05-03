@@ -1001,10 +1001,9 @@
         }
 
         function pushActiveOrLiveSlicePairStats() {
-            var anchor = ribbonPointerActive ? String(lastPointerDate || '').slice(0, 10) : '';
-            var idx = anchor ? dates.indexOf(anchor) : -1;
+            var idx = ribbonPointerActive ? dates.indexOf(lastPointerDate) : -1;
             if (idx > 0) {
-                pushSlicePairStatsForDate(anchor, dates[idx - 1], visibleRibbonProducts());
+                pushSlicePairStatsForDate(lastPointerDate, dates[idx - 1]);
                 return;
             }
             pushLiveSlicePairStats();
