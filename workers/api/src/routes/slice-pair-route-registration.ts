@@ -78,8 +78,13 @@ async function handleSlicePairStatsRequest(
     ) as typeof baseFilters,
   )
 
+  const explicitEndRaw = typeof merged.end_date === 'string' ? merged.end_date.trim() : ''
+  const defaultEndDate = todayYmd()
   const endRaw = typeof resolvedFilters.endDate === 'string' ? resolvedFilters.endDate.trim() : ''
-  const dYmd = endRaw && /^\d{4}-\d{2}-\d{2}$/.test(endRaw) ? endRaw : todayYmd()
+  const dYmd =
+    explicitEndRaw && /^\d{4}-\d{2}-\d{2}$/.test(explicitEndRaw)
+      ? (endRaw && /^\d{4}-\d{2}-\d{2}$/.test(endRaw) ? endRaw : explicitEndRaw)
+      : defaultEndDate
   const pYmd = previousCalendarUtcDay(dYmd)
 
   const latestFilters = options.buildLatestFilters({
