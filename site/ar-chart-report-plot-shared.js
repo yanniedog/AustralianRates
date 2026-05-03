@@ -998,12 +998,14 @@
             var prevYmd = dates.length >= 2 ? dates[dates.length - 2] : '';
             if (!latestYmd || !prevYmd) return;
             pushSlicePairStatsForDate(latestYmd, prevYmd);
+            refreshSlicePairStatsForAnchor(latestYmd);
         }
 
         function pushActiveOrLiveSlicePairStats() {
             var idx = ribbonPointerActive ? dates.indexOf(lastPointerDate) : -1;
             if (idx > 0) {
                 pushSlicePairStatsForDate(lastPointerDate, dates[idx - 1]);
+                refreshSlicePairStatsForAnchor(lastPointerDate);
                 return;
             }
             pushLiveSlicePairStats();
@@ -1081,7 +1083,7 @@
                 delete slicePairFetchPending[key];
                 if (!payload) return;
                 rememberSlicePairStats(key, payload);
-                if (String(lastPointerDate || '').slice(0, 10) !== anchor) return;
+                if (ribbonPointerActive && String(lastPointerDate || '').slice(0, 10) !== anchor) return;
                 setHeroSlicePairStats(payload, true);
             }).catch(function (err) {
                 delete slicePairFetchPending[key];
