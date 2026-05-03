@@ -169,6 +169,7 @@
             rbaHistory: rbaHistory,
             cpiData: cpiData,
             economicOverlaySeries: economicOverlaySeries,
+            slicePairParams: model && model.slicePairParams ? model.slicePairParams : null,
             bankColor: bankColor,
             noteText: resolvedTermLabel,
             infoBox: infoBoxBandsTd,

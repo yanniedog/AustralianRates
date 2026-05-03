@@ -638,6 +638,7 @@
     }
 
     function buildReportPreviewModel(reportPlots, currentFields, baseParams) {
+        var slicePairParams = baseParams || {};
         var history = chartState.reportProductHistory || null;
         if (history && chartData.buildChartModelFromReportProductHistory) {
             var previewModel = chartData.buildChartModelFromReportProductHistory(
@@ -648,6 +649,7 @@
             );
             if (previewModel && Array.isArray(previewModel.allSeries) && previewModel.allSeries.length > 0) {
                 previewModel.reportPlots = reportPlots || { moves: null, bands: null };
+                previewModel.slicePairParams = slicePairParams;
                 return previewModel;
             }
         }
@@ -655,6 +657,7 @@
         if (previewRows.length && chartData.buildChartModel) {
             var latestModel = chartData.buildChartModel(previewRows, currentFields || fields(), chartState);
             latestModel.reportPlots = reportPlots || { moves: null, bands: null };
+            latestModel.slicePairParams = slicePairParams;
             return latestModel;
         }
         var bands = reportPlots && reportPlots.bands && Array.isArray(reportPlots.bands.series)
@@ -675,6 +678,7 @@
                 totalSeries: 0,
             },
             reportPlots: reportPlots || { moves: null, bands: null },
+            slicePairParams: slicePairParams,
         };
     }
 

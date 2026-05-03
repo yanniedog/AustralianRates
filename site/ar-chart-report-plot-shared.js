@@ -95,6 +95,9 @@
         var plotPayload = options.plotPayload;
         var range = options.range;
         var section = options.section;
+        var slicePairFetchBaseParams = options.slicePairParams && typeof options.slicePairParams === 'object'
+            ? options.slicePairParams
+            : null;
         var bankList = options.bankList || [];
         var ribbonSummaryData = plotPayload && plotPayload.mode === 'bands'
             ? buildRibbonBankSummaryData(plotPayload, options.allSeries || [], range.viewStart, range.ctxMax)
@@ -112,6 +115,10 @@
         var lastRibbonScrubLogAt = 0;
         var lastRibbonVisualSig = '';
         var lastSiteUiRibbonLogAt = 0;
+        var SLICE_PAIR_HOVER_CACHE_LIMIT = 80;
+        var slicePairFetchCache = {};
+        var slicePairFetchCacheOrder = [];
+        var slicePairFetchPending = {};
         var ribbonChromeHandlers = {
             onChipClick: function () {},
             onChipPointerEnter: function () {},
@@ -710,49 +717,6 @@
             return '';
         }
 
-        /** Bank under pointer: full min–max band at date (narrowest band wins if overlapping). */
-        function pickBankFromRibbonBand(dateStr, yVal) {
-            if (!dateStr || !Number.isFinite(yVal)) return '';
-            var visibleByBank = null;
-            if (ribbonCanvasModel && ribbonCanvasModel.count) {
-                visibleByBank = {};
-                visibleRibbonProducts().forEach(function (prod) {
-                    var key = normRibbonBankName(prod && prod.bankName);
-                    if (!key) return;
-                    if (!visibleByBank[key]) visibleByBank[key] = [];
-                    visibleByBank[key].push(prod);
-                });
-            }
-            var candidates = [];
-            Object.keys(knownBanks).forEach(function (bn) {
-                var p = bandByDateByBank[bn] && bandByDateByBank[bn][dateStr];
-                var lo = p ? positiveRibbonRateOrNull(p.min_rate) : null;
-                var hi = p ? positiveRibbonRateOrNull(p.max_rate) : null;
-                if ((lo == null || hi == null) && visibleByBank) {
-                    var vals = [];
-                    (visibleByBank[normRibbonBankName(bn)] || []).forEach(function (prod) {
-                        var v = ribbonVisibleProductRateAt(prod, dateStr);
-                        if (v != null) vals.push(v);
-                    });
-                    if (vals.length) {
-                        lo = vals[0];
-                        hi = vals[0];
-                        vals.forEach(function (v) {
-                            if (v < lo) lo = v;
-                            if (v > hi) hi = v;
-                        });
-                    }
-                }
-                if (lo == null || hi == null || hi < lo) return;
-                if (yVal >= lo && yVal <= hi) {
-                    var w = hi - lo;
-                    candidates.push({ bn: bn, w: Number.isFinite(w) ? w : 0 });
-                }
-            });
-            candidates.sort(function (a, b) { return a.w - b.w; });
-            return candidates.length ? candidates[0].bn : '';
-        }
-
         function syncRibbonTrayUi() {
             if (!ribbonTrayRoot) return;
             var activeBanks = currentRibbonTrayBankState();
@@ -987,15 +951,6 @@
             });
         }
 
-        function visibleRibbonProductsForBank(bankName) {
-            var bank = canonicalBandsBankFromUi(String(bankName || '').trim());
-            if (!bank) return [];
-            var bankKey = normRibbonBankName(bank);
-            return visibleRibbonProducts().filter(function (prod) {
-                return normRibbonBankName(prod && prod.bankName) === bankKey;
-            });
-        }
-
         function ribbonVisibleProductRateAt(prod, ymd) {
             return positiveRibbonRateOrNull(prod && prod.byDate ? prod.byDate[String(ymd || '').slice(0, 10)] : null);
         }
@@ -1058,13 +1013,63 @@
             }
         }
 
-        function syncRibbonSlicePairStat(anchorYmd, bankName) {
-            var fallback = dates.length ? dates[dates.length - 1] : '';
-            var anchor = String(anchorYmd || lastPointerDate || fallback).slice(0, 10);
-            var idx = dates.indexOf(anchor);
-            if (idx <= 0) return;
-            var products = bankName ? visibleRibbonProductsForBank(bankName) : visibleRibbonProducts();
-            pushSlicePairStatsForDate(anchor, dates[idx - 1], products);
+        function slicePairCacheKey(params) {
+            return Object.keys(params || {}).sort().map(function (key) {
+                return key + '=' + String(params[key] == null ? '' : params[key]);
+            }).join('&');
+        }
+
+        function slicePairParamsForDate(anchorYmd) {
+            var anchor = String(anchorYmd || '').slice(0, 10);
+            if (!anchor || !slicePairFetchBaseParams) return null;
+            var params = {};
+            Object.keys(slicePairFetchBaseParams).forEach(function (key) {
+                params[key] = slicePairFetchBaseParams[key];
+            });
+            params.end_date = anchor;
+            delete params.endDate;
+            return params;
+        }
+
+        function rememberSlicePairStats(key, payload) {
+            if (!slicePairFetchCache[key]) slicePairFetchCacheOrder.push(key);
+            slicePairFetchCache[key] = payload;
+            while (slicePairFetchCacheOrder.length > SLICE_PAIR_HOVER_CACHE_LIMIT) {
+                delete slicePairFetchCache[slicePairFetchCacheOrder.shift()];
+            }
+        }
+
+        function refreshSlicePairStatsForAnchor(anchorYmd) {
+            var anchor = String(anchorYmd || '').slice(0, 10);
+            var chartData = window.AR && window.AR.chartData;
+            var heroMod = window.AR && window.AR.hero;
+            if (!anchor || !chartData || typeof chartData.fetchSlicePairStats !== 'function') return;
+            if (!heroMod || typeof heroMod.setSlicePairStats !== 'function') return;
+            var params = slicePairParamsForDate(anchor);
+            if (!params) return;
+            var key = slicePairCacheKey(params);
+            if (slicePairFetchCache[key]) {
+                heroMod.setSlicePairStats(slicePairFetchCache[key]);
+                return;
+            }
+            if (slicePairFetchPending[key]) return;
+            slicePairFetchPending[key] = true;
+            chartData.fetchSlicePairStats(params).then(function (payload) {
+                delete slicePairFetchPending[key];
+                if (!payload) return;
+                rememberSlicePairStats(key, payload);
+                if (String(lastPointerDate || '').slice(0, 10) !== anchor) return;
+                heroMod.setSlicePairStats(payload);
+            }).catch(function (err) {
+                delete slicePairFetchPending[key];
+                if (clientLog) {
+                    clientLog('warn', 'Chart ribbon slice-pair hover fetch failed', {
+                        section: String(section || ''),
+                        anchorDate: anchor,
+                        message: String(err && err.message || err || ''),
+                    });
+                }
+            });
         }
 
         function buildRibbonSlicePairTableHtml(visibleProducts, anchorYmd, prevYmd, rs, rateRows) {
@@ -1092,18 +1097,18 @@
             reportHoverBox.style.display = 'block';
         }
 
-        function syncReportHoverBox(anchorYmd, bankName) {
+        function syncReportHoverBox(anchorYmd) {
             var anchor = String(anchorYmd || '').slice(0, 10);
             if (!anchor || dates.indexOf(anchor) < 0) {
                 if (reportHoverBox) reportHoverBox.style.display = 'none';
                 return;
             }
-            var bank = canonicalBandsBankFromUi(String(bankName || '').trim());
             var rs = getRibbonStyleResolved();
             var idx = dates.indexOf(anchor);
             var prevYmd = idx > 0 ? dates[idx - 1] : '';
-            var visibleProducts = bank ? visibleRibbonProductsForBank(bank) : visibleRibbonProducts();
+            var visibleProducts = visibleRibbonProducts();
             pushSlicePairStatsForDate(anchor, prevYmd, visibleProducts);
+            refreshSlicePairStatsForAnchor(anchor);
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
                 var rate = prod && prod.byDate ? prod.byDate[anchor] : null;
@@ -1131,7 +1136,7 @@
             if (!values.length) {
                 var sliceHtmlEmpty = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, rateRowsEmpty);
                 showReportHoverBox({
-                    heading: bank || 'Visible ribbon',
+                    heading: 'Visible ribbon',
                     date: fmtReportDateYmd(anchor),
                     rows: sliceHtmlEmpty ? [] : rateRowsEmpty,
                     slicePairTableHtml: sliceHtmlEmpty,
@@ -1153,7 +1158,7 @@
             ];
             var sliceHtml = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs, rateRows);
             showReportHoverBox({
-                heading: bank || 'Visible ribbon',
+                heading: 'Visible ribbon',
                 date: fmtReportDateYmd(anchor),
                 rows: sliceHtml ? [] : rateRows,
                 slicePairTableHtml: sliceHtml,
@@ -1904,7 +1909,7 @@
             var anchor = resolveDateFromAxisValue(ax0.value);
             if (!anchor) return;
             setRibbonAnchorDate(anchor);
-            syncReportHoverBox(anchor, hoveredBank || ribbonPanelBank());
+            syncReportHoverBox(anchor);
             if (isBandsMode) refreshRibbonUnderChartPanel();
         });
 
@@ -2132,7 +2137,6 @@
                 hoveredBank = '';
                 ribbonTrayHoverBank = bn;
                 if (!lastPointerDate && dates.length) lastPointerDate = dates[dates.length - 1];
-                syncRibbonSlicePairStat(null, bn);
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
                 refreshRibbonUnderChartPanel();
@@ -2155,7 +2159,6 @@
                     return;
                 }
                 ribbonTrayHoverBank = '';
-                syncRibbonSlicePairStat();
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
                 refreshRibbonUnderChartPanel();
@@ -2182,7 +2185,6 @@
                     if (!keys || !keys.length) return;
                     ribbonListHoverKeys = keys.slice();
                     ribbonListHoverPath = String(row.getAttribute('data-ribbon-tree-path') || '');
-                    syncRibbonSlicePairStat();
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     updateProductVisibility();
                     scheduleRibbonRedraw();
@@ -2204,7 +2206,6 @@
                     var n = ribbonListHoverKeys.length;
                     ribbonListHoverKeys = null;
                     ribbonListHoverPath = '';
-                    syncRibbonSlicePairStat();
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     updateProductVisibility();
                     scheduleRibbonRedraw();
@@ -2247,10 +2248,8 @@
                     if (!dataCoord || dataCoord.length < 2) return;
                     var anchor = resolveDateFromAxisValue(dataCoord[0]);
                     if (!anchor) return;
-                    var bank = pickBankFromRibbonBand(anchor, Number(dataCoord[1]));
-                    if (bank) hoveredBank = bank;
                     setRibbonAnchorDate(anchor);
-                    syncReportHoverBox(anchor, bank || hoveredBank || ribbonPanelBank());
+                    syncReportHoverBox(anchor);
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     if (isBandsMode) refreshRibbonUnderChartPanel();
                     syncRibbonTrayUi();
@@ -2258,13 +2257,6 @@
                 };
                 var onRibbonChartOut = function () {
                     if (reportHoverBox) reportHoverBox.style.display = 'none';
-                    if (hoveredBank && !ribbonProductBank && !ribbonTrayHoverBank) {
-                        hoveredBank = '';
-                        applyRibbonBankHighlightState(ribbonChartHighlightBank());
-                        refreshRibbonUnderChartPanel();
-                        syncRibbonTrayUi();
-                        if (useRibbonCanvas) scheduleRibbonRedraw();
-                    }
                 };
                 zr.on('mousemove', onRibbonChartMove);
                 zr.on('globalout', onRibbonChartOut);
