@@ -998,12 +998,14 @@
             var prevYmd = dates.length >= 2 ? dates[dates.length - 2] : '';
             if (!latestYmd || !prevYmd) return;
             pushSlicePairStatsForDate(latestYmd, prevYmd);
+            refreshSlicePairStatsForAnchor(latestYmd);
         }
 
         function pushActiveOrLiveSlicePairStats() {
             var idx = ribbonPointerActive ? dates.indexOf(lastPointerDate) : -1;
             if (idx > 0) {
                 pushSlicePairStatsForDate(lastPointerDate, dates[idx - 1]);
+                refreshSlicePairStatsForAnchor(lastPointerDate);
                 return;
             }
             pushLiveSlicePairStats();
