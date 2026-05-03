@@ -32,6 +32,7 @@ function normalizeScopeParams(
   const normalized = { ...params }
   const datasetMode = normalized.dataset_mode
   delete normalized.dataset_mode
+  delete normalized.__implicit_end_date
   normalized.mode = datasetMode
   return normalized
 }

@@ -66,9 +66,9 @@ function alignImplicitBandEndDateToToday<TFilters extends ReportFilters>(
   filters: TFilters,
   mode: ReportPlotMode,
   query: QueryRecord,
+  today: string,
 ): TFilters {
   if (mode !== 'bands' || hasExplicitEndDate(query)) return filters
-  const today = todayYmd()
   if (filters.endDate === today) return filters
   const startDate = typeof filters.startDate === 'string' && filters.startDate.trim()
     ? filters.startDate.trim()
@@ -78,6 +78,18 @@ function alignImplicitBandEndDateToToday<TFilters extends ReportFilters>(
     startDate: startDate <= today ? startDate : today,
     endDate: today,
   }
+}
+
+function buildReportPlotCacheParams(
+  query: QueryRecord,
+  mode: ReportPlotMode,
+  effectiveFilters: ReportFilters,
+): QueryRecord {
+  const params = toQueryParams(query)
+  if (mode === 'bands' && !hasExplicitEndDate(query) && typeof effectiveFilters.endDate === 'string') {
+    params.__implicit_end_date = effectiveFilters.endDate
+  }
+  return params
 }
 
 async function handleReportPlotRequest<TFilters extends ReportFilters>(
@@ -110,7 +122,8 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
         }))
     ) as TFilters,
   )
-  const effectiveFilters = alignImplicitBandEndDateToToday(resolvedFilters, mode, merged)
+  const effectiveFilters = alignImplicitBandEndDateToToday(resolvedFilters, mode, merged, todayYmd())
+  const cacheParams = buildReportPlotCacheParams(merged, mode, effectiveFilters)
 
   const liveAllowed = !(await isPublicLiveD1FallbackDisabled(c.env))
   let payload: Awaited<ReturnType<typeof getCachedOrComputeReportPlot>>
@@ -119,7 +132,7 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
       c.env,
       options.section,
       mode,
-      toQueryParams(merged),
+      cacheParams,
       () => queryReportPlotPayload(getReadDb(c), options.section, mode, effectiveFilters),
       { allowLiveCompute: liveAllowed },
     )
