@@ -12,7 +12,7 @@ import type { ReportPlotMode, ReportPlotPayload, ReportPlotSection } from './rep
 import { getMelbourneNowParts } from '../utils/time'
 
 const REPORT_PLOT_CACHE_TABLE = 'report_plot_request_cache'
-const REPORT_PLOT_PAYLOAD_VERSION = 5
+const REPORT_PLOT_PAYLOAD_VERSION = 6
 const D1_CACHE_FRESH_MINUTES = 90
 
 type ReportPlotCacheRow = {
@@ -32,6 +32,7 @@ function normalizeScopeParams(
   const normalized = { ...params }
   const datasetMode = normalized.dataset_mode
   delete normalized.dataset_mode
+  delete normalized.__implicit_end_date
   normalized.mode = datasetMode
   return normalized
 }
