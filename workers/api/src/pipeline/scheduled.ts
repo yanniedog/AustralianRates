@@ -1,5 +1,6 @@
 import { ensureAppConfigTable, getIngestPauseConfig, setAppConfig } from '../db/app-config'
 import {
+  MELBOURNE_DAILY_INGEST_MINUTE,
   MELBOURNE_TARGET_HOUR,
   RATE_CHECK_LAST_RUN_ISO_KEY,
 } from '../constants'
@@ -39,6 +40,10 @@ function melbourneDailyIngestHours(env: EnvBindings): number[] {
   return [Math.max(0, Math.min(23, parseIntegerEnv(env.MELBOURNE_TARGET_HOUR, MELBOURNE_TARGET_HOUR)))]
 }
 
+function melbourneDailyIngestMinute(env: EnvBindings): number {
+  return Math.max(0, Math.min(59, parseIntegerEnv(env.MELBOURNE_DAILY_INGEST_MINUTE, MELBOURNE_DAILY_INGEST_MINUTE)))
+}
+
 async function runOptionalScheduledPrelude(env: EnvBindings) {
   let reconciliation: Awaited<ReturnType<typeof runLifecycleReconciliation>> | null = null
   let coverageAudit: Awaited<ReturnType<typeof runCoverageGapAudit>> | null = null
@@ -49,9 +54,9 @@ async function runOptionalScheduledPrelude(env: EnvBindings) {
     reconciliation = await runLifecycleReconciliation(env.DB, {
       dryRun: false,
       idleMinutes: 5,
-      // Match site-health-cron: close runs stuck >30 min so partial-ingest
-      // snapshots are not held open until the legacy 90-min cutoff fires.
-      staleRunMinutes: 30,
+      // Match the scheduled ingest SLA: a daily CDR run gets 90 minutes
+      // before reconciliation treats it as stale.
+      staleRunMinutes: 90,
       timeZone: env.MELBOURNE_TIMEZONE,
     })
     const ready = reconciliation.ready_finalizations
@@ -134,12 +139,14 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     env.MELBOURNE_TIMEZONE || 'Australia/Melbourne',
   )
   const ingestHours = melbourneDailyIngestHours(env)
-  if (!ingestHours.includes(melbourneParts.hour)) {
+  const ingestMinute = melbourneDailyIngestMinute(env)
+  if (!ingestHours.includes(melbourneParts.hour) || melbourneParts.minute !== ingestMinute) {
     return {
       ok: true,
       skipped: true,
-      reason: 'not_melbourne_ingest_hour',
+      reason: 'not_melbourne_ingest_time',
       melbourne: melbourneParts,
+      targetMinute: ingestMinute,
       intervalMinutes: 0,
     }
   }

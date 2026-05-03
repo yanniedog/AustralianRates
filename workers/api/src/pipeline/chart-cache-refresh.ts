@@ -10,12 +10,8 @@ import { buildSnapshotKvKey, writeD1SnapshotCache, writeSnapshotKvBundles } from
 import { buildSnapshotPayload } from '../routes/snapshot-public'
 import type { EnvBindings } from '../types'
 import { getMelbourneNowParts } from '../utils/time'
-import {
-  collectHomeLoanAnalyticsRowsResolved,
-  collectSavingsAnalyticsRowsResolved,
-  collectTdAnalyticsRowsResolved,
-} from '../routes/analytics-data'
 import { log } from '../utils/logger'
+import { PUBLIC_CACHE_DATASETS } from './public-cache-datasets'
 import {
   precomputedSnapshotScopesForSection,
   type PublicPackageScope,
@@ -76,12 +72,9 @@ async function isFreshPublicSnapshotPackage(
   }
 }
 
-async function resolveLatestRunFinishedMs(env: EnvBindings): Promise<number | null> {
+async function resolveLatestRunFinishedAt(env: EnvBindings): Promise<string | null> {
   try {
-    const finishedAt = await getLatestCompletedDailyRunFinishedAt(env.DB)
-    if (!finishedAt) return null
-    const ms = new Date(finishedAt).getTime()
-    return Number.isFinite(ms) ? ms : null
+    return await getLatestCompletedDailyRunFinishedAt(env.DB)
   } catch {
     return null
   }
@@ -99,9 +92,13 @@ export async function refreshPublicSnapshotPackages(
   // Hoist the run-finalisation cutoff so freshness check stays O(1) D1 reads
   // regardless of how many (section, scope) pairs we iterate.
   const skipFreshnessCheck = options?.allScopes || options?.force
-  const latestRunFinishedMs = skipFreshnessCheck ? null : await resolveLatestRunFinishedMs(env)
+  const latestRunFinishedAt = await resolveLatestRunFinishedAt(env)
+  const latestRunFinishedMs = skipFreshnessCheck
+    ? null
+    : latestRunFinishedAt
+      ? new Date(latestRunFinishedAt).getTime()
+      : null
   const overallStartedAt = Date.now()
-  let lastFlushedRefreshed = 0
   for (const { section, scope: cacheScope } of items) {
     const itemStartedAt = Date.now()
     try {
@@ -109,20 +106,9 @@ export async function refreshPublicSnapshotPackages(
         skipped++
         continue
       }
-      const snapshot = await buildSnapshotPayload(env, section, cacheScope)
+      const snapshot = await buildSnapshotPayload(env, section, cacheScope, { sourceRunFinishedAt: latestRunFinishedAt })
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
       refreshed++
-      // Persist a warn breadcrumb every 4 successful builds so an admin
-      // operator can see how far the cron got even when the worker is killed
-      // mid-iteration by a CPU-time limit. Warn-level persists immediately
-      // (info logs flush at handler exit, which the kill bypasses).
-      if (refreshed - lastFlushedRefreshed >= 4) {
-        lastFlushedRefreshed = refreshed
-        log.warn('public_package_refresh', 'progress checkpoint', {
-          code: 'public_package_refresh_progress',
-          context: `refreshed=${refreshed} skipped=${skipped} errors=${errors.length} elapsed_ms=${Date.now() - overallStartedAt} last_section=${section} last_scope=${cacheScope} last_item_ms=${Date.now() - itemStartedAt}`,
-        })
-      }
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e)
       errors.push(`${section}:snapshot:${cacheScope}: ${msg}`)
@@ -140,13 +126,14 @@ export async function refreshPublicSnapshotPackages(
   return { ok: errors.length === 0, refreshed, skipped, errors }
 }
 
-/** Refresh scoped chart request caches for all sections and representations. Manual/admin-only in production. */
+/** Refresh scoped chart/report/snapshot caches for all public sections and representations. */
 export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: boolean; refreshed: number; errors: string[] }> {
   const db = env.DB
   const rd = getReadDbFromEnv(env)
   const dbs = { canonicalDb: rd, analyticsDb: rd }
   const errors: string[] = []
   let refreshed = 0
+  const sourceRunFinishedAt = await resolveLatestRunFinishedAt(env)
 
   try {
     await refreshAllReportDeltaTables(db)
@@ -159,30 +146,21 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
     })
   }
 
-  for (const section of PUBLIC_PACKAGE_SECTIONS) {
+  for (const dataset of PUBLIC_CACHE_DATASETS) {
+    const section = dataset.section
     for (const cacheScope of precomputedSnapshotScopesForSection(section)) {
       const filters = await resolveFiltersForScope(rd, section, cacheScope)
       for (const rep of REPRESENTATIONS) {
         try {
-          const result =
-            section === 'home_loans'
-              ? await collectHomeLoanAnalyticsRowsResolved(dbs, rep, {
-                  ...filters,
-                  disableRowCap: true,
-                  chartInternalRefresh: true,
-                })
-              : section === 'savings'
-                ? await collectSavingsAnalyticsRowsResolved(dbs, rep, {
-                    ...filters,
-                    disableRowCap: true,
-                    chartInternalRefresh: true,
-                  })
-                : await collectTdAnalyticsRowsResolved(dbs, rep, {
-                    ...filters,
-                    disableRowCap: true,
-                    chartInternalRefresh: true,
-                  })
-          await writeD1ChartCache(db, section, rep, cacheScope, result)
+          const result = await dataset.collectAnalyticsRows(dbs, rep, {
+            ...filters,
+            disableRowCap: true,
+            chartInternalRefresh: true,
+          })
+          await writeD1ChartCache(db, section, rep, cacheScope, result, {
+            filtersResolved: { startDate: filters.startDate, endDate: filters.endDate },
+            sourceRunFinishedAt,
+          })
           refreshed++
         } catch (e) {
           const msg = (e as Error)?.message ?? String(e)
@@ -196,7 +174,7 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
       for (const mode of ['moves', 'bands'] as const) {
         try {
           const payload = await queryReportPlotPayload(rd, section, mode, filters)
-          await writeD1ReportPlotCache(db, section, mode, cacheScope, payload)
+          await writeD1ReportPlotCache(db, section, mode, cacheScope, payload, { sourceRunFinishedAt })
           refreshed++
         } catch (e) {
           const msg = (e as Error)?.message ?? String(e)
@@ -209,8 +187,8 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
       }
 
       try {
-        const snapshot = await buildSnapshotPayload(env, section, cacheScope)
-        await writeD1SnapshotCache(db, section, cacheScope, snapshot)
+        const snapshot = await buildSnapshotPayload(env, section, cacheScope, { sourceRunFinishedAt })
+        await writeD1SnapshotCache(db, section, cacheScope, snapshot, { sourceRunFinishedAt })
         await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
         refreshed++
       } catch (e) {

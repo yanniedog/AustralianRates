@@ -56,7 +56,7 @@ describe('public package refresh side-effect policy', () => {
         nonEssentialDisabled: false,
       }),
     ).toEqual({
-      suppressed: false,
+      ancillarySuppressed: false,
       reason: null,
       runReplayMaintenance: true,
       assuranceOptions: {
@@ -66,14 +66,14 @@ describe('public package refresh side-effect policy', () => {
     })
   })
 
-  it('keeps the package refresh eligible in D1 emergency mode while suppressing D1 write side effects', () => {
+  it('keeps the cache refresh eligible in D1 emergency mode while suppressing ancillary side effects', () => {
     expect(
       publicPackageRefreshSideEffectPolicy({
         emergencyMinimumWrites: true,
         nonEssentialDisabled: false,
       }),
     ).toEqual({
-      suppressed: true,
+      ancillarySuppressed: true,
       reason: 'd1_emergency_minimum_writes',
       runReplayMaintenance: false,
       assuranceOptions: {

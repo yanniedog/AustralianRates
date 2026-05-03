@@ -16,9 +16,35 @@ const MAX_INLINE_BYTES = 500000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
 const SNAPSHOT_KV_VERSION = 11;
+// Keep in sync with PUBLIC_DAILY_CACHE_TTL_SECONDS in workers/api/src/db/public-cache-freshness.ts.
+const SNAPSHOT_FRESH_MS = 36 * 60 * 60 * 1000;
+const MELBOURNE_FORMATTER = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' });
+
+function melbourneDateYmdOffset(offsetDays) {
+    return MELBOURNE_FORMATTER.format(new Date(Date.now() + offsetDays * 86400000));
+}
 
 function melbourneDateYmd() {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(new Date());
+    return melbourneDateYmdOffset(0);
+}
+
+function snapshotPayloadFresh(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    var builtAt = new Date(String(payload.builtAt || '')).getTime();
+    if (!Number.isFinite(builtAt) || Date.now() - builtAt > SNAPSHOT_FRESH_MS) return false;
+    var filtersResolved = payload.data && payload.data.filtersResolved;
+    var endDate = filtersResolved && typeof filtersResolved.endDate === 'string' ? filtersResolved.endDate : '';
+    return endDate === melbourneDateYmdOffset(0) || endDate === melbourneDateYmdOffset(-1);
+}
+
+function wrapSnapshotPayload(parsed, data) {
+    return JSON.stringify({
+        ok: true,
+        section: parsed.section,
+        scope: parsed.scope,
+        builtAt: parsed.builtAt,
+        data: data || parsed.data,
+    });
 }
 const SECTION_KV_KEY = {
     'home-loan-rates': 'home_loans',
@@ -50,6 +76,23 @@ function defaultChartWindowForSection(section) {
     if (section === 'term-deposit-rates') return '30D';
     if (section === 'home-loan-rates' || section === 'savings-rates') return '90D';
     return '';
+}
+
+/** Consumer-first public pages: inline the consumer-default snapshot (aligned with site/ar-snapshot.js). */
+function inferInlineSnapshotPreset(section, searchParams) {
+    if (section === 'term-deposit-rates') return '';
+    const view = String(searchParams.get('view') || '').trim().toLowerCase();
+    if (view === 'analyst') return '';
+    if (section === 'home-loan-rates' || section === 'savings-rates') return 'consumer-default';
+    return '';
+}
+
+function resolveSnapshotQueryForInline(section, searchParams) {
+    const chartWindow =
+        normaliseChartWindow(searchParams.get('chart_window')) || defaultChartWindowForSection(section);
+    const explicit = normalisePreset(searchParams.get('preset'));
+    const preset = explicit || inferInlineSnapshotPreset(section, searchParams);
+    return { chartWindow, preset };
 }
 
 function buildScope(chartWindow, preset) {
@@ -211,35 +254,33 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
     const dbSection = SECTION_KV_KEY[sectionApiName];
     if (!dbSection) return null;
     const scope = buildScope(chartWindow, preset);
-    const melbDate = melbourneDateYmd();
-    const inlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + melbDate;
-    const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + melbDate;
+    const dates = Array.from(new Set([melbourneDateYmd(), melbourneDateYmdOffset(-1)]));
+    const inlineKeys = dates.map(function (date) {
+        return 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + date;
+    });
+    let lastFailure = 'kv-miss:' + dates.join(',');
     try {
-        const body = await env.CHART_CACHE_KV.get(inlineKey);
-        if (body) {
-            const parsed = JSON.parse(body);
-            const wrapped = JSON.stringify({
-                ok: true,
-                section: parsed.section,
-                scope: parsed.scope,
-                builtAt: parsed.builtAt,
-                data: parsed.data,
-            });
-            return { ok: true, body: wrapped, source: 'kv-inline' };
+        for (var i = 0; i < dates.length; i++) {
+            const inlineKey = inlineKeys[i];
+            const body = await env.CHART_CACHE_KV.get(inlineKey);
+            if (body) {
+                const parsed = JSON.parse(body);
+                if (snapshotPayloadFresh(parsed)) return { ok: true, body: wrapSnapshotPayload(parsed), source: 'kv-inline' };
+                lastFailure = 'kv-stale-inline:' + dates[i];
+            }
+            const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + dates[i];
+            const mainBody = await env.CHART_CACHE_KV.get(mainKey);
+            if (!mainBody) continue;
+            const parsed = JSON.parse(mainBody);
+            if (!snapshotPayloadFresh(parsed)) {
+                lastFailure = 'kv-stale-main:' + dates[i];
+                continue;
+            }
+            const trimmed = trimSnapshotForInline(parsed);
+            if (!trimmed) return { ok: false, reason: 'kv-main-oversize:' + dates[i], url: 'kv:' + mainKey };
+            return { ok: true, body: wrapSnapshotPayload(parsed, trimmed), source: 'kv-main' };
         }
-        const mainBody = await env.CHART_CACHE_KV.get(mainKey);
-        if (!mainBody) return { ok: false, reason: 'kv-miss', url: 'kv:' + inlineKey };
-        const parsed = JSON.parse(mainBody);
-        const trimmed = trimSnapshotForInline(parsed);
-        if (!trimmed) return { ok: false, reason: 'kv-main-oversize', url: 'kv:' + mainKey };
-        const wrapped = JSON.stringify({
-            ok: true,
-            section: parsed.section,
-            scope: parsed.scope,
-            builtAt: parsed.builtAt,
-            data: trimmed,
-        });
-        return { ok: true, body: wrapped, source: 'kv-main' };
+        return { ok: false, reason: lastFailure, url: 'kv:' + inlineKeys.join('|') };
     } catch (err) {
         const message = err && err.message ? String(err.message) : 'unknown';
         return { ok: false, reason: 'kv-error:' + message.slice(0, 60).replace(/[^A-Za-z0-9_.:-]/g, '_') };
@@ -248,8 +289,9 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
 
 async function fetchSnapshotWithTimeout(origin, section, params) {
     const qs = new URLSearchParams();
-    const chartWindow = normaliseChartWindow(params.get('chart_window')) || defaultChartWindowForSection(section);
-    const preset = normalisePreset(params.get('preset'));
+    const snapQ = resolveSnapshotQueryForInline(section, params);
+    const chartWindow = snapQ.chartWindow;
+    const preset = snapQ.preset;
     if (chartWindow) qs.set('chart_window', chartWindow);
     if (preset) qs.set('preset', preset);
     qs.set('lite', '1');
@@ -310,11 +352,16 @@ export async function onRequest(context) {
     const contentType = (originalResponse.headers.get('content-type') || '').toLowerCase();
     if (!contentType.includes('text/html')) return wrapOriginalResponse(originalResponse, 'bypass-html');
 
-    const chartWindow = normaliseChartWindow(url.searchParams.get('chart_window')) || defaultChartWindowForSection(section);
-    const preset = normalisePreset(url.searchParams.get('preset'));
+    const snapQ = resolveSnapshotQueryForInline(section, url.searchParams);
+    const chartWindow = snapQ.chartWindow;
+    const preset = snapQ.preset;
 
     const kvBound = !!(env && env.CHART_CACHE_KV);
     let result = await fetchSnapshotFromKv(env, section, chartWindow, preset);
+    if ((!result || !result.ok) && kvBound) {
+        const diag = 'kv+';
+        return wrapOriginalResponse(originalResponse, 'miss:' + diag + ':' + (result ? result.reason : 'kv-unavailable'));
+    }
     if (!result || !result.ok) {
         result = await fetchSnapshotWithTimeout(url.origin, section, url.searchParams);
     }

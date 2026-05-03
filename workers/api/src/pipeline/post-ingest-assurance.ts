@@ -9,6 +9,8 @@ import {
 } from '../db/historical-quarantine'
 import { listCoverageGapRows } from '../db/lender-dataset-status'
 import { buildSnapshotKvKey } from '../db/snapshot-cache'
+import { getLatestCompletedDailyRunFinishedAt } from '../db/run-reports'
+import { isPublicDailyCacheFresh } from '../db/public-cache-freshness'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { publicSnapshotPackageScopeItems } from './public-package-scopes'
@@ -53,6 +55,8 @@ type PackageFreshness = {
   ok: boolean
   source: 'kv' | 'missing'
   built_at: string | null
+  end_date: string | null
+  reason: string | null
 }
 
 type QuarantineActionTotals = {
@@ -434,30 +438,56 @@ async function applyQuarantinePulse(
 }
 
 async function packageFreshness(env: EnvBindings): Promise<PackageFreshness[]> {
+  const latestRunFinishedAt = await getLatestCompletedDailyRunFinishedAt(env.DB).catch(() => null)
   if (!env.CHART_CACHE_KV) {
     return PUBLIC_PACKAGE_SCOPES.map((item) => ({
       ...item,
       ok: false,
       source: 'missing',
       built_at: null,
+      end_date: null,
+      reason: 'missing_kv_binding',
     }))
   }
   const results: PackageFreshness[] = []
   for (const item of PUBLIC_PACKAGE_SCOPES) {
     const raw = await env.CHART_CACHE_KV.get(buildSnapshotKvKey(item.section, item.scope))
     let builtAt: string | null = null
+    let endDate: string | null = null
+    let ok = false
+    let reason: string | null = null
     if (raw) {
       try {
-        builtAt = String((JSON.parse(raw) as { builtAt?: string }).builtAt ?? '') || null
+        const parsed = JSON.parse(raw) as {
+          builtAt?: string
+          sourceRunFinishedAt?: string | null
+          data?: { filtersResolved?: { startDate?: string; endDate?: string } }
+        }
+        builtAt = String(parsed.builtAt ?? '') || null
+        endDate = typeof parsed.data?.filtersResolved?.endDate === 'string' ? parsed.data.filtersResolved.endDate : null
+        ok = isPublicDailyCacheFresh({
+          builtAt: builtAt || '',
+          filtersResolved: parsed.data?.filtersResolved,
+          sourceRunFinishedAt: parsed.sourceRunFinishedAt ?? null,
+          latestRunFinishedAt,
+        })
+        reason = ok ? null : 'stale_or_malformed_package'
       } catch {
         builtAt = null
+        endDate = null
+        ok = false
+        reason = 'invalid_json'
       }
+    } else {
+      reason = 'missing_kv_entry'
     }
     results.push({
       ...item,
-      ok: Boolean(raw && builtAt),
+      ok,
       source: raw ? 'kv' : 'missing',
       built_at: builtAt,
+      end_date: endDate,
+      reason,
     })
   }
   return results

@@ -10,10 +10,15 @@ import {
 } from './chart-cache'
 import type { ReportPlotMode, ReportPlotPayload, ReportPlotSection } from './report-plot-types'
 import { getMelbourneNowParts } from '../utils/time'
+import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
+import {
+  isPublicDailyCacheFresh,
+  publicCacheMetadata,
+  type PublicCacheMetadata,
+} from './public-cache-freshness'
 
 const REPORT_PLOT_CACHE_TABLE = 'report_plot_request_cache'
 const REPORT_PLOT_PAYLOAD_VERSION = 7
-const D1_CACHE_FRESH_MINUTES = 90
 
 type ReportPlotCacheRow = {
   payload_json: string
@@ -24,6 +29,14 @@ type ReportPlotCacheRow = {
 function isNoSuchTableError(error: unknown, table: string): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return /no such table/i.test(message) && message.includes(table)
+}
+
+async function latestRunFinishedAtOrNull(db: D1Database): Promise<string | null> {
+  try {
+    return await getLatestCompletedDailyRunFinishedAt(db)
+  } catch {
+    return null
+  }
 }
 
 function normalizeScopeParams(
@@ -91,20 +104,33 @@ export async function readD1ReportPlotCache(
   }
   if (!row?.payload_json) return null
 
-  const cutoff = new Date()
-  cutoff.setMinutes(cutoff.getMinutes() - D1_CACHE_FRESH_MINUTES)
-  const builtAt = new Date(row.built_at)
-  if (builtAt < cutoff) return null
-  // Reject entries built on a different Melbourne day to prevent cross-midnight seeding into today's KV key.
-  const builtAtMelbourneDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(builtAt)
-  if (builtAtMelbourneDate !== getMelbourneNowParts().date) return null
-
   try {
     const payloadText = row.payload_json.startsWith(GZIP_PREFIX)
       ? await gunzipFromBase64(row.payload_json.slice(GZIP_PREFIX.length))
       : row.payload_json
-    const parsed = JSON.parse(payloadText) as { v?: number; payload?: ReportPlotPayload }
+    const parsed = JSON.parse(payloadText) as {
+      v?: number
+      payload?: ReportPlotPayload
+      meta?: Partial<PublicCacheMetadata>
+      builtAt?: string
+      sourceRunFinishedAt?: string | null
+    }
     if (!parsed || parsed.v !== REPORT_PLOT_PAYLOAD_VERSION || !parsed.payload) return null
+    const filtersResolved = {
+      startDate: parsed.payload.meta.start_date,
+      endDate: parsed.payload.meta.end_date,
+    }
+    const latestRunFinishedAt = await latestRunFinishedAtOrNull(db)
+    if (
+      !isPublicDailyCacheFresh({
+        builtAt: String(parsed.meta?.builtAt || parsed.builtAt || row.built_at || ''),
+        filtersResolved,
+        sourceRunFinishedAt: parsed.meta?.sourceRunFinishedAt ?? parsed.sourceRunFinishedAt ?? null,
+        latestRunFinishedAt,
+      })
+    ) {
+      return null
+    }
     return parsed.payload
   } catch {
     return null
@@ -117,8 +143,25 @@ export async function writeD1ReportPlotCache(
   mode: ReportPlotMode,
   scope: ChartCacheScope,
   payload: ReportPlotPayload,
+  options?: { sourceRunFinishedAt?: string | null },
 ): Promise<void> {
-  const rawJson = JSON.stringify({ v: REPORT_PLOT_PAYLOAD_VERSION, payload })
+  const builtAt = new Date().toISOString()
+  const filtersResolved = {
+    startDate: payload.meta.start_date,
+    endDate: payload.meta.end_date,
+  }
+  const rawJson = JSON.stringify({
+    v: REPORT_PLOT_PAYLOAD_VERSION,
+    payloadVersion: REPORT_PLOT_PAYLOAD_VERSION,
+    builtAt,
+    filtersResolved,
+    sourceRunFinishedAt: options?.sourceRunFinishedAt ?? null,
+    meta: publicCacheMetadata(REPORT_PLOT_PAYLOAD_VERSION, builtAt, {
+      filtersResolved,
+      sourceRunFinishedAt: options?.sourceRunFinishedAt ?? null,
+    }),
+    payload,
+  })
   const payloadJson =
     rawJson.length <= MAX_UNCOMPRESSED_CHARS ? rawJson : `${GZIP_PREFIX}${await gzipToBase64(rawJson)}`
   try {
@@ -137,7 +180,7 @@ export async function writeD1ReportPlotCache(
         scope,
         payloadJson,
         payloadItemCount(payload),
-        new Date().toISOString(),
+        builtAt,
       )
       .run()
   } catch (error) {
@@ -182,13 +225,6 @@ export async function getCachedOrComputeReportPlot(
   }
 
   const payload = await compute()
-  if (scope) {
-    try {
-      await writeD1ReportPlotCache(env.DB, section, mode, scope, payload)
-    } catch {
-      /* ignore D1 cache write failure */
-    }
-  }
   await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, kvKey, payload)
   return { ...payload, fromCache: 'live' }
 }

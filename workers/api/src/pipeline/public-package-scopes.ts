@@ -6,13 +6,14 @@ import {
   type ChartCacheSection,
 } from '../db/chart-cache'
 import type { ChartWindow } from '../utils/chart-window'
+import { PUBLIC_CACHE_SECTIONS, sectionSupportsConsumerDefaultPreset } from './public-cache-datasets'
 
 export type PublicPackageScope = {
   section: ChartCacheSection
   scope: ChartCacheScope
 }
 
-export const PUBLIC_PACKAGE_SECTIONS: ChartCacheSection[] = ['home_loans', 'savings', 'term_deposits']
+export const PUBLIC_PACKAGE_SECTIONS: readonly ChartCacheSection[] = PUBLIC_CACHE_SECTIONS
 // The bare `default` scope (no window, no preset) is what `/snapshot` returns
 // for the homepage hero, ribbon and slice-pair indicators when the page loads
 // with no chart_window query. It MUST be refreshed before the heavier
@@ -29,7 +30,7 @@ export function precomputedSnapshotScopesForSection(section: ChartCacheSection):
   const raw: ChartCacheScope[] = [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) =>
     buildPrecomputedChartScope(window),
   )
-  if (section === 'home_loans' || section === 'savings') {
+  if (sectionSupportsConsumerDefaultPreset(section)) {
     return raw.concat(
       [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) =>
         buildPrecomputedChartScopeForPreset(window, 'consumer-default'),
@@ -49,7 +50,7 @@ export function publicSnapshotScopesForSection(
     buildPrecomputedChartScope(null),
     ...PRECOMPUTED_CHART_WINDOWS.map((window) => buildPrecomputedChartScope(window)),
   ]
-  if (section === 'home_loans' || section === 'savings') {
+  if (sectionSupportsConsumerDefaultPreset(section)) {
     return uniqueScopes([
       ...rawScopes,
       buildPrecomputedChartScopeForPreset(null, 'consumer-default'),
@@ -77,7 +78,7 @@ export function publicSnapshotPackageScopeItems(options?: { allScopes?: boolean 
   }
   for (const window of PUBLIC_PACKAGE_WINDOW_PRIORITY) {
     for (const section of PUBLIC_PACKAGE_SECTIONS) {
-      if (section === 'home_loans' || section === 'savings') {
+      if (sectionSupportsConsumerDefaultPreset(section)) {
         push(section, buildPrecomputedChartScopeForPreset(window, 'consumer-default'))
       }
       push(section, buildPrecomputedChartScope(window))

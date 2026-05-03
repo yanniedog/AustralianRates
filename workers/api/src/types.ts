@@ -245,10 +245,13 @@ export type EnvBindings = {
   PUBLIC_API_BASE_PATH?: string
   MELBOURNE_TIMEZONE?: string
   MELBOURNE_TARGET_HOUR?: string
+  MELBOURNE_DAILY_INGEST_MINUTE?: string
   /** Default 18; paired with MELBOURNE_TARGET_HOUR when MELBOURNE_DAILY_INGEST_HOURS unset. */
   MELBOURNE_SECOND_INGEST_HOUR?: string
   /** Comma-separated Melbourne wall-clock hours (0–23) for scheduled ingest; overrides the two defaults when set. */
   MELBOURNE_DAILY_INGEST_HOURS?: string
+  MELBOURNE_PUBLIC_CACHE_REFRESH_HOUR?: string
+  MELBOURNE_PUBLIC_CACHE_REFRESH_MINUTE?: string
   LOCK_TTL_SECONDS?: string
   MAX_QUEUE_ATTEMPTS?: string
   MAX_PRODUCTS_PER_LENDER?: string

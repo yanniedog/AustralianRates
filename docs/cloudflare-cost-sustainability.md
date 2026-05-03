@@ -6,7 +6,7 @@ Primary invariant: daily CDR coverage must run every Melbourne day. Cost guardra
 
 ## Implemented Guardrails
 
-- Production crons are limited to one Melbourne-gated daily CDR ingest and one daily public package refresh.
+- Production crons are limited to one Melbourne-gated daily CDR ingest and one daily full public cache refresh.
 - Site health, hourly maintenance, hourly chart cache rebuild, integrity audit, daily backup, historical quality, and monthly export remain manual/admin paths.
 - Scheduled ingest prelude audits and product-classification audits are feature-flagged off by default.
 - Fetch, scheduled, and queue handlers wrap `env.DB`/`env.READ_DB` with an advisory D1 usage tracker. Work is classified as `critical_coverage`, `essential_serving`, `deferable`, or `nonessential`.
@@ -16,7 +16,7 @@ Primary invariant: daily CDR coverage must run every Melbourne day. Cost guardra
 - Success probe payload capture is disabled. Failure captures remain available for diagnostics.
 - Replay queue dispatch no longer runs on every scheduled event.
 - Public snapshot/package requests are KV/cache first. If usage is healthy, bounded best-effort live compute can fill missing cache entries; after the 90% projected threshold, public live D1 fallback returns a stale/unavailable state instead of waterfalling through D1.
-- The daily public package refresh is essential serving work: it refreshes all selectable public chart windows for home loans, savings, and term deposits into `CHART_CACHE_KV`. During D1 emergency minimum-write mode it still runs, but replay maintenance and persistent/hard-failure assurance side effects are suppressed. Refreshes prioritize 30D packages across all three datasets first and skip packages already rebuilt within the last 20 hours, so interrupted manual refreshes can resume without repeating fresh D1 reads.
+- The daily public cache refresh is essential serving work: it refreshes all selectable public chart windows for home loans, savings, and term deposits into D1 chart/report/snapshot caches and `CHART_CACHE_KV`. During D1 emergency minimum-write mode it still runs, but replay maintenance and persistent/hard-failure assurance side effects are suppressed.
 - Frontend snapshottable public requests should fail closed when the package is unavailable instead of falling through to `/filters`, `/latest-all`, `/analytics/series`, or `/analytics/report-plot`.
 - Admin D1 usage is available at `GET /api/home-loan-rates/admin/cloudflare/d1-usage?days=31` and `/admin/d1-usage.html`. Cloudflare GraphQL is the billing-grade source within the account analytics retention window; local KV tracking is advisory fallback. The admin page backfills every UTC date through today, includes invoice-style Cloudflare PayGo billable line items as daily table columns with quota/rate labels, rolls up current and recent historical D1 cost by the account billing cycle start day (`CLOUDFLARE_BILLING_CYCLE_START_DAY`, default `21`), and prices row overage in whole per-million billing units to match Cloudflare billable usage.
 
@@ -24,8 +24,8 @@ Primary invariant: daily CDR coverage must run every Melbourne day. Cost guardra
 
 | Cron | Purpose | Cost posture |
 | --- | --- | --- |
-| `0 19,20 * * *` | Daily CDR ingest, gated to Melbourne 06:00 by `MELBOURNE_DAILY_INGEST_HOURS=6` | Essential |
-| `0 23 * * *` | Public package refresh to `CHART_CACHE_KV` for all public chart windows across home loans, savings, and term deposits | Essential |
+| `1 13,14 * * *` | Daily CDR ingest, gated to Melbourne 00:01 by `MELBOURNE_DAILY_INGEST_HOURS=0` and `MELBOURNE_DAILY_INGEST_MINUTE=1` | Essential |
+| `1 16,17 * * *` | Full public cache refresh at Melbourne 03:01 for chart, report-plot, snapshot, ribbon, and hierarchical-table packages across home loans, savings, and term deposits | Essential |
 
 `CHART_CACHE_KV_TTL` is 129600 seconds (36 hours), so one missed package refresh does not immediately push public users back to D1.
 
@@ -41,7 +41,7 @@ Primary invariant: daily CDR coverage must run every Melbourne day. Cost guardra
 
 ## Operating Rule
 
-Never disable daily CDR ingest for cost. Never skip the daily KV public package refresh solely because `D1_EMERGENCY_MINIMUM_WRITES` is enabled; suppress write-producing side effects instead. If public packages are missing, rebuild packages or investigate the scheduled refresh. Do not re-enable unrestricted public live D1 fallback as a quick fix; that recreates the bill-shock path.
+Never disable daily CDR ingest for cost. Never skip the daily full public cache refresh solely because `D1_EMERGENCY_MINIMUM_WRITES` is enabled; suppress ancillary replay/assurance side effects instead. If public packages are missing, rebuild packages or investigate the scheduled refresh. Do not re-enable unrestricted public live D1 fallback as a quick fix; that recreates the bill-shock path.
 
 Use `POST /api/home-loan-rates/admin/public-packages/refresh` for the bounded public-window refresh. Add `?full=1` only for a deliberate all-scope rebuild.
 
