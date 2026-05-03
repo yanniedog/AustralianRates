@@ -66,7 +66,7 @@ export function pendingSavingsTdLenders(
   return lenders.filter((lender) => !completedSavings.has(lender.code) || !completedTd.has(lender.code))
 }
 
-type DailyDatasetSelection = {
+export type DailyDatasetSelection = {
   homeLoans: boolean
   savings: boolean
   termDeposits: boolean
@@ -114,6 +114,47 @@ function pendingSelectedSavingsTdLenders(
 
 function isMonthCursor(value: string | undefined): value is string {
   return !!value && /^\d{4}-\d{2}$/.test(value)
+}
+
+async function historicalRowCountForCollectionDate(
+  db: D1Database,
+  table: 'historical_loan_rates' | 'historical_savings_rates' | 'historical_term_deposit_rates',
+  collectionDate: string,
+): Promise<number> {
+  const row = await db
+    .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE collection_date = ?`)
+    .bind(collectionDate)
+    .first<{ n: number }>()
+  return Number(row?.n ?? 0)
+}
+
+/**
+ * Scheduled runs can mark every lender_dataset_run as "complete" (e.g. zero expected TD details) while
+ * the historical table still has no rows for that collection_date. Post-ingest assurance then fails.
+ * Call only when `pendingSavingsLenders.length === 0` and savings or term deposits are selected; returns
+ * whether to force-repick all lenders and which datasets to enqueue (only empty historical tables).
+ */
+export function planSavingsTdEnqueueDatasetsForEmptyPending(input: {
+  selection: DailyDatasetSelection
+  historicalSavingsCount: number
+  historicalTdCount: number
+}): { repickAllSavingsLendersWithForce: boolean; datasets: Array<'savings' | 'term_deposits'> } {
+  const full: Array<'savings' | 'term_deposits'> = [
+    ...(input.selection.savings ? ['savings' as const] : []),
+    ...(input.selection.termDeposits ? ['term_deposits' as const] : []),
+  ]
+  const needSavings = input.selection.savings && input.historicalSavingsCount === 0
+  const needTd = input.selection.termDeposits && input.historicalTdCount === 0
+  if (!needSavings && !needTd) {
+    return { repickAllSavingsLendersWithForce: false, datasets: full }
+  }
+  return {
+    repickAllSavingsLendersWithForce: true,
+    datasets: [
+      ...(needSavings ? ['savings' as const] : []),
+      ...(needTd ? ['term_deposits' as const] : []),
+    ],
+  }
 }
 
 export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions) {
@@ -179,10 +220,10 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
         runSource: options.source,
       }),
     ])
-    const pendingLoanLenders = datasetSelection.homeLoans
+    let pendingLoanLenders = datasetSelection.homeLoans
       ? pendingSelectedLenders(selectedLenders, doneLoans, Boolean(options.force))
       : []
-    const pendingSavingsLenders = datasetSelection.savings || datasetSelection.termDeposits
+    let pendingSavingsLenders = datasetSelection.savings || datasetSelection.termDeposits
       ? pendingSelectedSavingsTdLenders(
           selectedLenders,
           doneSavings,
@@ -191,6 +232,47 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
           Boolean(options.force),
         )
       : []
+
+    let savingsEnqueueDatasets: Array<'savings' | 'term_deposits'> = [
+      ...(datasetSelection.savings ? ['savings' as const] : []),
+      ...(datasetSelection.termDeposits ? ['term_deposits' as const] : []),
+    ]
+
+    if (pendingLoanLenders.length === 0 && datasetSelection.homeLoans) {
+      const loanRows = await historicalRowCountForCollectionDate(env.DB, 'historical_loan_rates', collectionDate)
+      if (loanRows === 0) {
+        pendingLoanLenders = pendingSelectedLenders(selectedLenders, doneLoans, true)
+      }
+    }
+
+    if (pendingSavingsLenders.length === 0 && (datasetSelection.savings || datasetSelection.termDeposits)) {
+      const savingsCountPromise = datasetSelection.savings
+        ? historicalRowCountForCollectionDate(env.DB, 'historical_savings_rates', collectionDate)
+        : Promise.resolve(-1)
+      const tdCountPromise = datasetSelection.termDeposits
+        ? historicalRowCountForCollectionDate(env.DB, 'historical_term_deposit_rates', collectionDate)
+        : Promise.resolve(-1)
+      const [histSavings, histTd] = await Promise.all([savingsCountPromise, tdCountPromise])
+      const plan = planSavingsTdEnqueueDatasetsForEmptyPending({
+        selection: datasetSelection,
+        historicalSavingsCount: histSavings,
+        historicalTdCount: histTd,
+      })
+      if (plan.repickAllSavingsLendersWithForce) {
+        pendingSavingsLenders = pendingSelectedSavingsTdLenders(
+          selectedLenders,
+          new Set(),
+          new Set(),
+          {
+            homeLoans: false,
+            savings: plan.datasets.includes('savings'),
+            termDeposits: plan.datasets.includes('term_deposits'),
+          },
+          true,
+        )
+      }
+      savingsEnqueueDatasets = plan.datasets
+    }
 
     if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
       if (!isD1EmergencyMinimumWrites(env)) {
@@ -273,10 +355,7 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
         runSource: options.source,
         collectionDate,
         lenders: pendingSavingsLenders,
-        datasets: [
-          ...(datasetSelection.savings ? ['savings' as const] : []),
-          ...(datasetSelection.termDeposits ? ['term_deposits' as const] : []),
-        ],
+        datasets: savingsEnqueueDatasets,
       })
 
       const summary = buildInitialPerLenderSummary(mergePerLenderCounts(enqueue.perLender, savingsEnqueue.perLender))

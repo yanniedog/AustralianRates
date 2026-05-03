@@ -663,12 +663,22 @@ adminRoutes.post('/runs/daily', async (c) => {
     ? sourceOverride
     : 'manual'
 
+  const rawCollectionDate = body.collection_date ?? body.collectionDate
+  const collectionDateOverride =
+    typeof rawCollectionDate === 'string' && rawCollectionDate.trim()
+      ? String(rawCollectionDate).trim()
+      : undefined
+  if (collectionDateOverride && !/^\d{4}-\d{2}-\d{2}$/.test(collectionDateOverride)) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'collection_date must be YYYY-MM-DD when provided')
+  }
+
   const result = await triggerDailyRun(c.env, {
     source,
     force,
     runIdOverride,
     lenderCodes,
     datasets,
+    collectionDateOverride,
   })
 
   return c.json({
