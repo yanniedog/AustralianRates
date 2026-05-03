@@ -43,14 +43,18 @@ function previousMelbourneDate(now: Date, timeZone = 'Australia/Melbourne'): str
 export function inferFiltersResolvedFromRows(
   rows: Array<Record<string, unknown>>,
 ): PublicCacheMetadata['filtersResolved'] {
-  const dates = rows
-    .map((row) => String(row.collection_date || '').slice(0, 10))
-    .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
-    .sort()
-  if (dates.length === 0) return undefined
+  let startDate: string | undefined
+  let endDate: string | undefined
+  for (const row of rows) {
+    const value = String(row.collection_date || '').slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) continue
+    if (startDate === undefined || value < startDate) startDate = value
+    if (endDate === undefined || value > endDate) endDate = value
+  }
+  if (startDate === undefined) return undefined
   return {
-    startDate: dates[0],
-    endDate: dates[dates.length - 1],
+    startDate,
+    endDate,
   }
 }
 

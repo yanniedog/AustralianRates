@@ -21,20 +21,31 @@ type PublicCacheDatasetConfig = {
   ) => Promise<ResolvedAnalyticsRows>
 }
 
-export const PUBLIC_CACHE_DATASETS: readonly PublicCacheDatasetConfig[] = [
+// Single registry for public section coverage. Cache refresh, snapshot package
+// scopes, graph data, and report/hierarchy payloads must derive from this list
+// so mortgage, savings, and term-deposit handling cannot drift independently.
+export const PUBLIC_CACHE_DATASETS = [
   {
     section: 'home_loans',
     routeSlug: 'home-loan-rates',
     supportsConsumerDefaultPreset: true,
     collectAnalyticsRows: (dbs, representation, filters) =>
-      collectHomeLoanAnalyticsRowsResolved(dbs, representation, filters as Parameters<typeof collectHomeLoanAnalyticsRowsResolved>[2]),
+      collectHomeLoanAnalyticsRowsResolved(
+        dbs,
+        representation,
+        filters as Parameters<typeof collectHomeLoanAnalyticsRowsResolved>[2],
+      ),
   },
   {
     section: 'savings',
     routeSlug: 'savings-rates',
     supportsConsumerDefaultPreset: true,
     collectAnalyticsRows: (dbs, representation, filters) =>
-      collectSavingsAnalyticsRowsResolved(dbs, representation, filters as Parameters<typeof collectSavingsAnalyticsRowsResolved>[2]),
+      collectSavingsAnalyticsRowsResolved(
+        dbs,
+        representation,
+        filters as Parameters<typeof collectSavingsAnalyticsRowsResolved>[2],
+      ),
   },
   {
     section: 'term_deposits',
@@ -43,7 +54,7 @@ export const PUBLIC_CACHE_DATASETS: readonly PublicCacheDatasetConfig[] = [
     collectAnalyticsRows: (dbs, representation, filters) =>
       collectTdAnalyticsRowsResolved(dbs, representation, filters as Parameters<typeof collectTdAnalyticsRowsResolved>[2]),
   },
-] as const
+] as const satisfies readonly PublicCacheDatasetConfig[]
 
 export const PUBLIC_CACHE_SECTIONS = PUBLIC_CACHE_DATASETS.map((dataset) => dataset.section) as readonly ChartCacheSection[]
 

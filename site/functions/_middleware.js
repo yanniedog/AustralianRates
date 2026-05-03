@@ -16,12 +16,12 @@ const MAX_INLINE_BYTES = 500000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
 const SNAPSHOT_KV_VERSION = 11;
+// Keep in sync with PUBLIC_DAILY_CACHE_TTL_SECONDS in workers/api/src/db/public-cache-freshness.ts.
 const SNAPSHOT_FRESH_MS = 36 * 60 * 60 * 1000;
+const MELBOURNE_FORMATTER = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' });
 
 function melbourneDateYmdOffset(offsetDays) {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(
-        new Date(Date.now() + offsetDays * 86400000),
-    );
+    return MELBOURNE_FORMATTER.format(new Date(Date.now() + offsetDays * 86400000));
 }
 
 function melbourneDateYmd() {
@@ -255,25 +255,32 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
     if (!dbSection) return null;
     const scope = buildScope(chartWindow, preset);
     const dates = Array.from(new Set([melbourneDateYmd(), melbourneDateYmdOffset(-1)]));
-    const firstInlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + dates[0];
+    const inlineKeys = dates.map(function (date) {
+        return 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + date;
+    });
+    let lastFailure = 'kv-miss:' + dates.join(',');
     try {
         for (var i = 0; i < dates.length; i++) {
-            const inlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + dates[i];
+            const inlineKey = inlineKeys[i];
             const body = await env.CHART_CACHE_KV.get(inlineKey);
             if (body) {
                 const parsed = JSON.parse(body);
                 if (snapshotPayloadFresh(parsed)) return { ok: true, body: wrapSnapshotPayload(parsed), source: 'kv-inline' };
+                lastFailure = 'kv-stale-inline:' + dates[i];
             }
             const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + dates[i];
             const mainBody = await env.CHART_CACHE_KV.get(mainKey);
             if (!mainBody) continue;
             const parsed = JSON.parse(mainBody);
-            if (!snapshotPayloadFresh(parsed)) continue;
+            if (!snapshotPayloadFresh(parsed)) {
+                lastFailure = 'kv-stale-main:' + dates[i];
+                continue;
+            }
             const trimmed = trimSnapshotForInline(parsed);
-            if (!trimmed) return { ok: false, reason: 'kv-main-oversize', url: 'kv:' + mainKey };
+            if (!trimmed) return { ok: false, reason: 'kv-main-oversize:' + dates[i], url: 'kv:' + mainKey };
             return { ok: true, body: wrapSnapshotPayload(parsed, trimmed), source: 'kv-main' };
         }
-        return { ok: false, reason: 'kv-miss', url: 'kv:' + firstInlineKey };
+        return { ok: false, reason: lastFailure, url: 'kv:' + inlineKeys.join('|') };
     } catch (err) {
         const message = err && err.message ? String(err.message) : 'unknown';
         return { ok: false, reason: 'kv-error:' + message.slice(0, 60).replace(/[^A-Za-z0-9_.:-]/g, '_') };

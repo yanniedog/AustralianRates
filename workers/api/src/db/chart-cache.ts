@@ -509,6 +509,7 @@ export async function readD1ChartCache(
   section: ChartCacheSection,
   representation: 'day' | 'change',
   scope: ChartCacheScope = 'default',
+  options?: { latestRunFinishedAt?: string | null },
 ): Promise<{ rows: Array<Record<string, unknown>>; representation: 'day' | 'change'; fallbackReason: string | null; builtAt: string } | null> {
   let row: ChartCacheRow | null = null
   try {
@@ -555,7 +556,10 @@ export async function readD1ChartCache(
   } catch {
     return null
   }
-  const latestRunFinishedAt = await latestRunFinishedAtOrNull(db)
+  const latestRunFinishedAt =
+    options && Object.prototype.hasOwnProperty.call(options, 'latestRunFinishedAt')
+      ? options.latestRunFinishedAt ?? null
+      : await latestRunFinishedAtOrNull(db)
   if (
     !isPublicDailyCacheFresh({
       builtAt: meta.builtAt || builtAt,
@@ -584,15 +588,17 @@ export async function writeD1ChartCache(
   options?: { filtersResolved?: PublicCacheMetadata['filtersResolved']; sourceRunFinishedAt?: string | null },
 ): Promise<void> {
   const builtAt = new Date().toISOString()
+  const filtersResolved = options?.filtersResolved || inferFiltersResolvedFromRows(result.rows)
+  const sourceRunFinishedAt = options?.sourceRunFinishedAt ?? null
   const rawJson = JSON.stringify({
     v: CHART_PIVOT_PAYLOAD_VERSION,
     payloadVersion: CHART_PIVOT_PAYLOAD_VERSION,
     builtAt,
-    filtersResolved: options?.filtersResolved || inferFiltersResolvedFromRows(result.rows),
-    sourceRunFinishedAt: options?.sourceRunFinishedAt ?? null,
+    filtersResolved,
+    sourceRunFinishedAt,
     meta: publicCacheMetadata(CHART_PIVOT_PAYLOAD_VERSION, builtAt, {
-      filtersResolved: options?.filtersResolved || inferFiltersResolvedFromRows(result.rows),
-      sourceRunFinishedAt: options?.sourceRunFinishedAt ?? null,
+      filtersResolved,
+      sourceRunFinishedAt,
     }),
     rows: result.rows,
   })
@@ -738,7 +744,8 @@ export async function getCachedOrCompute(
 
   const cacheScope = resolveChartCacheScope(section, params)
   if (cacheScope) {
-    const d1Cached = await readD1ChartCache(env.DB, section, representation, cacheScope)
+    const latestRunFinishedAt = await latestRunFinishedAtOrNull(env.DB)
+    const d1Cached = await readD1ChartCache(env.DB, section, representation, cacheScope, { latestRunFinishedAt })
     if (d1Cached) {
       const d1Payload = {
         rows: d1Cached.rows,
@@ -752,7 +759,9 @@ export async function getCachedOrCompute(
       }
     }
     for (const fallbackScope of widerFallbackScopes(cacheScope)) {
-      const fallbackCached = await readD1ChartCache(env.DB, section, representation, fallbackScope)
+      const fallbackCached = await readD1ChartCache(env.DB, section, representation, fallbackScope, {
+        latestRunFinishedAt,
+      })
       if (!fallbackCached) continue
       const d1Payload = {
         rows: filterRowsToScopeWindow(fallbackCached.rows, cacheScope),

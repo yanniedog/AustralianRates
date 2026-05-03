@@ -34,6 +34,8 @@ export function publicPackageRefreshSideEffectPolicy(input: PublicPackageSideEff
   }
 }
 
+const CACHE_REFRESH_CRON_TOLERANCE_MINUTES = 5
+
 function scheduledMelbourneCacheRefreshTime(env: EnvBindings): { hour: number; minute: number } {
   return {
     hour: Math.max(
@@ -47,6 +49,18 @@ function scheduledMelbourneCacheRefreshTime(env: EnvBindings): { hour: number; m
   }
 }
 
+function isWithinCacheRefreshWindow(
+  melbourne: { hour: number; minute: number },
+  target: { hour: number; minute: number },
+): boolean {
+  const melbourneTotalMinutes = melbourne.hour * 60 + melbourne.minute
+  const targetTotalMinutes = target.hour * 60 + target.minute
+  return (
+    melbourneTotalMinutes >= targetTotalMinutes &&
+    melbourneTotalMinutes <= targetTotalMinutes + CACHE_REFRESH_CRON_TOLERANCE_MINUTES
+  )
+}
+
 export async function runPublicPackageRefreshCron(
   env: EnvBindings,
   input: { scheduledIso: string; cron: string },
@@ -57,7 +71,7 @@ export async function runPublicPackageRefreshCron(
     env.MELBOURNE_TIMEZONE || MELBOURNE_TIMEZONE,
   )
   const target = scheduledMelbourneCacheRefreshTime(env)
-  if (melbourne.hour !== target.hour || melbourne.minute !== target.minute) {
+  if (!isWithinCacheRefreshWindow(melbourne, target)) {
     return {
       ok: true,
       skipped: true,
