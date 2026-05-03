@@ -71,7 +71,7 @@ const lines = [
   '2. Commit + push',
   '3. PR to main',
   '4. CI green (ci_result, etc.)',
-  '5. Bot wait gate: late sweep + ~10-15 min re-poll unless waived',
+  '5. Bot wait gate: 7 min after new PR creation or bot tagging; code pushes alone do not restart it',
   '6. In-thread reply on every substantive bot/human thread',
   '7. Merge to main',
   '8. Deploy finished (Pages / Workers as applicable)',
