@@ -182,21 +182,26 @@
         return ss;
     }
 
-    /** Compact slice-pair glyphs: ↑→↓ x- -x xx (calendar P vs D, proper ingests only). */
+    /** Compact slice-pair glyphs: ↑→↓ x-(n) -x(n) xx(n) (calendar P vs D, proper ingests only). */
 
     function glyphNum(x) {
         var n = Number(x);
         return Number.isFinite(n) ? n : 0;
     }
 
+    /** Matches footer compact missing-row glyphs x-(prior) -x(current) xx(both). */
+    function slicePairMissingGlyphs(stats) {
+        if (!stats) return 'x-(0) -x(0) xx(0)';
+        return 'x-(' + glyphNum(stats.prev_missing_count) + ') -x(' + glyphNum(stats.curr_missing_count)
+            + ') xx(' + glyphNum(stats.both_missing_count) + ')';
+    }
+
     function formatSlicePairText(stats) {
         if (!stats) return '';
-        return '\u2191' + String(glyphNum(stats.up_count))
-            + ' \u2192' + String(glyphNum(stats.flat_count))
-            + ' \u2193' + String(glyphNum(stats.down_count))
-            + ' x-' + String(glyphNum(stats.prev_missing_count))
-            + ' -x' + String(glyphNum(stats.curr_missing_count))
-            + ' xx' + String(glyphNum(stats.both_missing_count));
+        return '\u2191' + glyphNum(stats.up_count)
+            + ' \u2192' + glyphNum(stats.flat_count)
+            + ' \u2193' + glyphNum(stats.down_count)
+            + ' ' + slicePairMissingGlyphs(stats);
     }
 
     function slicePairAriaLabel(stats) {
@@ -211,13 +216,14 @@
             + ', previous day missing ' + glyphNum(stats.prev_missing_count)
             + ', current day missing ' + glyphNum(stats.curr_missing_count)
             + ', both missing ' + glyphNum(stats.both_missing_count)
-            + '.' + chk;
+            + '; footer ' + slicePairMissingGlyphs(stats) + '.' + chk;
     }
 
     function slicePairDataHelp(stats) {
         var p = stats && stats.p ? String(stats.p).slice(0, 10) : '';
         var dr = stats && stats.d ? String(stats.d).slice(0, 10) : '';
         return 'Proper ingests only. Calendar P=' + p + ', D=' + dr + ' (Lag-free). Movement strip elsewhere uses ingest lag.'
+            + ' Missing-row footer glyphs: ' + slicePairMissingGlyphs(stats) + '.'
             + (stats && stats.checksum_ok === false ? ' Checksum mismatch detected.' : '');
     }
 
