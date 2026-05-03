@@ -420,6 +420,7 @@
         var lastPointerDate = '';
         if (/^\d{4}-\d{2}-\d{2}$/.test(windowEndYmd)) lastPointerDate = windowEndYmd;
         else if (/^\d{4}-\d{2}-\d{2}$/.test(spotlightYmd)) lastPointerDate = spotlightYmd;
+        var ribbonPointerActive = false;
         var ribbonListHoverKeys = null;
         var ribbonHoverScopeMap = {};
         var ribbonHoverScopeSeq = 0;
@@ -997,6 +998,16 @@
             var prevYmd = dates.length >= 2 ? dates[dates.length - 2] : '';
             if (!latestYmd || !prevYmd) return;
             pushSlicePairStatsForDate(latestYmd, prevYmd);
+        }
+
+        function pushActiveOrLiveSlicePairStats() {
+            var anchor = ribbonPointerActive ? String(lastPointerDate || '').slice(0, 10) : '';
+            var idx = anchor ? dates.indexOf(anchor) : -1;
+            if (idx > 0) {
+                pushSlicePairStatsForDate(anchor, dates[idx - 1], visibleRibbonProducts());
+                return;
+            }
+            pushLiveSlicePairStats();
         }
 
         function setHeroSlicePairStats(stats) {
@@ -1921,6 +1932,7 @@
             if (!ax0) return;
             var anchor = resolveDateFromAxisValue(ax0.value);
             if (!anchor) return;
+            ribbonPointerActive = true;
             setRibbonAnchorDate(anchor);
             syncReportHoverBox(anchor);
             if (isBandsMode) refreshRibbonUnderChartPanel();
@@ -2261,6 +2273,7 @@
                     if (!dataCoord || dataCoord.length < 2) return;
                     var anchor = resolveDateFromAxisValue(dataCoord[0]);
                     if (!anchor) return;
+                    ribbonPointerActive = true;
                     setRibbonAnchorDate(anchor);
                     syncReportHoverBox(anchor);
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
@@ -2270,6 +2283,7 @@
                 };
                 var onRibbonChartOut = function () {
                     if (reportHoverBox) reportHoverBox.style.display = 'none';
+                    ribbonPointerActive = false;
                     lastPointerDate = '';
                     pushLiveSlicePairStats();
                 };
@@ -2285,7 +2299,7 @@
                     ribbonUnderchartSyncedOnFinish = true;
                     refreshRibbonUnderChartPanel();
                 }
-                pushLiveSlicePairStats();
+                pushActiveOrLiveSlicePairStats();
             });
 
             siteUiRibbonListener = function () {
@@ -2298,7 +2312,7 @@
                 updateProductVisibility();
                 scheduleRibbonRedraw();
                 syncRibbonTrayUi();
-                pushLiveSlicePairStats();
+                pushActiveOrLiveSlicePairStats();
             };
             window.addEventListener('ar:site-ui-settings', siteUiRibbonListener);
             syncRibbonTrayUi();
