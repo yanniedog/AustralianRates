@@ -638,10 +638,7 @@
     }
 
     function buildReportPreviewModel(reportPlots, currentFields, baseParams) {
-        var slicePairParams = {};
-        Object.keys(baseParams || {}).forEach(function (key) {
-            slicePairParams[key] = baseParams[key];
-        });
+        var slicePairParams = baseParams || {};
         var history = chartState.reportProductHistory || null;
         if (history && chartData.buildChartModelFromReportProductHistory) {
             var previewModel = chartData.buildChartModelFromReportProductHistory(
