@@ -34,6 +34,30 @@ export type SlicePairRouteOptions = {
   buildLatestFilters: (merged: QueryRecord) => LatestFilters | LatestSavingsFilters | LatestTdFilters
 }
 
+function isYmd(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function resolveEffectiveEndDate(input: {
+  explicitEndRaw: string
+  resolvedEndRaw: string
+  implicitDefault: string
+}): { dYmd: string; implicit: boolean } {
+  if (isYmd(input.explicitEndRaw)) {
+    return {
+      dYmd: isYmd(input.resolvedEndRaw) ? input.resolvedEndRaw : input.explicitEndRaw,
+      implicit: false,
+    }
+  }
+  if (input.explicitEndRaw) {
+    return {
+      dYmd: isYmd(input.resolvedEndRaw) ? input.resolvedEndRaw : input.implicitDefault,
+      implicit: false,
+    }
+  }
+  return { dYmd: input.implicitDefault, implicit: true }
+}
+
 function toQueryParams(input: QueryRecord): QueryRecord {
   const params: QueryRecord = {}
   for (const [key, value] of Object.entries(input)) {
@@ -81,10 +105,12 @@ async function handleSlicePairStatsRequest(
   const explicitEndRaw = typeof merged.end_date === 'string' ? merged.end_date.trim() : ''
   const defaultEndDate = todayYmd()
   const endRaw = typeof resolvedFilters.endDate === 'string' ? resolvedFilters.endDate.trim() : ''
-  const dYmd =
-    explicitEndRaw && /^\d{4}-\d{2}-\d{2}$/.test(explicitEndRaw)
-      ? (endRaw && /^\d{4}-\d{2}-\d{2}$/.test(endRaw) ? endRaw : explicitEndRaw)
-      : defaultEndDate
+  const effectiveEndDate = resolveEffectiveEndDate({
+    explicitEndRaw,
+    resolvedEndRaw: endRaw,
+    implicitDefault: defaultEndDate,
+  })
+  const dYmd = effectiveEndDate.dYmd
   const pYmd = previousCalendarUtcDay(dYmd)
 
   const latestFilters = options.buildLatestFilters({
@@ -93,12 +119,13 @@ async function handleSlicePairStatsRequest(
   })
 
   const liveAllowed = !(await isPublicLiveD1FallbackDisabled(c.env))
+  const cacheParams = effectiveEndDate.implicit ? { ...merged, implicit_end_date: dYmd } : merged
   let payload: SlicePairStatsPayload & { fromCache: 'kv' | 'live' }
   try {
     payload = await getCachedOrComputeSlicePairStats(
       c.env,
       options.section,
-      toQueryParams(merged),
+      toQueryParams(cacheParams),
       async () => {
         const counts = await querySlicePairStatsForSection(
           getReadDb(c),

@@ -75,7 +75,7 @@ export type PostIngestAssuranceReport = {
     raw_linkage_gaps: number
     package_freshness_failures: number
     quarantined_rows_total: number
-    missing_dataset_rows: number
+    missing_datasets_count: number
   }
   datasets: DatasetRowCount[]
   failed_scopes: FailedLenderScope[]
@@ -519,7 +519,7 @@ export async function runPostIngestAssurance(
       raw_linkage_gaps: rawLinkageGaps,
       package_freshness_failures: packageFailures,
       quarantined_rows_total: quarantinedRowsTotal,
-      missing_dataset_rows: missingDatasets.length,
+      missing_datasets_count: missingDatasets.length,
     },
     datasets,
     failed_scopes: failedScopes.slice(0, 50),
@@ -549,6 +549,7 @@ export async function runPostIngestAssurance(
       context: JSON.stringify({
         collection_date: collectionDate,
         hard_fail_lenders: hard.length,
+        missing_datasets_count: missingDatasets.length,
         missing_datasets: missingDatasets.map((item) => item.dataset),
         sample: hard.slice(0, 3),
       }),
