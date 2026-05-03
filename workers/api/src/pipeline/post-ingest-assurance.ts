@@ -29,6 +29,7 @@ type DatasetRowCount = {
   historical_table: string
   latest_collection_date: string | null
   latest_row_count: number
+  ok: boolean
 }
 
 type FailedLenderScope = {
@@ -74,6 +75,7 @@ export type PostIngestAssuranceReport = {
     raw_linkage_gaps: number
     package_freshness_failures: number
     quarantined_rows_total: number
+    missing_datasets_count: number
   }
   datasets: DatasetRowCount[]
   failed_scopes: FailedLenderScope[]
@@ -136,17 +138,19 @@ async function countLatestRows(
   collectionDate: string | null,
 ): Promise<DatasetRowCount> {
   if (!collectionDate || !(await tableExists(db, table))) {
-    return { dataset, historical_table: table, latest_collection_date: null, latest_row_count: 0 }
+    return { dataset, historical_table: table, latest_collection_date: null, latest_row_count: 0, ok: false }
   }
   const row = await db
     .prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE collection_date = ?`)
     .bind(collectionDate)
     .first<{ count: number }>()
+  const latestRowCount = Number(row?.count ?? 0)
   return {
     dataset,
     historical_table: table,
     latest_collection_date: collectionDate,
-    latest_row_count: Number(row?.count ?? 0),
+    latest_row_count: latestRowCount,
+    ok: latestRowCount > 0,
   }
 }
 
@@ -490,6 +494,7 @@ export async function runPostIngestAssurance(
   ])
   const failedScopes = groupFailedScopes(gaps)
   const hard = hardFailures(failedScopes)
+  const missingDatasets = datasets.filter((item) => !item.ok)
   const packageFailures = packages.filter((item) => !item.ok).length
   const quarantineActions = await applyQuarantinePulse(env, collectionDate, failedScopes)
   const quarantineCounts = await listHistoricalQuarantineCounts(env.DB)
@@ -502,6 +507,7 @@ export async function runPostIngestAssurance(
     ok:
       failedScopes.length === 0 &&
       hard.length === 0 &&
+      missingDatasets.length === 0 &&
       productKeyMismatches === 0 &&
       rawLinkageGaps === 0 &&
       (!requirePackageFreshness || packageFailures === 0),
@@ -513,6 +519,7 @@ export async function runPostIngestAssurance(
       raw_linkage_gaps: rawLinkageGaps,
       package_freshness_failures: packageFailures,
       quarantined_rows_total: quarantinedRowsTotal,
+      missing_datasets_count: missingDatasets.length,
     },
     datasets,
     failed_scopes: failedScopes.slice(0, 50),
@@ -536,12 +543,14 @@ export async function runPostIngestAssurance(
     await setAppConfig(env.DB, POST_INGEST_ASSURANCE_REPORT_KEY, JSON.stringify(report))
   }
 
-  if (hard.length > 0 && input.emitHardFailureLog !== false) {
+  if ((hard.length > 0 || missingDatasets.length > 0) && input.emitHardFailureLog !== false) {
     log.error('scheduler', 'post_ingest_assurance_hard_failure', {
       code: 'post_ingest_assurance_failed',
       context: JSON.stringify({
         collection_date: collectionDate,
         hard_fail_lenders: hard.length,
+        missing_datasets_count: missingDatasets.length,
+        missing_datasets: missingDatasets.map((item) => item.dataset),
         sample: hard.slice(0, 3),
       }),
     })
