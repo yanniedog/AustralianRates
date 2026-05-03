@@ -135,7 +135,7 @@
         });
     }
 
-    function setReportHoverSlicePairStats(stats) {
+    function setReportSlicePairStats(stats) {
         var heroApi = window.AR && window.AR.hero ? window.AR.hero : null;
         if (!heroApi || typeof heroApi.setSlicePairStats !== 'function') return;
         slicePairHeroSeq += 1;
@@ -1236,6 +1236,7 @@
         markStale: markStale,
         refreshFromCache: refreshFromCache,
         refreshReportRangePreview: refreshReportRangePreview,
-        setReportHoverSlicePairStats: setReportHoverSlicePairStats,
+        setReportSlicePairStats: setReportSlicePairStats,
+        setReportHoverSlicePairStats: setReportSlicePairStats,
     };
 })();

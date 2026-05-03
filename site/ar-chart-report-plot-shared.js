@@ -1001,6 +1001,10 @@
 
         function setHeroSlicePairStats(stats) {
             var chartsMod = window.AR && window.AR.charts;
+            if (chartsMod && typeof chartsMod.setReportSlicePairStats === 'function') {
+                chartsMod.setReportSlicePairStats(stats);
+                return;
+            }
             if (chartsMod && typeof chartsMod.setReportHoverSlicePairStats === 'function') {
                 chartsMod.setReportHoverSlicePairStats(stats);
                 return;
@@ -1011,7 +1015,7 @@
             }
         }
 
-        function pushSlicePairStatsForDate(anchorYmd, prevYmd, visibleProducts, hoverDriven) {
+        function pushSlicePairStatsForDate(anchorYmd, prevYmd, visibleProducts) {
             var anchor = String(anchorYmd || '').slice(0, 10);
             var prev = String(prevYmd || '').slice(0, 10);
             if (!anchor || !prev) return;
@@ -1116,7 +1120,7 @@
             var idx = dates.indexOf(anchor);
             var prevYmd = idx > 0 ? dates[idx - 1] : '';
             var visibleProducts = visibleRibbonProducts();
-            pushSlicePairStatsForDate(anchor, prevYmd, visibleProducts, true);
+            pushSlicePairStatsForDate(anchor, prevYmd, visibleProducts);
             refreshSlicePairStatsForAnchor(anchor);
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
