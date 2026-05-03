@@ -67,13 +67,18 @@ function addCalendarDaysUtcYmd(ymd: string, deltaDays: number): string {
   return new Date(t).toISOString().slice(0, 10)
 }
 
-function alignImplicitBandEndDateToToday<TFilters extends ReportFilters>(
+function shouldAlignImplicitBandEndDate(section: ChartCacheSection, mode: ReportPlotMode, query: QueryRecord): boolean {
+  return section === 'term_deposits' && mode === 'bands' && !hasExplicitEndDate(query)
+}
+
+export function alignImplicitBandEndDateToToday<TFilters extends ReportFilters>(
   filters: TFilters,
+  section: ChartCacheSection,
   mode: ReportPlotMode,
   query: QueryRecord,
   today: string,
 ): TFilters {
-  if (mode !== 'bands' || hasExplicitEndDate(query)) return filters
+  if (!shouldAlignImplicitBandEndDate(section, mode, query)) return filters
   if (filters.endDate === today) return filters
   const endDate = typeof filters.endDate === 'string' && filters.endDate.trim()
     ? filters.endDate.trim()
@@ -93,11 +98,12 @@ function alignImplicitBandEndDateToToday<TFilters extends ReportFilters>(
 
 function buildReportPlotCacheParams(
   query: QueryRecord,
+  section: ChartCacheSection,
   mode: ReportPlotMode,
   effectiveFilters: ReportFilters,
 ): QueryRecord {
   const params = toQueryParams(query)
-  if (mode === 'bands' && !hasExplicitEndDate(query) && typeof effectiveFilters.endDate === 'string') {
+  if (shouldAlignImplicitBandEndDate(section, mode, query) && typeof effectiveFilters.endDate === 'string') {
     params.__implicit_end_date = effectiveFilters.endDate
   }
   return params
@@ -133,8 +139,8 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
         }))
     ) as TFilters,
   )
-  const effectiveFilters = alignImplicitBandEndDateToToday(resolvedFilters, mode, merged, todayYmd())
-  const cacheParams = buildReportPlotCacheParams(merged, mode, effectiveFilters)
+  const effectiveFilters = alignImplicitBandEndDateToToday(resolvedFilters, options.section, mode, merged, todayYmd())
+  const cacheParams = buildReportPlotCacheParams(merged, options.section, mode, effectiveFilters)
 
   const liveAllowed = !(await isPublicLiveD1FallbackDisabled(c.env))
   let payload: Awaited<ReturnType<typeof getCachedOrComputeReportPlot>>

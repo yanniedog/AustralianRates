@@ -12,7 +12,7 @@ import type { ReportPlotMode, ReportPlotPayload, ReportPlotSection } from './rep
 import { getMelbourneNowParts } from '../utils/time'
 
 const REPORT_PLOT_CACHE_TABLE = 'report_plot_request_cache'
-const REPORT_PLOT_PAYLOAD_VERSION = 6
+const REPORT_PLOT_PAYLOAD_VERSION = 7
 const D1_CACHE_FRESH_MINUTES = 90
 
 type ReportPlotCacheRow = {
