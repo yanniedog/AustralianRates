@@ -999,7 +999,19 @@
             pushSlicePairStatsForDate(latestYmd, prevYmd);
         }
 
-        function pushSlicePairStatsForDate(anchorYmd, prevYmd, visibleProducts) {
+        function setHeroSlicePairStats(stats, hoverDriven) {
+            var chartsMod = window.AR && window.AR.charts;
+            if (hoverDriven && chartsMod && typeof chartsMod.setReportHoverSlicePairStats === 'function') {
+                chartsMod.setReportHoverSlicePairStats(stats);
+                return;
+            }
+            var heroMod = window.AR && window.AR.hero;
+            if (heroMod && typeof heroMod.setSlicePairStats === 'function') {
+                heroMod.setSlicePairStats(stats);
+            }
+        }
+
+        function pushSlicePairStatsForDate(anchorYmd, prevYmd, visibleProducts, hoverDriven) {
             var anchor = String(anchorYmd || '').slice(0, 10);
             var prev = String(prevYmd || '').slice(0, 10);
             if (!anchor || !prev) return;
@@ -1007,10 +1019,7 @@
             var stats = buildRibbonVisibleSlicePairCounts(products, anchor, prev);
             stats.d = anchor;
             stats.p = prev;
-            var heroMod = window.AR && window.AR.hero;
-            if (heroMod && typeof heroMod.setSlicePairStats === 'function') {
-                heroMod.setSlicePairStats(stats);
-            }
+            setHeroSlicePairStats(stats, !!hoverDriven);
         }
 
         function slicePairCacheKey(params) {
@@ -1049,7 +1058,7 @@
             if (!params) return;
             var key = slicePairCacheKey(params);
             if (slicePairFetchCache[key]) {
-                heroMod.setSlicePairStats(slicePairFetchCache[key]);
+                setHeroSlicePairStats(slicePairFetchCache[key], true);
                 return;
             }
             if (slicePairFetchPending[key]) return;
@@ -1059,7 +1068,7 @@
                 if (!payload) return;
                 rememberSlicePairStats(key, payload);
                 if (String(lastPointerDate || '').slice(0, 10) !== anchor) return;
-                heroMod.setSlicePairStats(payload);
+                setHeroSlicePairStats(payload, true);
             }).catch(function (err) {
                 delete slicePairFetchPending[key];
                 if (clientLog) {
@@ -1107,7 +1116,7 @@
             var idx = dates.indexOf(anchor);
             var prevYmd = idx > 0 ? dates[idx - 1] : '';
             var visibleProducts = visibleRibbonProducts();
-            pushSlicePairStatsForDate(anchor, prevYmd, visibleProducts);
+            pushSlicePairStatsForDate(anchor, prevYmd, visibleProducts, true);
             refreshSlicePairStatsForAnchor(anchor);
             if (visibleProducts.length === 1) {
                 var prod = visibleProducts[0];
@@ -2257,6 +2266,7 @@
                 };
                 var onRibbonChartOut = function () {
                     if (reportHoverBox) reportHoverBox.style.display = 'none';
+                    pushLiveSlicePairStats();
                 };
                 zr.on('mousemove', onRibbonChartMove);
                 zr.on('globalout', onRibbonChartOut);
