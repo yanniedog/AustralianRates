@@ -58,6 +58,28 @@ function parseReportPlotMode(value: string | undefined): ReportPlotMode | null {
   return null
 }
 
+function hasExplicitEndDate(query: QueryRecord): boolean {
+  return typeof query.end_date === 'string' && query.end_date.trim().length > 0
+}
+
+function alignImplicitBandEndDateToToday<TFilters extends ReportFilters>(
+  filters: TFilters,
+  mode: ReportPlotMode,
+  query: QueryRecord,
+): TFilters {
+  if (mode !== 'bands' || hasExplicitEndDate(query)) return filters
+  const today = todayYmd()
+  if (filters.endDate === today) return filters
+  const startDate = typeof filters.startDate === 'string' && filters.startDate.trim()
+    ? filters.startDate.trim()
+    : today
+  return {
+    ...filters,
+    startDate: startDate <= today ? startDate : today,
+    endDate: today,
+  }
+}
+
 async function handleReportPlotRequest<TFilters extends ReportFilters>(
   c: Context<AppContext>,
   options: ReportPlotRouteOptions<TFilters>,
@@ -88,6 +110,7 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
         }))
     ) as TFilters,
   )
+  const effectiveFilters = alignImplicitBandEndDateToToday(resolvedFilters, mode, merged)
 
   const liveAllowed = !(await isPublicLiveD1FallbackDisabled(c.env))
   let payload: Awaited<ReturnType<typeof getCachedOrComputeReportPlot>>
@@ -97,7 +120,7 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
       options.section,
       mode,
       toQueryParams(merged),
-      () => queryReportPlotPayload(getReadDb(c), options.section, mode, resolvedFilters),
+      () => queryReportPlotPayload(getReadDb(c), options.section, mode, effectiveFilters),
       { allowLiveCompute: liveAllowed },
     )
   } catch (error) {

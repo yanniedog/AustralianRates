@@ -75,7 +75,7 @@ type SectionConfig = {
 
 // Write-optimisation skips unchanged-rate rows indefinitely; fill the entire practical query window.
 const BAND_PRODUCT_GAP_FILL_MAX_DAYS = 365
-export const REPORT_BANDS_SOURCE_VERSION = 5
+export const REPORT_BANDS_SOURCE_VERSION = 6
 
 function rateBoundsForReportSection(section: ReportPlotSection): { min: number; max: number } {
   switch (section) {
