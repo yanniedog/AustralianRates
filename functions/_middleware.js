@@ -16,9 +16,35 @@ const MAX_INLINE_BYTES = 500000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
 const SNAPSHOT_KV_VERSION = 11;
+const SNAPSHOT_FRESH_MS = 36 * 60 * 60 * 1000;
+
+function melbourneDateYmdOffset(offsetDays) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(
+        new Date(Date.now() + offsetDays * 86400000),
+    );
+}
 
 function melbourneDateYmd() {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(new Date());
+    return melbourneDateYmdOffset(0);
+}
+
+function snapshotPayloadFresh(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    var builtAt = new Date(String(payload.builtAt || '')).getTime();
+    if (!Number.isFinite(builtAt) || Date.now() - builtAt > SNAPSHOT_FRESH_MS) return false;
+    var filtersResolved = payload.data && payload.data.filtersResolved;
+    var endDate = filtersResolved && typeof filtersResolved.endDate === 'string' ? filtersResolved.endDate : '';
+    return endDate === melbourneDateYmdOffset(0) || endDate === melbourneDateYmdOffset(-1);
+}
+
+function wrapSnapshotPayload(parsed, data) {
+    return JSON.stringify({
+        ok: true,
+        section: parsed.section,
+        scope: parsed.scope,
+        builtAt: parsed.builtAt,
+        data: data || parsed.data,
+    });
 }
 
 const SECTION_KV_KEY = {
@@ -230,37 +256,27 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
     const dbSection = SECTION_KV_KEY[sectionApiName];
     if (!dbSection) return null;
     const scope = buildScope(chartWindow, preset);
-    const melbDate = melbourneDateYmd();
-    const inlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + melbDate;
-    const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + melbDate;
+    const dates = Array.from(new Set([melbourneDateYmd(), melbourneDateYmdOffset(-1)]));
+    const firstInlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + dates[0];
     try {
-        const body = await env.CHART_CACHE_KV.get(inlineKey);
-        if (body) {
-            // The KV value is the raw SnapshotPayload JSON (no `{ok, section, scope, builtAt, data}` wrapper).
-            // The client expects the wrapped shape, so wrap it here.
-            const parsed = JSON.parse(body);
-            const wrapped = JSON.stringify({
-                ok: true,
-                section: parsed.section,
-                scope: parsed.scope,
-                builtAt: parsed.builtAt,
-                data: parsed.data,
-            });
-            return { ok: true, body: wrapped, source: 'kv-inline' };
+        for (var i = 0; i < dates.length; i++) {
+            const inlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + dates[i];
+            const body = await env.CHART_CACHE_KV.get(inlineKey);
+            if (body) {
+                // The KV value is the raw SnapshotPayload JSON. The client expects the wrapped shape.
+                const parsed = JSON.parse(body);
+                if (snapshotPayloadFresh(parsed)) return { ok: true, body: wrapSnapshotPayload(parsed), source: 'kv-inline' };
+            }
+            const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + dates[i];
+            const mainBody = await env.CHART_CACHE_KV.get(mainKey);
+            if (!mainBody) continue;
+            const parsed = JSON.parse(mainBody);
+            if (!snapshotPayloadFresh(parsed)) continue;
+            const trimmed = trimSnapshotForInline(parsed);
+            if (!trimmed) return { ok: false, reason: 'kv-main-oversize', url: 'kv:' + mainKey };
+            return { ok: true, body: wrapSnapshotPayload(parsed, trimmed), source: 'kv-main' };
         }
-        const mainBody = await env.CHART_CACHE_KV.get(mainKey);
-        if (!mainBody) return { ok: false, reason: 'kv-miss', url: 'kv:' + inlineKey };
-        const parsed = JSON.parse(mainBody);
-        const trimmed = trimSnapshotForInline(parsed);
-        if (!trimmed) return { ok: false, reason: 'kv-main-oversize', url: 'kv:' + mainKey };
-        const wrapped = JSON.stringify({
-            ok: true,
-            section: parsed.section,
-            scope: parsed.scope,
-            builtAt: parsed.builtAt,
-            data: trimmed,
-        });
-        return { ok: true, body: wrapped, source: 'kv-main' };
+        return { ok: false, reason: 'kv-miss', url: 'kv:' + firstInlineKey };
     } catch (err) {
         const message = err && err.message ? String(err.message) : 'unknown';
         return { ok: false, reason: 'kv-error:' + message.slice(0, 60).replace(/[^A-Za-z0-9_.:-]/g, '_') };

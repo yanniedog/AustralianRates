@@ -11,6 +11,11 @@ import {
 import { scheduledTasksForCron } from '../src/pipeline/scheduler-dispatch'
 
 describe('scheduledTasksForCron', () => {
+  it('uses UTC pairs for Melbourne 00:01 ingest and 03:01 public cache refresh', () => {
+    expect(DAILY_SCHEDULE_CRON_EXPRESSION).toBe('1 13,14 * * *')
+    expect(PUBLIC_PACKAGE_REFRESH_CRON_EXPRESSION).toBe('1 16,17 * * *')
+  })
+
   it('routes the daily cron to the ingest pipeline', () => {
     expect(scheduledTasksForCron('')).toEqual(['daily'])
     expect(scheduledTasksForCron(DAILY_SCHEDULE_CRON_EXPRESSION)).toEqual(['daily'])

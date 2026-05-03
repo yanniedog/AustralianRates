@@ -279,7 +279,7 @@ describe('report-plot routes', () => {
 })
 
 describe('report-plot cache refresh', () => {
-  it('writes a D1 report-plot cache row for a default public scope', async () => {
+  it('does not write a D1 report-plot cache row from a public live fallback', async () => {
     await env.DB
       .prepare('DELETE FROM report_plot_request_cache WHERE section = ? AND mode = ? AND request_scope = ?')
       .bind('savings', 'bands', 'window:90D')
@@ -289,12 +289,14 @@ describe('report-plot cache refresh', () => {
       'https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D',
     )
     expect(response.status).toBe(200)
+    expect(response.headers.get('X-AR-Cache')).toBe('live')
+    await response.text()
 
     const row = await env.DB
       .prepare('SELECT COUNT(*) AS n FROM report_plot_request_cache WHERE section = ? AND mode = ? AND request_scope = ?')
       .bind('savings', 'bands', 'window:90D')
       .first<{ n: number }>()
 
-    expect(Number(row?.n || 0)).toBe(1)
+    expect(Number(row?.n || 0)).toBe(0)
   })
 })

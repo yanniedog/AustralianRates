@@ -92,20 +92,23 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Cost-control schedule: one daily CDR ingest at Melbourne 06:00 plus one post-ingest public package refresh.
-# The UTC pair covers AEST/AEDT; the handler gates on MELBOURNE_DAILY_INGEST_HOURS=6.
-# Heavy maintenance, health, integrity, backup, historical-quality, and chart-cache jobs remain manual/admin-only.
-crons = ["0 19,20 * * *", "0 23 * * *"]
+# Cost-control schedule: one daily CDR ingest at Melbourne 00:01 plus one full public cache refresh at Melbourne 03:01.
+# UTC pairs cover AEST/AEDT; handlers gate on Melbourne wall-clock hour/minute so only one tick runs each job.
+# Heavy maintenance, health, integrity, backup, and historical-quality jobs remain manual/admin-only.
+crons = ["1 13,14 * * *", "1 16,17 * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"
 PUBLIC_API_BASE_PATH = "/api/home-loan-rates"
 MELBOURNE_TIMEZONE = "Australia/Melbourne"
-MELBOURNE_TARGET_HOUR = "6"
-MELBOURNE_SECOND_INGEST_HOUR = "18"
-MELBOURNE_DAILY_INGEST_HOURS = "6"
+MELBOURNE_TARGET_HOUR = "0"
+MELBOURNE_DAILY_INGEST_MINUTE = "1"
+MELBOURNE_SECOND_INGEST_HOUR = "0"
+MELBOURNE_DAILY_INGEST_HOURS = "0"
+MELBOURNE_PUBLIC_CACHE_REFRESH_HOUR = "3"
+MELBOURNE_PUBLIC_CACHE_REFRESH_MINUTE = "1"
 MANUAL_RUN_COOLDOWN_SECONDS = "60"
-LOCK_TTL_SECONDS = "7200"
+LOCK_TTL_SECONDS = "5400"
 MAX_QUEUE_ATTEMPTS = "3"
 MAX_PRODUCTS_PER_LENDER = "20000"
 FEATURE_SCHEDULED_INGEST_AUDITS_ENABLED = "false"
@@ -192,11 +195,14 @@ new_sqlite_classes = ["HistoricalQualityAuditDO"]
 WORKER_VERSION = "test"
 PUBLIC_API_BASE_PATH = "/api/home-loan-rates"
 MELBOURNE_TIMEZONE = "Australia/Melbourne"
-MELBOURNE_TARGET_HOUR = "6"
-MELBOURNE_SECOND_INGEST_HOUR = "18"
-MELBOURNE_DAILY_INGEST_HOURS = "6"
+MELBOURNE_TARGET_HOUR = "0"
+MELBOURNE_DAILY_INGEST_MINUTE = "1"
+MELBOURNE_SECOND_INGEST_HOUR = "0"
+MELBOURNE_DAILY_INGEST_HOURS = "0"
+MELBOURNE_PUBLIC_CACHE_REFRESH_HOUR = "3"
+MELBOURNE_PUBLIC_CACHE_REFRESH_MINUTE = "1"
 MANUAL_RUN_COOLDOWN_SECONDS = "60"
-LOCK_TTL_SECONDS = "7200"
+LOCK_TTL_SECONDS = "5400"
 MAX_QUEUE_ATTEMPTS = "3"
 MAX_PRODUCTS_PER_LENDER = "20000"
 FEATURE_SCHEDULED_INGEST_AUDITS_ENABLED = "false"

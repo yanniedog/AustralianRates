@@ -1,5 +1,6 @@
 import { nowIso } from '../utils/time'
 import type { EnvBindings } from '../types'
+import { DEFAULT_LOCK_TTL_SECONDS } from '../constants'
 
 type LockRecord = {
   key: string
@@ -37,7 +38,7 @@ const MAX_TTL_SECONDS = 24 * 60 * 60
 function clampTtl(ttlSeconds: number | undefined): number {
   const parsed = Number(ttlSeconds)
   if (!Number.isFinite(parsed)) {
-    return 7200
+    return DEFAULT_LOCK_TTL_SECONDS
   }
   return Math.min(MAX_TTL_SECONDS, Math.max(MIN_TTL_SECONDS, Math.floor(parsed)))
 }

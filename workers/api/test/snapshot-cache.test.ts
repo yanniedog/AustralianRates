@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSnapshotInlineKvKey, buildSnapshotKvKey, getCachedOrComputeSnapshot } from '../src/db/snapshot-cache'
+import { buildSnapshotKvKey, getCachedOrComputeSnapshot } from '../src/db/snapshot-cache'
 
 class MemoryKv {
   readonly values = new Map<string, string>()
@@ -19,18 +19,18 @@ class MemoryKv {
   }
 }
 
-describe('snapshot cache KV healing', () => {
-  it('backfills the inline KV entry when serving a full snapshot from KV', async () => {
+describe('snapshot cache KV hits', () => {
+  it('serves a fresh full snapshot from KV without rewriting snapshot bundles', async () => {
     const kv = new MemoryKv()
     const section = 'home_loans'
     const scope = 'window:90D'
     const mainKey = buildSnapshotKvKey(section, scope)
-    const inlineKey = buildSnapshotInlineKvKey(section, scope)
     const payload = {
-      builtAt: '2026-04-19T00:00:00.000Z',
+      builtAt: new Date().toISOString(),
       scope,
       section,
       data: {
+        filtersResolved: { startDate: '2026-04-18', endDate: new Date().toISOString().slice(0, 10) },
         siteUi: { ok: true },
         filters: { ok: true, filters: { banks: ['ANZ'] } },
         latestAll: {
@@ -54,7 +54,6 @@ describe('snapshot cache KV healing', () => {
 
     expect(result.fromCache).toBe('kv')
     expect(result.section).toBe(section)
-    expect(kv.values.get(inlineKey)).toBeTruthy()
-    expect(kv.putCalls).toBeGreaterThan(0)
+    expect(kv.putCalls).toBe(0)
   })
 })

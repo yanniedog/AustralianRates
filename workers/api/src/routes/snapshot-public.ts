@@ -264,6 +264,7 @@ export async function buildSnapshotPayload(
   env: { DB: D1Database; CHART_CACHE_KV?: KVNamespace },
   section: DatasetKind,
   scope: SnapshotScope = 'default',
+  options?: { sourceRunFinishedAt?: string | null },
 ): Promise<SnapshotPayload> {
   const db = env.DB
   const filters = await resolveFiltersForScope(db, section, scope)
@@ -333,6 +334,7 @@ export async function buildSnapshotPayload(
     builtAt: new Date().toISOString(),
     scope,
     section,
+    sourceRunFinishedAt: options?.sourceRunFinishedAt ?? null,
     data: {
       ...data,
       filtersResolved: {

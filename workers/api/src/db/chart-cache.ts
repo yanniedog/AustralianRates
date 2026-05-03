@@ -22,6 +22,14 @@ import {
   resolveChartWindowStart,
   type ChartWindow,
 } from '../utils/chart-window'
+import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
+import {
+  PUBLIC_DAILY_CACHE_TTL_SECONDS,
+  inferFiltersResolvedFromRows,
+  isPublicDailyCacheFresh,
+  publicCacheMetadata,
+  type PublicCacheMetadata,
+} from './public-cache-freshness'
 
 export type ChartCacheSection = 'home_loans' | 'savings' | 'term_deposits'
 type ChartCachePreset = 'consumer-default'
@@ -36,8 +44,6 @@ const CACHE_TABLE = 'chart_request_cache'
 const LEGACY_CACHE_TABLE = 'chart_pivot_cache'
 /** Bump when chart row selection semantics change so legacy D1 payloads are ignored. */
 const CHART_PIVOT_PAYLOAD_VERSION = 2
-/** D1 cache row considered fresh if built within this many minutes. */
-const D1_CACHE_FRESH_MINUTES = 90
 /**
  * D1 has practical limits on row/value sizes; large JSON payloads can fail with SQLITE_TOOBIG.
  * We store JSON directly when small, otherwise store gzip(base64(JSON)) with a prefix.
@@ -45,7 +51,7 @@ const D1_CACHE_FRESH_MINUTES = 90
 export const GZIP_PREFIX = 'gz:'
 export const MAX_UNCOMPRESSED_CHARS = 500_000
 /** KV TTL for public packages (seconds). Must bridge one missed daily package refresh without user D1 fallback. */
-export const CHART_CACHE_KV_TTL = 129600
+export const CHART_CACHE_KV_TTL = PUBLIC_DAILY_CACHE_TTL_SECONDS
 export { PRECOMPUTED_CHART_WINDOWS }
 
 const CONSUMER_DEFAULT_SCOPE = 'preset:consumer-default' as const
@@ -462,6 +468,41 @@ function isNoSuchTableError(e: unknown, table: string): boolean {
   return /no such table/i.test(msg) && msg.includes(table)
 }
 
+async function latestRunFinishedAtOrNull(db: D1Database): Promise<string | null> {
+  try {
+    return await getLatestCompletedDailyRunFinishedAt(db)
+  } catch {
+    return null
+  }
+}
+
+function normalizeChartCachePayload(
+  parsed: unknown,
+  row: ChartCacheRow,
+): { rows: Array<Record<string, unknown>>; meta: PublicCacheMetadata } | null {
+  if (!parsed || typeof parsed !== 'object') return null
+  const payload = parsed as {
+    v?: unknown
+    rows?: unknown
+    meta?: Partial<PublicCacheMetadata>
+    builtAt?: string
+    filtersResolved?: PublicCacheMetadata['filtersResolved']
+    sourceRunFinishedAt?: string | null
+  }
+  if (payload.v !== CHART_PIVOT_PAYLOAD_VERSION || !Array.isArray(payload.rows)) return null
+  const rows = payload.rows as Array<Record<string, unknown>>
+  const builtAt = String(payload.meta?.builtAt || payload.builtAt || row.built_at || '')
+  const filtersResolved = payload.meta?.filtersResolved || payload.filtersResolved || inferFiltersResolvedFromRows(rows)
+  const meta = {
+    payloadVersion: CHART_PIVOT_PAYLOAD_VERSION,
+    builtAt,
+    cacheDate: String(payload.meta?.cacheDate || ''),
+    filtersResolved,
+    sourceRunFinishedAt: payload.meta?.sourceRunFinishedAt ?? payload.sourceRunFinishedAt ?? null,
+  }
+  return { rows, meta }
+}
+
 /** Read precomputed payload from D1. Returns null if missing, stale, or table does not exist (migration 0030 not applied). */
 export async function readD1ChartCache(
   db: D1Database,
@@ -499,27 +540,30 @@ export async function readD1ChartCache(
   }
   if (!row?.payload_json) return null
   const builtAt = row.built_at
-  const cutoff = new Date()
-  cutoff.setMinutes(cutoff.getMinutes() - D1_CACHE_FRESH_MINUTES)
-  if (new Date(builtAt) < cutoff) return null
   let rows: Array<Record<string, unknown>>
+  let meta: PublicCacheMetadata
   try {
     const payload = row.payload_json.startsWith(GZIP_PREFIX)
       ? await gunzipFromBase64(row.payload_json.slice(GZIP_PREFIX.length))
       : row.payload_json
     const parsed = JSON.parse(payload) as unknown
     if (Array.isArray(parsed)) return null
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      (parsed as { v?: unknown }).v === CHART_PIVOT_PAYLOAD_VERSION &&
-      Array.isArray((parsed as { rows?: unknown }).rows)
-    ) {
-      rows = (parsed as { rows: Array<Record<string, unknown>> }).rows
-    } else {
-      return null
-    }
+    const normalized = normalizeChartCachePayload(parsed, row)
+    if (!normalized) return null
+    rows = normalized.rows
+    meta = normalized.meta
   } catch {
+    return null
+  }
+  const latestRunFinishedAt = await latestRunFinishedAtOrNull(db)
+  if (
+    !isPublicDailyCacheFresh({
+      builtAt: meta.builtAt || builtAt,
+      filtersResolved: meta.filtersResolved,
+      sourceRunFinishedAt: meta.sourceRunFinishedAt,
+      latestRunFinishedAt,
+    })
+  ) {
     return null
   }
   return {
@@ -537,11 +581,23 @@ export async function writeD1ChartCache(
   representation: 'day' | 'change',
   scope: ChartCacheScope,
   result: { rows: Array<Record<string, unknown>> },
+  options?: { filtersResolved?: PublicCacheMetadata['filtersResolved']; sourceRunFinishedAt?: string | null },
 ): Promise<void> {
-  const rawJson = JSON.stringify({ v: CHART_PIVOT_PAYLOAD_VERSION, rows: result.rows })
+  const builtAt = new Date().toISOString()
+  const rawJson = JSON.stringify({
+    v: CHART_PIVOT_PAYLOAD_VERSION,
+    payloadVersion: CHART_PIVOT_PAYLOAD_VERSION,
+    builtAt,
+    filtersResolved: options?.filtersResolved || inferFiltersResolvedFromRows(result.rows),
+    sourceRunFinishedAt: options?.sourceRunFinishedAt ?? null,
+    meta: publicCacheMetadata(CHART_PIVOT_PAYLOAD_VERSION, builtAt, {
+      filtersResolved: options?.filtersResolved || inferFiltersResolvedFromRows(result.rows),
+      sourceRunFinishedAt: options?.sourceRunFinishedAt ?? null,
+    }),
+    rows: result.rows,
+  })
   const payloadJson =
     rawJson.length <= MAX_UNCOMPRESSED_CHARS ? rawJson : `${GZIP_PREFIX}${await gzipToBase64(rawJson)}`
-  const builtAt = new Date().toISOString()
   try {
     await db
       .prepare(
@@ -666,7 +722,7 @@ export async function getCachedOrCompute(
   compute: () => Promise<ChartAnalyticsPayload>,
   options?: { allowLiveCompute?: boolean },
 ): Promise<ChartAnalyticsPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
-  const key = buildChartCacheKey(section, representation, params)
+  const key = buildChartCacheKey(section, representation, { ...params, __kvDay: getMelbourneNowParts().date })
 
   if (env.CHART_CACHE_KV) {
     const kvCached = await env.CHART_CACHE_KV.get(key)
@@ -704,11 +760,6 @@ export async function getCachedOrCompute(
         fallbackReason: fallbackCached.fallbackReason,
       } satisfies ChartAnalyticsPayload
       await writeChartPayloadToKv(env.CHART_CACHE_KV, key, d1Payload)
-      try {
-        await writeD1ChartCache(env.DB, section, representation, cacheScope, d1Payload)
-      } catch {
-        /* ignore D1 cache write failure on fallback hydration */
-      }
       return {
         ...d1Payload,
         fromCache: 'd1',
@@ -721,13 +772,6 @@ export async function getCachedOrCompute(
   }
 
   const result = await compute()
-  if (cacheScope) {
-    try {
-      await writeD1ChartCache(env.DB, section, representation, cacheScope, result)
-    } catch {
-      /* ignore D1 cache write failure on live requests */
-    }
-  }
   await writeChartPayloadToKv(env.CHART_CACHE_KV, key, result)
   return { ...result, fromCache: 'live' }
 }

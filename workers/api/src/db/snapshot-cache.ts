@@ -16,12 +16,16 @@ import {
   type ChartCacheSection,
 } from './chart-cache'
 import { getMelbourneNowParts } from '../utils/time'
+import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
+import {
+  isPublicDailyCacheFresh,
+  publicCacheMetadata,
+  type PublicCacheMetadata,
+} from './public-cache-freshness'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
 /** Bump when snapshot payload shape changes so stale rows are ignored. v11 aligns chart window end with latest_* max collection_date; v10 adds slicePairStats; v9 raised the inline snapshot budget for raw home-loan report bundles. */
 const SNAPSHOT_PAYLOAD_VERSION = 11
-/** Snapshot considered fresh if built within this many minutes. */
-const D1_CACHE_FRESH_MINUTES = 90
 
 /** Snapshot scope matches chart-cache scope so the same scope strings cover both caches. */
 export type SnapshotScope = ChartCacheScope
@@ -29,7 +33,21 @@ export type SnapshotPayload = {
   builtAt: string
   scope: SnapshotScope
   section: ChartCacheSection
+  sourceRunFinishedAt?: string | null
   data: Record<string, unknown>
+}
+
+function snapshotFiltersResolved(payload: SnapshotPayload): PublicCacheMetadata['filtersResolved'] {
+  return (payload.data as { filtersResolved?: { startDate?: string; endDate?: string } } | undefined)
+    ?.filtersResolved
+}
+
+function isSnapshotPayloadFresh(payload: SnapshotPayload): boolean {
+  return isPublicDailyCacheFresh({
+    builtAt: payload.builtAt,
+    filtersResolved: snapshotFiltersResolved(payload),
+    sourceRunFinishedAt: payload.sourceRunFinishedAt ?? null,
+  })
 }
 
 export function buildSnapshotKvKey(section: ChartCacheSection, scope: SnapshotScope, melbourneDate?: string): string {
@@ -47,6 +65,14 @@ export function buildSnapshotInlineKvKey(section: ChartCacheSection, scope: Snap
 function isNoSuchTableError(error: unknown, table: string): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return /no such table/i.test(message) && message.includes(table)
+}
+
+async function latestRunFinishedAtOrNull(db: D1Database): Promise<string | null> {
+  try {
+    return await getLatestCompletedDailyRunFinishedAt(db)
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -149,31 +175,33 @@ export async function readD1SnapshotCache(
   }
   if (!row?.payload_json) return null
 
-  const cutoff = new Date()
-  cutoff.setMinutes(cutoff.getMinutes() - D1_CACHE_FRESH_MINUTES)
-  const builtAt = new Date(row.built_at)
-  if (builtAt < cutoff) return null
-  // Reject entries built on a different Melbourne day to prevent cross-midnight stale endDate.
-  const builtAtMelbourneDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(builtAt)
-  if (builtAtMelbourneDate !== getMelbourneNowParts().date) return null
-
   try {
     const payloadText = row.payload_json.startsWith(GZIP_PREFIX)
       ? await gunzipFromBase64(row.payload_json.slice(GZIP_PREFIX.length))
       : row.payload_json
-    const parsed = JSON.parse(payloadText) as { v?: number; payload?: SnapshotPayload }
+    const parsed = JSON.parse(payloadText) as {
+      v?: number
+      payload?: SnapshotPayload
+      meta?: Partial<PublicCacheMetadata>
+      builtAt?: string
+      sourceRunFinishedAt?: string | null
+    }
     if (!parsed || parsed.v !== SNAPSHOT_PAYLOAD_VERSION || !parsed.payload) return null
-    // Reject absent/non-string endDate (malformed payloads) and entries more than
-    // one Melbourne day old. Allow previous-day endDate for early-morning hours
-    // (after Melbourne midnight but before today's data is ingested).
     const endDate = (parsed.payload.data as { filtersResolved?: { endDate?: unknown } } | undefined)
       ?.filtersResolved?.endDate
-    if (typeof endDate !== 'string') return null
-    const melbourneToday = getMelbourneNowParts().date
-    const melbourneYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(
-      new Date(Date.now() - 86400000),
-    )
-    if (endDate !== melbourneToday && endDate !== melbourneYesterday) return null
+    const startDate = (parsed.payload.data as { filtersResolved?: { startDate?: unknown } } | undefined)
+      ?.filtersResolved?.startDate
+    const latestRunFinishedAt = await latestRunFinishedAtOrNull(db)
+    if (
+      !isPublicDailyCacheFresh({
+        builtAt: String(parsed.meta?.builtAt || parsed.builtAt || row.built_at || parsed.payload.builtAt || ''),
+        filtersResolved: { startDate, endDate },
+        sourceRunFinishedAt: parsed.meta?.sourceRunFinishedAt ?? parsed.sourceRunFinishedAt ?? null,
+        latestRunFinishedAt,
+      })
+    ) {
+      return null
+    }
     return parsed.payload
   } catch {
     return null
@@ -188,8 +216,22 @@ export async function writeD1SnapshotCache(
   section: ChartCacheSection,
   scope: SnapshotScope,
   payload: SnapshotPayload,
+  options?: { sourceRunFinishedAt?: string | null },
 ): Promise<{ rawBytes: number; storedBytes: number; compressed: boolean }> {
-  const rawJson = JSON.stringify({ v: SNAPSHOT_PAYLOAD_VERSION, payload })
+  const filtersResolved = (payload.data as { filtersResolved?: { startDate?: string; endDate?: string } } | undefined)
+    ?.filtersResolved
+  const rawJson = JSON.stringify({
+    v: SNAPSHOT_PAYLOAD_VERSION,
+    payloadVersion: SNAPSHOT_PAYLOAD_VERSION,
+    builtAt: payload.builtAt,
+    filtersResolved,
+    sourceRunFinishedAt: options?.sourceRunFinishedAt ?? null,
+    meta: publicCacheMetadata(SNAPSHOT_PAYLOAD_VERSION, payload.builtAt, {
+      filtersResolved,
+      sourceRunFinishedAt: options?.sourceRunFinishedAt ?? null,
+    }),
+    payload,
+  })
   const compressed = rawJson.length > MAX_UNCOMPRESSED_CHARS
   const payloadJson = compressed ? `${GZIP_PREFIX}${await gzipToBase64(rawJson)}` : rawJson
   const rawBytes = rawJson.length
@@ -235,7 +277,7 @@ export async function getCachedOrComputeSnapshot(
     if (kvCached) {
       try {
         const payload = JSON.parse(kvCached) as SnapshotPayload
-        await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, payload)
+        if (!isSnapshotPayloadFresh(payload)) throw new Error('snapshot_kv_stale')
         return { ...payload, fromCache: 'kv' }
       } catch {
         /* ignore invalid KV entry */
@@ -256,11 +298,6 @@ export async function getCachedOrComputeSnapshot(
   }
 
   const payload = await compute()
-  try {
-    await writeD1SnapshotCache(env.DB, section, scope, payload)
-  } catch {
-    /* ignore D1 write failure on live requests */
-  }
   await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, payload)
   return { ...payload, fromCache: 'live' }
 }

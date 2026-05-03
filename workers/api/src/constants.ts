@@ -16,16 +16,19 @@ export const SAVINGS_API_BASE_PATH = '/api/savings-rates'
 export const TD_API_BASE_PATH = '/api/term-deposit-rates'
 export const ECONOMIC_API_BASE_PATH = '/api/economic-data'
 export const MELBOURNE_TIMEZONE = 'Australia/Melbourne'
-export const MELBOURNE_TARGET_HOUR = 6
-/** Legacy second wall-clock hour; production now uses MELBOURNE_DAILY_INGEST_HOURS=6 for one daily ingest. */
-export const MELBOURNE_SECOND_INGEST_HOUR = 18
+export const MELBOURNE_TARGET_HOUR = 0
+export const MELBOURNE_DAILY_INGEST_MINUTE = 1
+/** Legacy second wall-clock hour; production now uses MELBOURNE_DAILY_INGEST_HOURS=0 for one daily ingest. */
+export const MELBOURNE_SECOND_INGEST_HOUR = 0
+export const MELBOURNE_PUBLIC_CACHE_REFRESH_HOUR = 3
+export const MELBOURNE_PUBLIC_CACHE_REFRESH_MINUTE = 1
 /**
- * Two UTC hours bracket Melbourne 06:00 across AEDT/AEST. The handler gates on local wall-clock
- * hours, so only one of these ticks performs the daily CDR ingest.
+ * Two UTC ticks bracket Melbourne 00:01 across AEDT/AEST. The handler gates on local
+ * wall-clock hour/minute, so only one tick performs the daily CDR ingest.
  */
-export const DAILY_SCHEDULE_CRON_EXPRESSION = '0 19,20 * * *'
-/** Daily post-ingest public package refresh; writes KV packages so users do not hit D1. */
-export const PUBLIC_PACKAGE_REFRESH_CRON_EXPRESSION = '0 23 * * *'
+export const DAILY_SCHEDULE_CRON_EXPRESSION = '1 13,14 * * *'
+/** Daily full public cache refresh at Melbourne 03:01; writes D1 caches plus KV packages. */
+export const PUBLIC_PACKAGE_REFRESH_CRON_EXPRESSION = '1 16,17 * * *'
 export const SITE_HEALTH_CRON_EXPRESSION = '*/15 * * * *'
 /** Manual/admin-only maintenance; no longer scheduled in production. */
 export const HOURLY_MAINTENANCE_CRON_EXPRESSION = '0 * * * *'
@@ -80,7 +83,7 @@ export const DEFAULT_PUBLIC_CACHE_SECONDS = 300
 export const PUBLIC_EXPORT_FETCH_CHUNK_SIZE = 1000
 /** Upper bound when the client passes an explicit export `limit` query param. */
 export const PUBLIC_EXPORT_MAX_EXPLICIT_LIMIT = 50_000_000
-export const DEFAULT_LOCK_TTL_SECONDS = 7200
+export const DEFAULT_LOCK_TTL_SECONDS = 5400
 export const DEFAULT_MAX_QUEUE_ATTEMPTS = 3
 
 export const SECURITY_PURPOSES: SecurityPurpose[] = ['owner_occupied', 'investment']

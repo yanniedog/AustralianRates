@@ -1,5 +1,12 @@
 import type { Hono } from 'hono'
-import { API_BASE_PATH, MELBOURNE_TIMEZONE } from '../constants'
+import {
+  API_BASE_PATH,
+  MELBOURNE_DAILY_INGEST_MINUTE,
+  MELBOURNE_PUBLIC_CACHE_REFRESH_HOUR,
+  MELBOURNE_PUBLIC_CACHE_REFRESH_MINUTE,
+  MELBOURNE_TARGET_HOUR,
+  MELBOURNE_TIMEZONE,
+} from '../constants'
 import { getReadDb } from '../db/read-db'
 import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { getLandingOverview } from '../db/landing-overview'
@@ -27,7 +34,13 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
     withPublicCache(c, 30)
 
     const melbourne = getMelbourneNowParts(new Date(), c.env.MELBOURNE_TIMEZONE || MELBOURNE_TIMEZONE)
-    const targetHour = parseIntegerEnv(c.env.MELBOURNE_TARGET_HOUR, 6)
+    const targetHour = parseIntegerEnv(c.env.MELBOURNE_TARGET_HOUR, MELBOURNE_TARGET_HOUR)
+    const targetMinute = parseIntegerEnv(c.env.MELBOURNE_DAILY_INGEST_MINUTE, MELBOURNE_DAILY_INGEST_MINUTE)
+    const cacheRefreshHour = parseIntegerEnv(c.env.MELBOURNE_PUBLIC_CACHE_REFRESH_HOUR, MELBOURNE_PUBLIC_CACHE_REFRESH_HOUR)
+    const cacheRefreshMinute = parseIntegerEnv(
+      c.env.MELBOURNE_PUBLIC_CACHE_REFRESH_MINUTE,
+      MELBOURNE_PUBLIC_CACHE_REFRESH_MINUTE,
+    )
 
     return c.json({
       ok: true,
@@ -37,6 +50,9 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
       api_base_path: c.env.PUBLIC_API_BASE_PATH || API_BASE_PATH,
       melbourne,
       scheduled_target_hour: targetHour,
+      scheduled_target_minute: targetMinute,
+      public_cache_refresh_hour: cacheRefreshHour,
+      public_cache_refresh_minute: cacheRefreshMinute,
       features: {
         prospective: String(c.env.FEATURE_PROSPECTIVE_ENABLED || 'true').toLowerCase() === 'true',
         backfill: String(c.env.FEATURE_BACKFILL_ENABLED || 'true').toLowerCase() === 'true',
