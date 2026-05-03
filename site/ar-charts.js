@@ -135,6 +135,13 @@
         });
     }
 
+    function setReportSlicePairStats(stats) {
+        var heroApi = window.AR && window.AR.hero ? window.AR.hero : null;
+        if (!heroApi || typeof heroApi.setSlicePairStats !== 'function') return;
+        slicePairHeroSeq += 1;
+        heroApi.setSlicePairStats(stats || null);
+    }
+
     function disposeCharts() {
         chartState.mainChart = disposeChart(chartState.mainChart);
         chartState.detailChart = disposeChart(chartState.detailChart);
@@ -1229,5 +1236,7 @@
         markStale: markStale,
         refreshFromCache: refreshFromCache,
         refreshReportRangePreview: refreshReportRangePreview,
+        setReportSlicePairStats: setReportSlicePairStats,
+        setReportHoverSlicePairStats: setReportSlicePairStats,
     };
 })();

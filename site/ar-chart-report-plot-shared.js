@@ -999,6 +999,22 @@
             pushSlicePairStatsForDate(latestYmd, prevYmd);
         }
 
+        function setHeroSlicePairStats(stats) {
+            var chartsMod = window.AR && window.AR.charts;
+            if (chartsMod && typeof chartsMod.setReportSlicePairStats === 'function') {
+                chartsMod.setReportSlicePairStats(stats);
+                return;
+            }
+            if (chartsMod && typeof chartsMod.setReportHoverSlicePairStats === 'function') {
+                chartsMod.setReportHoverSlicePairStats(stats);
+                return;
+            }
+            var heroMod = window.AR && window.AR.hero;
+            if (heroMod && typeof heroMod.setSlicePairStats === 'function') {
+                heroMod.setSlicePairStats(stats);
+            }
+        }
+
         function pushSlicePairStatsForDate(anchorYmd, prevYmd, visibleProducts) {
             var anchor = String(anchorYmd || '').slice(0, 10);
             var prev = String(prevYmd || '').slice(0, 10);
@@ -1007,10 +1023,7 @@
             var stats = buildRibbonVisibleSlicePairCounts(products, anchor, prev);
             stats.d = anchor;
             stats.p = prev;
-            var heroMod = window.AR && window.AR.hero;
-            if (heroMod && typeof heroMod.setSlicePairStats === 'function') {
-                heroMod.setSlicePairStats(stats);
-            }
+            setHeroSlicePairStats(stats);
         }
 
         function slicePairCacheKey(params) {
@@ -1049,7 +1062,7 @@
             if (!params) return;
             var key = slicePairCacheKey(params);
             if (slicePairFetchCache[key]) {
-                heroMod.setSlicePairStats(slicePairFetchCache[key]);
+                setHeroSlicePairStats(slicePairFetchCache[key], true);
                 return;
             }
             if (slicePairFetchPending[key]) return;
@@ -1059,7 +1072,7 @@
                 if (!payload) return;
                 rememberSlicePairStats(key, payload);
                 if (String(lastPointerDate || '').slice(0, 10) !== anchor) return;
-                heroMod.setSlicePairStats(payload);
+                setHeroSlicePairStats(payload, true);
             }).catch(function (err) {
                 delete slicePairFetchPending[key];
                 if (clientLog) {
@@ -2257,6 +2270,8 @@
                 };
                 var onRibbonChartOut = function () {
                     if (reportHoverBox) reportHoverBox.style.display = 'none';
+                    lastPointerDate = '';
+                    pushLiveSlicePairStats();
                 };
                 zr.on('mousemove', onRibbonChartMove);
                 zr.on('globalout', onRibbonChartOut);
