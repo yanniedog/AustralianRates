@@ -713,17 +713,24 @@
         /** Bank under pointer: full min–max band at date (narrowest band wins if overlapping). */
         function pickBankFromRibbonBand(dateStr, yVal) {
             if (!dateStr || !Number.isFinite(yVal)) return '';
+            var visibleByBank = null;
+            if (ribbonCanvasModel && ribbonCanvasModel.count) {
+                visibleByBank = {};
+                visibleRibbonProducts().forEach(function (prod) {
+                    var key = normRibbonBankName(prod && prod.bankName);
+                    if (!key) return;
+                    if (!visibleByBank[key]) visibleByBank[key] = [];
+                    visibleByBank[key].push(prod);
+                });
+            }
             var candidates = [];
             Object.keys(knownBanks).forEach(function (bn) {
                 var p = bandByDateByBank[bn] && bandByDateByBank[bn][dateStr];
                 var lo = p ? positiveRibbonRateOrNull(p.min_rate) : null;
                 var hi = p ? positiveRibbonRateOrNull(p.max_rate) : null;
-                if ((lo == null || hi == null) && ribbonCanvasModel && ribbonCanvasModel.count) {
+                if ((lo == null || hi == null) && visibleByBank) {
                     var vals = [];
-                    var bankKey = normRibbonBankName(canonicalBandsBankFromUi(bn));
-                    visibleRibbonProducts().filter(function (prod) {
-                        return normRibbonBankName(prod && prod.bankName) === bankKey;
-                    }).forEach(function (prod) {
+                    (visibleByBank[normRibbonBankName(bn)] || []).forEach(function (prod) {
                         var v = ribbonVisibleProductRateAt(prod, dateStr);
                         if (v != null) vals.push(v);
                     });
@@ -982,12 +989,11 @@
 
         function visibleRibbonProductsForBank(bankName) {
             var bank = canonicalBandsBankFromUi(String(bankName || '').trim());
-            if (!bank) return visibleRibbonProducts();
+            if (!bank) return [];
             var bankKey = normRibbonBankName(bank);
-            var filtered = visibleRibbonProducts().filter(function (prod) {
+            return visibleRibbonProducts().filter(function (prod) {
                 return normRibbonBankName(prod && prod.bankName) === bankKey;
             });
-            return filtered.length ? filtered : visibleRibbonProducts();
         }
 
         function ribbonVisibleProductRateAt(prod, ymd) {
