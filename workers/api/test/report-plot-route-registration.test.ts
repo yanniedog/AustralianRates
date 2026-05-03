@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alignImplicitBandEndDateToToday } from '../src/routes/report-plot-route-registration'
+import { alignTdImplicitBandEndDateToToday } from '../src/routes/report-plot-route-registration'
 
 describe('report plot route registration', () => {
   it('aligns only implicit term-deposit band windows to today', () => {
@@ -9,16 +9,16 @@ describe('report plot route registration', () => {
       chartWindow: '30D' as const,
     }
 
-    expect(alignImplicitBandEndDateToToday(filters, 'term_deposits', 'bands', { mode: 'bands' }, '2026-05-03'))
+    expect(alignTdImplicitBandEndDateToToday(filters, 'term_deposits', 'bands', { mode: 'bands' }, '2026-05-03'))
       .toMatchObject({
         startDate: '2026-04-03',
         endDate: '2026-05-03',
       })
 
-    expect(alignImplicitBandEndDateToToday(filters, 'savings', 'bands', { mode: 'bands' }, '2026-05-03'))
+    expect(alignTdImplicitBandEndDateToToday(filters, 'savings', 'bands', { mode: 'bands' }, '2026-05-03'))
       .toEqual(filters)
 
-    expect(alignImplicitBandEndDateToToday(
+    expect(alignTdImplicitBandEndDateToToday(
       filters,
       'term_deposits',
       'bands',

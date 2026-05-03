@@ -14,6 +14,7 @@ import { isPublicLiveD1FallbackDisabled } from '../utils/d1-budget'
 import { getMelbourneNowParts } from '../utils/time'
 
 const REPORT_PLOT_CACHE_MAX_AGE = 300
+const IMPLICIT_BAND_END_DATE_ALIGNED_SECTIONS = new Set<ChartCacheSection>(['term_deposits'])
 
 type QueryRecord = Record<string, string | undefined>
 type ReportFilters = Record<string, unknown> & {
@@ -68,10 +69,10 @@ function addCalendarDaysUtcYmd(ymd: string, deltaDays: number): string {
 }
 
 function shouldAlignImplicitBandEndDate(section: ChartCacheSection, mode: ReportPlotMode, query: QueryRecord): boolean {
-  return section === 'term_deposits' && mode === 'bands' && !hasExplicitEndDate(query)
+  return IMPLICIT_BAND_END_DATE_ALIGNED_SECTIONS.has(section) && mode === 'bands' && !hasExplicitEndDate(query)
 }
 
-export function alignImplicitBandEndDateToToday<TFilters extends ReportFilters>(
+export function alignTdImplicitBandEndDateToToday<TFilters extends ReportFilters>(
   filters: TFilters,
   section: ChartCacheSection,
   mode: ReportPlotMode,
@@ -139,7 +140,7 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
         }))
     ) as TFilters,
   )
-  const effectiveFilters = alignImplicitBandEndDateToToday(resolvedFilters, options.section, mode, merged, todayYmd())
+  const effectiveFilters = alignTdImplicitBandEndDateToToday(resolvedFilters, options.section, mode, merged, todayYmd())
   const cacheParams = buildReportPlotCacheParams(merged, options.section, mode, effectiveFilters)
 
   const liveAllowed = !(await isPublicLiveD1FallbackDisabled(c.env))
