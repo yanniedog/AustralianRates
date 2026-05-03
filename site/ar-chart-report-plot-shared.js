@@ -1083,7 +1083,7 @@
                 delete slicePairFetchPending[key];
                 if (!payload) return;
                 rememberSlicePairStats(key, payload);
-                if (String(lastPointerDate || '').slice(0, 10) !== anchor) return;
+                if (ribbonPointerActive && String(lastPointerDate || '').slice(0, 10) !== anchor) return;
                 setHeroSlicePairStats(payload, true);
             }).catch(function (err) {
                 delete slicePairFetchPending[key];
