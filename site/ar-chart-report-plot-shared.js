@@ -999,9 +999,9 @@
             pushSlicePairStatsForDate(latestYmd, prevYmd);
         }
 
-        function setHeroSlicePairStats(stats, hoverDriven) {
+        function setHeroSlicePairStats(stats) {
             var chartsMod = window.AR && window.AR.charts;
-            if (hoverDriven && chartsMod && typeof chartsMod.setReportHoverSlicePairStats === 'function') {
+            if (chartsMod && typeof chartsMod.setReportHoverSlicePairStats === 'function') {
                 chartsMod.setReportHoverSlicePairStats(stats);
                 return;
             }
@@ -1019,7 +1019,7 @@
             var stats = buildRibbonVisibleSlicePairCounts(products, anchor, prev);
             stats.d = anchor;
             stats.p = prev;
-            setHeroSlicePairStats(stats, !!hoverDriven);
+            setHeroSlicePairStats(stats);
         }
 
         function slicePairCacheKey(params) {
@@ -2266,6 +2266,7 @@
                 };
                 var onRibbonChartOut = function () {
                     if (reportHoverBox) reportHoverBox.style.display = 'none';
+                    lastPointerDate = '';
                     pushLiveSlicePairStats();
                 };
                 zr.on('mousemove', onRibbonChartMove);
