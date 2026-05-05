@@ -15,7 +15,7 @@ const MAX_INLINE_BYTES = 500000;
 // free and do not need a timeout).
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
-const SNAPSHOT_KV_VERSION = 11;
+const SNAPSHOT_KV_VERSION = 12;
 // Keep in sync with PUBLIC_DAILY_CACHE_TTL_SECONDS in workers/api/src/db/public-cache-freshness.ts.
 const SNAPSHOT_FRESH_MS = 36 * 60 * 60 * 1000;
 const MELBOURNE_FORMATTER = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' });
@@ -34,7 +34,9 @@ function snapshotPayloadFresh(payload) {
     if (!Number.isFinite(builtAt) || Date.now() - builtAt > SNAPSHOT_FRESH_MS) return false;
     var filtersResolved = payload.data && payload.data.filtersResolved;
     var endDate = filtersResolved && typeof filtersResolved.endDate === 'string' ? filtersResolved.endDate : '';
-    return endDate === melbourneDateYmdOffset(0) || endDate === melbourneDateYmdOffset(-1);
+    var today = melbourneDateYmd();
+    var yesterday = melbourneDateYmdOffset(-1);
+    return endDate === today || endDate === yesterday;
 }
 
 function wrapSnapshotPayload(parsed, data) {
