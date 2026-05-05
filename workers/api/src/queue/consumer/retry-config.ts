@@ -1,6 +1,7 @@
 import { persistRawPayload } from '../../db/raw-payloads'
 import type { EnvBindings } from '../../types'
 import { parseIntegerEnv } from '../../utils/time'
+import { isNonRetryableDetailFetchStatus } from './ingest-outcomes'
 
 export function calculateRetryDelaySeconds(attempts: number): number {
   const safeAttempt = Math.max(1, Math.floor(attempts))
@@ -24,11 +25,9 @@ export async function persistProductDetailPayload(
 }
 
 export function isNonRetryableErrorMessage(message: string): boolean {
-  if (
-    message.startsWith('detail_fetch_failed:') &&
-    (message.includes('status=400') || message.includes('status=406'))
-  ) {
-    return true
+  if (message.startsWith('detail_fetch_failed:')) {
+    const status = Number(message.match(/status=(\d+)/)?.[1] ?? 0)
+    return isNonRetryableDetailFetchStatus(status)
   }
   return (
     message === 'invalid_queue_message_shape' ||

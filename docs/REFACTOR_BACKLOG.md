@@ -42,6 +42,7 @@ easy to bisect if a visual regression appears.
 | `tools/node-scripts/src/integrity/data-integrity-audit-prod.ts` | 1340 | Split by audit dimension (CDR coverage, presence, duplicates, timestamps). |
 | `workers/api/src/db/integrity-checks.ts` | 945 | Below 1000 but trending up — plan a split when next touched. |
 | `workers/api/src/db/chart-cache.ts` | 851 | Above the 800 LOC workflow ceiling and touched by cache cost-control work. Split gzip/KV helpers, scope resolution, D1 cache read/write operations, and stale-cache fallback policy into sibling modules in the next cache-focused PR. |
+| `workers/api/src/queue/consumer/handlers/product-detail.ts` | 570 | Touched by CDR outcome resilience work and over the 500 LOC refactor trigger. Split per-dataset detail handling (`home_loans`, `savings`, `term_deposits`) and shared validation/write-stat helpers into sibling modules. Keep the exported `handleProductDetailJob` entrypoint stable. |
 | `workers/api/src/routes/snapshot-public.ts` | 321 | Over the review threshold. Split public package request handling from package construction when replacing the current snapshot shape with the v2 `meta`/`dict`/`hierarchy`/`ribbon` package. |
 | `workers/api/src/pipeline/scheduler-dispatch.ts` | 323 | Over the review threshold after adding public package refresh. Split task routing from task execution if more scheduled job logic is added. |
 

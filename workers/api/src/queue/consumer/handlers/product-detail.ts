@@ -14,6 +14,7 @@ import { detectUpstreamBlock } from '../../../utils/upstream-block'
 import { recordDroppedAnomalies } from '../anomalies'
 import { ensureProductDetailFetchEventId } from '../detail-fetch-event'
 import { markDetailProcessedAndFinalize } from '../finalization'
+import { classifyDetailFetchOutcome, classifyValidatedRowsOutcome, INGEST_OUTCOME_POLICY, type IngestOutcome } from '../ingest-outcomes'
 import { elapsedMs, serializeForLog } from '../log-helpers'
 import { bankNameForLender, markHomeLoanSeriesSeenForRun, markProductsSeenForRun, markSavingsSeriesSeenForRun, markTdSeriesSeenForRun } from '../series-tracking'
 import { splitValidatedRows, splitValidatedSavingsRows, splitValidatedTdRows } from '../validation'
@@ -42,6 +43,47 @@ export function resolveRowFetchEventId(input: {
 
 function countRowsMissingFetchEventId(rows: Array<{ fetchEventId?: number | null }>): number {
   return rows.reduce((sum, row) => sum + (row.fetchEventId == null ? 1 : 0), 0)
+}
+
+function logDetailFetchOutcome(input: {
+  runId: string
+  lenderCode: string
+  dataset: ProductDetailJob['dataset']
+  productId: string
+  status: number
+  upstreamBlock: ReturnType<typeof detectUpstreamBlock>
+  fetchEventId: number | null | undefined
+  ok: boolean
+}): IngestOutcome {
+  const outcome = classifyDetailFetchOutcome({
+    ok: input.ok,
+    status: input.status,
+    upstreamBlocked: input.upstreamBlock.blocked,
+  })
+  if (input.upstreamBlock.blocked) {
+    log.warn('consumer', 'product_detail_fetch upstream_block_detected', {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      context:
+        `dataset=${input.dataset} product=${input.productId} status=${input.status}` +
+        ` reason=${input.upstreamBlock.reasonCode}` +
+        ` marker=${input.upstreamBlock.marker || 'none'}` +
+        ` fetch_event_id=${input.fetchEventId ?? 'none'}`,
+    })
+  }
+  if (outcome !== 'ok') {
+    const policy = INGEST_OUTCOME_POLICY[outcome]
+    log.warn('consumer', 'product_detail_fetch outcome', {
+      code: `cdr_ingest_${outcome}`,
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      context:
+        `dataset=${input.dataset} product=${input.productId} status=${input.status}` +
+        ` retry=${policy.retry} mark_progress=${policy.markProgress}` +
+        ` preserve_previous_latest=${policy.preservePreviousLatest} fatal=${policy.fatal}`,
+    })
+  }
+  return outcome
 }
 
 export async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): Promise<void> {
@@ -96,6 +138,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
     let fetchEventId: number | null | undefined
     const fallbackFetchEventId = job.fallbackFetchEventId ?? null
     let droppedReasons: Record<string, number> = {}
+    let validationOutcome: IngestOutcome = 'ok'
 
     if (job.dataset === 'home_loans') {
       const details = await fetchProductDetailRows({
@@ -128,24 +171,23 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         status: details.rawPayload.status,
         body: details.rawPayload.body,
       })
-      if (upstreamBlock.blocked) {
-        log.warn('consumer', 'product_detail_fetch upstream_block_detected', {
-          runId: job.runId,
-          lenderCode: job.lenderCode,
-          context:
-            `dataset=${job.dataset} product=${job.productId} status=${details.rawPayload.status}` +
-            ` reason=${upstreamBlock.reasonCode}` +
-            ` marker=${upstreamBlock.marker || 'none'}` +
-            ` fetch_event_id=${fetchEventId ?? 'none'}`,
-        })
-      }
+      const fetchOutcome = logDetailFetchOutcome({
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: job.dataset,
+        productId: job.productId,
+        status: details.rawPayload.status,
+        upstreamBlock,
+        fetchEventId,
+        ok: details.ok,
+      })
       if (!details.ok) {
         await recordLenderDatasetWriteStats(env.DB, {
           runId: job.runId,
           lenderCode: job.lenderCode,
           dataset: 'home_loans',
           detailFetchEventCount: fetchEventId != null ? 1 : 0,
-          errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}`,
+          errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}:outcome=${fetchOutcome}`,
         })
         await markLenderDatasetDetailProcessed(env.DB, {
           runId: job.runId,
@@ -188,6 +230,11 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
       validationMs = elapsedMs(validationStartedAt)
       droppedReasons = {}
       for (const item of dropped) droppedReasons[item.reason] = (droppedReasons[item.reason] || 0) + 1
+      validationOutcome = classifyValidatedRowsOutcome({
+        fetchedRows,
+        acceptedRows: accepted.length,
+        droppedRows: dropped.length,
+      })
       await recordDroppedAnomalies(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
@@ -258,24 +305,23 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         status: details.rawPayload.status,
         body: details.rawPayload.body,
       })
-      if (upstreamBlock.blocked) {
-        log.warn('consumer', 'product_detail_fetch upstream_block_detected', {
-          runId: job.runId,
-          lenderCode: job.lenderCode,
-          context:
-            `dataset=${job.dataset} product=${job.productId} status=${details.rawPayload.status}` +
-            ` reason=${upstreamBlock.reasonCode}` +
-            ` marker=${upstreamBlock.marker || 'none'}` +
-            ` fetch_event_id=${fetchEventId ?? 'none'}`,
-        })
-      }
+      const fetchOutcome = logDetailFetchOutcome({
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: job.dataset,
+        productId: job.productId,
+        status: details.rawPayload.status,
+        upstreamBlock,
+        fetchEventId,
+        ok: details.ok,
+      })
       if (!details.ok) {
         await recordLenderDatasetWriteStats(env.DB, {
           runId: job.runId,
           lenderCode: job.lenderCode,
           dataset: 'savings',
           detailFetchEventCount: fetchEventId != null ? 1 : 0,
-          errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}`,
+          errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}:outcome=${fetchOutcome}`,
         })
         await markLenderDatasetDetailProcessed(env.DB, {
           runId: job.runId,
@@ -317,6 +363,11 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
       validationMs = elapsedMs(validationStartedAt)
       droppedReasons = {}
       for (const item of dropped) droppedReasons[item.reason] = (droppedReasons[item.reason] || 0) + 1
+      validationOutcome = classifyValidatedRowsOutcome({
+        fetchedRows,
+        acceptedRows: accepted.length,
+        droppedRows: dropped.length,
+      })
       await recordDroppedAnomalies(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
@@ -387,24 +438,23 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         status: details.rawPayload.status,
         body: details.rawPayload.body,
       })
-      if (upstreamBlock.blocked) {
-        log.warn('consumer', 'product_detail_fetch upstream_block_detected', {
-          runId: job.runId,
-          lenderCode: job.lenderCode,
-          context:
-            `dataset=${job.dataset} product=${job.productId} status=${details.rawPayload.status}` +
-            ` reason=${upstreamBlock.reasonCode}` +
-            ` marker=${upstreamBlock.marker || 'none'}` +
-            ` fetch_event_id=${fetchEventId ?? 'none'}`,
-        })
-      }
+      const fetchOutcome = logDetailFetchOutcome({
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: job.dataset,
+        productId: job.productId,
+        status: details.rawPayload.status,
+        upstreamBlock,
+        fetchEventId,
+        ok: details.ok,
+      })
       if (!details.ok) {
         await recordLenderDatasetWriteStats(env.DB, {
           runId: job.runId,
           lenderCode: job.lenderCode,
           dataset: 'term_deposits',
           detailFetchEventCount: fetchEventId != null ? 1 : 0,
-          errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}`,
+          errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}:outcome=${fetchOutcome}`,
         })
         await markLenderDatasetDetailProcessed(env.DB, {
           runId: job.runId,
@@ -446,6 +496,11 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
       validationMs = elapsedMs(validationStartedAt)
       droppedReasons = {}
       for (const item of dropped) droppedReasons[item.reason] = (droppedReasons[item.reason] || 0) + 1
+      validationOutcome = classifyValidatedRowsOutcome({
+        fetchedRows,
+        acceptedRows: accepted.length,
+        droppedRows: dropped.length,
+      })
       await recordDroppedAnomalies(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
@@ -500,6 +555,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         `dataset=${job.dataset} product=${job.productId} status=${fetchStatus}` +
         ` lineage(detail=${fetchEventId ?? 'none'},fallback=${fallbackFetchEventId ?? 'none'})` +
         ` fetched=${fetchedRows} accepted=${acceptedRows} written=${written} unchanged=${unchangedRows}` +
+        ` outcome=${validationOutcome}` +
         ` dropped_reasons=${serializeForLog(droppedReasons)}` +
         ` timings(ms):validate=${validationMs},total=${elapsedMs(startedAt)}`,
     })
