@@ -2,16 +2,24 @@ import {
   buildPrecomputedChartScope,
   buildPrecomputedChartScopeForPreset,
   PRECOMPUTED_CHART_WINDOWS,
+  resolveDefaultChartCacheScope,
   type ChartCacheScope,
   type ChartCacheSection,
 } from '../db/chart-cache'
-import type { ChartWindow } from '../utils/chart-window'
-import { PUBLIC_CACHE_SECTIONS, sectionSupportsConsumerDefaultPreset } from './public-cache-datasets'
+import { parseChartCacheScope, type ScopePreset } from '../db/scope-filters'
+import { parseChartWindow, type ChartWindow } from '../utils/chart-window'
+import {
+  defaultPublicChartWindowForSection,
+  PUBLIC_CACHE_SECTIONS,
+  sectionSupportsConsumerDefaultPreset,
+} from './public-cache-datasets'
 
 export type PublicPackageScope = {
   section: ChartCacheSection
   scope: ChartCacheScope
 }
+
+type QueryRecord = Record<string, string | undefined>
 
 export const PUBLIC_PACKAGE_SECTIONS: readonly ChartCacheSection[] = PUBLIC_CACHE_SECTIONS
 // The bare `default` scope (no window, no preset) is what `/snapshot` returns
@@ -24,6 +32,53 @@ const PUBLIC_PACKAGE_WINDOW_PRIORITY: Array<ChartWindow | null> = [null, '30D', 
 
 function uniqueScopes(scopes: ChartCacheScope[]): ChartCacheScope[] {
   return Array.from(new Set(scopes))
+}
+
+function normalizePublicPreset(section: ChartCacheSection, preset: ScopePreset | null): ScopePreset | null {
+  return preset === 'consumer-default' && sectionSupportsConsumerDefaultPreset(section) ? preset : null
+}
+
+function precomputedWindowOrNull(window: ChartWindow | null): ChartWindow | null {
+  return window && PRECOMPUTED_CHART_WINDOWS.includes(window) ? window : null
+}
+
+export function buildPublicSnapshotScope(
+  section: ChartCacheSection,
+  window: ChartWindow | null,
+  preset: ScopePreset | null,
+): ChartCacheScope {
+  return buildPrecomputedChartScopeForPreset(window, normalizePublicPreset(section, preset))
+}
+
+export function parsePublicScopePreset(value: string | undefined | null): ScopePreset | null {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return normalized === 'consumer-default' ? 'consumer-default' : null
+}
+
+export function resolvePublicSnapshotRequestScope(
+  section: ChartCacheSection,
+  windowRaw: string | undefined | null,
+  presetRaw: string | undefined | null,
+): ChartCacheScope {
+  return buildPublicSnapshotScope(section, parseChartWindow(windowRaw), parsePublicScopePreset(presetRaw))
+}
+
+export function normalizePublicSnapshotScope(
+  section: ChartCacheSection,
+  scope: ChartCacheScope,
+): ChartCacheScope | null {
+  const { window, preset } = parseChartCacheScope(scope)
+  const effectiveWindow = precomputedWindowOrNull(window ?? defaultPublicChartWindowForSection(section))
+  if (!effectiveWindow) return null
+  return buildPublicSnapshotScope(section, effectiveWindow, preset)
+}
+
+export function defaultPublicSnapshotScopeForQuery(
+  section: ChartCacheSection,
+  params: QueryRecord,
+): ChartCacheScope | null {
+  const scope = resolveDefaultChartCacheScope(section, params)
+  return scope ? normalizePublicSnapshotScope(section, scope) : null
 }
 
 export function precomputedSnapshotScopesForSection(section: ChartCacheSection): ChartCacheScope[] {

@@ -1,6 +1,9 @@
 import { SELF, env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
+import worker from '../../src/index'
 import { getCachedOrCompute, resolveChartDateRangeFromDb, writeD1ChartCache } from '../../src/db/chart-cache'
+import { D1_INCLUDED_MONTHLY_READS } from '../../src/utils/d1-budget'
+import type { EnvBindings } from '../../src/types'
 import { getReadDbFromEnv } from '../../src/db/read-db'
 import { queryReportPlotPayload } from '../../src/db/report-plot'
 import { writeD1ReportPlotCache } from '../../src/db/report-plot-cache'
@@ -19,6 +22,33 @@ async function latestSourceRunFinishedAt(): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function liveFallbackDisabledEnv(): EnvBindings {
+  const usage = JSON.stringify({
+    reads: D1_INCLUDED_MONTHLY_READS,
+    writes: 0,
+    updated_at: '2026-05-05T00:00:00.000Z',
+  })
+  const idempotencyKv = {
+    get: async (key: string) => (key === `d1-budget:${today()}` ? usage : null),
+    put: async () => undefined,
+  } as unknown as KVNamespace
+  return {
+    ...env,
+    IDEMPOTENCY_KV: idempotencyKv,
+  } as unknown as EnvBindings
+}
+
+function testExecutionContext(): ExecutionContext {
+  return {
+    waitUntil: () => undefined,
+    passThroughOnException: () => undefined,
+  } as unknown as ExecutionContext
 }
 
 async function warmTargetedPublicCaches() {
@@ -174,5 +204,32 @@ describe('analytics cache headers', () => {
     expect(reportSecondResponse.status).toBe(200)
     expect(reportSecondResponse.headers.get('X-AR-Cache')).toBe('kv')
     await reportSecondResponse.text()
+  })
+
+  it('blocks public live chart and report fallbacks when D1 guardrails are active', async () => {
+    const guardedEnv = liveFallbackDisabledEnv()
+    const ctx = testExecutionContext()
+
+    const seriesResponse = await worker.fetch(
+      new Request(
+        'https://example.com/api/savings-rates/analytics/series?compact=1&representation=change&bank=ANZ&cache_bust=guardrail-series',
+      ),
+      guardedEnv,
+      ctx,
+    )
+    expect(seriesResponse.status).toBe(503)
+    const seriesJson = (await seriesResponse.json()) as { error?: { code?: string } }
+    expect(seriesJson.error?.code).toBe('PUBLIC_LIVE_D1_FALLBACK_DISABLED')
+
+    const reportResponse = await worker.fetch(
+      new Request(
+        'https://example.com/api/home-loan-rates/analytics/report-plot?mode=moves&bank=ANZ&cache_bust=guardrail-report',
+      ),
+      guardedEnv,
+      ctx,
+    )
+    expect(reportResponse.status).toBe(503)
+    const reportJson = (await reportResponse.json()) as { error?: { code?: string } }
+    expect(reportJson.error?.code).toBe('PUBLIC_LIVE_D1_FALLBACK_DISABLED')
   })
 })

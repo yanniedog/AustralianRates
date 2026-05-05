@@ -1,5 +1,4 @@
 export type ChartWindow = '30D' | '90D' | '180D' | '1Y' | 'ALL'
-export type ChartWindowSection = 'home_loans' | 'savings' | 'term_deposits'
 
 export const PRECOMPUTED_CHART_WINDOWS: ChartWindow[] = ['30D', '90D', '180D', '1Y', 'ALL']
 
@@ -52,13 +51,4 @@ export function resolveChartWindowStart(minDate: string, maxDate: string, window
 
 export function buildChartWindowScope(window: ChartWindow): `window:${ChartWindow}` {
   return `window:${window}`
-}
-
-/**
- * Public page default window. Term deposits default narrower because each lender
- * expands across terms, tiers, and interest-payment variants, and the browser
- * intentionally does not use TD snapshot short-circuiting.
- */
-export function defaultPublicChartWindowForSection(section: ChartWindowSection): ChartWindow {
-  return section === 'term_deposits' ? '30D' : '90D'
 }

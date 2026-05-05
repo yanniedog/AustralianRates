@@ -14,7 +14,8 @@ import { buildGroupedChartRows } from '../utils/chart-row-groups'
 import { log } from '../utils/logger'
 import { jsonError, withPublicCache } from '../utils/http'
 import { isPublicLiveD1FallbackDisabled } from '../utils/d1-budget'
-import { defaultPublicChartWindowForSection, PRECOMPUTED_CHART_WINDOWS, type ChartWindow } from '../utils/chart-window'
+import type { ChartWindow } from '../utils/chart-window'
+import { defaultPublicSnapshotScopeForQuery } from '../pipeline/public-package-scopes'
 import {
   parseAnalyticsRepresentation,
   type AnalyticsRepresentation,
@@ -61,24 +62,6 @@ function wantsCompactRows(query: QueryRecord): boolean {
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
 }
 
-function defaultSnapshotScope(section: ChartCacheSection, params: QueryRecord): ChartCacheScope | null {
-  const scope = resolveDefaultChartCacheScope(section, params)
-  if (!scope) return null
-  if (scope === 'default') return `window:${defaultPublicChartWindowForSection(section)}`
-  if (scope === 'preset:consumer-default') {
-    return `preset:consumer-default:window:${defaultPublicChartWindowForSection(section)}`
-  }
-  if (scope.startsWith('window:')) {
-    const window = scope.slice('window:'.length) as ChartWindow
-    return PRECOMPUTED_CHART_WINDOWS.includes(window) ? scope : null
-  }
-  if (scope.startsWith('preset:consumer-default:window:')) {
-    const window = scope.slice('preset:consumer-default:window:'.length) as ChartWindow
-    return PRECOMPUTED_CHART_WINDOWS.includes(window) ? scope : null
-  }
-  return null
-}
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
@@ -91,7 +74,7 @@ async function getPackagedCompactSeries(
   latestAvailableCollectionDate: string | null,
 ): Promise<{ payload: Record<string, unknown>; cache: 'kv' | 'd1' | 'live'; scope: ChartCacheScope } | null> {
   if (!wantsCompactRows(params) || representation !== 'day') return null
-  const scope = defaultSnapshotScope(section, params)
+  const scope = defaultPublicSnapshotScopeForQuery(section, params)
   if (!scope) return null
   try {
     const snapshot = await getCachedOrComputeSnapshot(
@@ -143,7 +126,7 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   const baseFilters = options.buildFilters(merged)
   const params = toQueryParams(merged)
   const couldUsePublicCache =
-    Boolean(defaultSnapshotScope(options.section, params)) ||
+    Boolean(defaultPublicSnapshotScopeForQuery(options.section, params)) ||
     Boolean(resolveDefaultChartCacheScope(options.section, params))
   const latestAvailableCollectionDate = couldUsePublicCache
     ? await queryCachedLatestSectionMaxCollectionDate(db, options.section)

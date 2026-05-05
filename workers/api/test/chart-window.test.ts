@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildChartWindowScope,
-  defaultPublicChartWindowForSection,
   parseChartWindow,
   resolveChartWindowStart,
 } from '../src/utils/chart-window'
+import { defaultPublicChartWindowForSection } from '../src/pipeline/public-cache-datasets'
 
 describe('chart-window', () => {
   it('parses supported window tokens', () => {
