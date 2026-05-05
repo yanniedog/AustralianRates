@@ -159,6 +159,10 @@ function isTransientUpstreamTransportError(row: EconomicSeriesCoverageRow): bool
   return false
 }
 
+function isOptionalAbsUnavailable(definition: EconomicSeriesDefinition, statusRow: EconomicStatusDbRow | null): boolean {
+  return isAbsIndicatorSeries(definition) && String(statusRow?.message || '').includes('abs_indicator_api_key_missing')
+}
+
 function storedProxyFlagMatches(definition: EconomicSeriesDefinition, row: EconomicStatusDbRow | null): boolean {
   if (!row) return true
   return Boolean(row.proxy_flag) === definition.proxy
@@ -441,7 +445,7 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     }
     const computedStatus = computedStatusForRow(definition, statusRow, latestObservationDate)
     if (statusRow?.status === 'error') {
-      issues.push('error_status')
+      issues.push(isOptionalAbsUnavailable(definition, statusRow) ? 'optional_abs_error_status' : 'error_status')
     } else if (computedStatus === 'stale') {
       issues.push('stale_status')
     }
@@ -476,7 +480,9 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
   const missingStatusRows = perSeries.filter((row) => row.issues.includes('missing_status'))
   const missingObservationRows = perSeries.filter((row) => row.issues.includes('missing_observations'))
   const optionalAbsRows = perSeries.filter((row) =>
-    row.issues.includes('optional_abs_missing_status') || row.issues.includes('optional_abs_missing_observations'),
+    row.issues.includes('optional_abs_missing_status') ||
+    row.issues.includes('optional_abs_missing_observations') ||
+    row.issues.includes('optional_abs_error_status'),
   )
   const errorStatusRows = perSeries.filter((row) => row.issues.includes('error_status'))
   const hardErrorStatusRows = errorStatusRows.filter((row) => row.proxy !== true)

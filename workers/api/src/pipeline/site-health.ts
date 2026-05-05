@@ -1,5 +1,7 @@
 import { attachEconomicCoverageProbes, runEconomicCoverageAudit, type EconomicCoverageProbe, type EconomicCoverageReport } from '../db/economic-coverage-audit'
+import { getEconomicStatusMap } from '../db/economic-series'
 import { runIntegrityChecks } from '../db/integrity-checks'
+import { shouldExcludeEconomicSeriesFromPublic } from '../economic/public-visibility'
 import { ECONOMIC_SERIES_DEFINITIONS } from '../economic/registry'
 import { getIngestPauseConfig } from '../db/app-config'
 import {
@@ -41,6 +43,10 @@ const ACTIONABLE_LOG_LOOKBACK_MANUAL_MINUTES = 24 * 60
 const ACTIONABLE_LOG_LIMIT_SCHEDULED = 500
 const ACTIONABLE_LOG_LIMIT_MANUAL = 2000
 const ECONOMIC_SERIES_PROBE_BATCH_SIZE = 12
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
 
 function isEnabled(value: string | undefined): boolean {
   const normalized = String(value || '').trim().toLowerCase()
@@ -461,7 +467,11 @@ async function checkEconomicData(
   origin: string,
   capturePolicy: ProbeCapturePolicy,
 ): Promise<{ components: ComponentStatus[]; probes: EconomicCoverageProbe[] }> {
-  const allSeriesIds = ECONOMIC_SERIES_DEFINITIONS.map((definition) => definition.id)
+  const endDate = todayIso()
+  const statusMap = await getEconomicStatusMap(env.DB, ECONOMIC_SERIES_DEFINITIONS.map((definition) => definition.id))
+  const allSeriesIds = ECONOMIC_SERIES_DEFINITIONS
+    .filter((definition) => !shouldExcludeEconomicSeriesFromPublic(statusMap.get(definition.id), definition.frequency, endDate))
+    .map((definition) => definition.id)
   const batches = chunkSeriesIds(allSeriesIds, ECONOMIC_SERIES_PROBE_BATCH_SIZE)
   const probeResults = await Promise.all([
     requestProbe(env, {

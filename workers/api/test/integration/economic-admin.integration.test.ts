@@ -103,6 +103,30 @@ describe('economic admin coverage', () => {
     )
   })
 
+  it('treats missing ABS Indicator API credentials as optional economic coverage degradation', async () => {
+    await upsertEconomicStatus(env.DB, {
+      seriesId: 'monthly_cpi_indicator',
+      lastCheckedAt: '2026-05-05T00:00:00.000Z',
+      lastSuccessAt: null,
+      lastObservationDate: null,
+      lastValue: null,
+      status: 'error',
+      message: 'abs_indicator_api_key_missing',
+      sourceUrl: 'https://indicator.api.abs.gov.au',
+      proxy: false,
+    })
+
+    const report = await runEconomicCoverageAudit(env.DB, { checkedAt: '2026-05-05T00:00:00.000Z' })
+    const monthlyCpi = report.per_series.find((row) => row.series_id === 'monthly_cpi_indicator')
+
+    expect(monthlyCpi?.issues).toContain('optional_abs_error_status')
+    expect(monthlyCpi?.issues).not.toContain('error_status')
+    expect(monthlyCpi?.severity).toBe('yellow')
+    expect(report.summary.error_series).toBe(0)
+    expect(report.findings.some((finding) => finding.code === 'economic_optional_abs_unavailable')).toBe(true)
+    expect(report.findings.some((finding) => finding.code === 'economic_error_status_rows')).toBe(false)
+  })
+
   it('can detect and clear stored observation metadata drift before a source migration refresh', async () => {
     const oldTable = parseRbaTableCsv(f1Fixture, 'https://www.rba.gov.au/statistics/tables/csv/f1-data.csv')
     const newTable = parseRbaTableCsv(f1_1Fixture, 'https://www.rba.gov.au/statistics/tables/csv/f1.1-data.csv')
