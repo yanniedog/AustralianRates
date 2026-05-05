@@ -279,7 +279,7 @@ describe('report-plot routes', () => {
 })
 
 describe('report-plot cache refresh', () => {
-  it('does not write a D1 report-plot cache row from a public live fallback', async () => {
+  it('writes a D1 report-plot cache row after a cacheable public live fallback', async () => {
     await env.DB
       .prepare('DELETE FROM report_plot_request_cache WHERE section = ? AND mode = ? AND request_scope = ?')
       .bind('savings', 'bands', 'window:90D')
@@ -297,6 +297,13 @@ describe('report-plot cache refresh', () => {
       .bind('savings', 'bands', 'window:90D')
       .first<{ n: number }>()
 
-    expect(Number(row?.n || 0)).toBe(0)
+    expect(Number(row?.n || 0)).toBe(1)
+
+    const d1Response = await SELF.fetch(
+      'https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D&cache_bust=integration-d1-after-live-fallback',
+    )
+    expect(d1Response.status).toBe(200)
+    expect(d1Response.headers.get('X-AR-Cache')).toBe('d1')
+    await d1Response.text()
   })
 })

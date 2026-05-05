@@ -356,6 +356,21 @@ export async function getCachedOrComputeSnapshot(
   }
 
   const payload = await compute()
-  await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, payload)
+  const kvWrite = writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, payload)
+  if (scope && options?.allowD1Fallback !== false) {
+    const d1Write = writeD1SnapshotCache(env.DB, section, scope, payload, {
+      sourceRunFinishedAt: options?.latestRunFinishedAt,
+    }).catch((error) => {
+      // Live responses should not fail just because durable cache write-through failed.
+      log.warn('snapshot_cache', 'snapshot D1 write-through failed', {
+        code: 'snapshot_d1_write_failed',
+        error,
+        context: { section, scope },
+      })
+    })
+    await Promise.all([kvWrite, d1Write])
+  } else {
+    await kvWrite
+  }
   return { ...payload, fromCache: 'live' }
 }
