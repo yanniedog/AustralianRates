@@ -676,16 +676,18 @@ body.ar-legal .legal-support-card {
     }
 
     body.ar-public .market-intro-live-card {
-        align-items: flex-start;
-        gap: 2px;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 4px 6px;
         padding: 6px 7px;
         border-radius: 8px;
     }
 
     body.ar-public .market-intro-live-label,
     body.ar-public .market-intro-live-card strong {
-        white-space: normal;
-        overflow-wrap: anywhere;
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: normal;
     }
 
     body.ar-section-economic-data .economic-hero {
