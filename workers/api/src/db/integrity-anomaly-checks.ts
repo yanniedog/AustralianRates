@@ -56,6 +56,8 @@ type AbruptMovementSampleRow = {
   gap_days: number | null
 }
 
+const ACTIVE_HISTORICAL_RATE_ROW_SQL = `(quarantine_reason IS NULL OR TRIM(quarantine_reason) = '')`
+
 function errorDetail(error: unknown): Record<string, unknown> {
   return {
     error: (error as Error)?.message || String(error),
@@ -527,14 +529,17 @@ export async function runHistoricalAnomalyChecks(db: D1Database): Promise<Integr
              SELECT 'home_loans' AS dataset, series_key, collection_date, interest_rate
              FROM historical_loan_rates
              WHERE collection_date >= date('now', '-30 days')
+               AND ${ACTIVE_HISTORICAL_RATE_ROW_SQL}
              UNION ALL
              SELECT 'savings' AS dataset, series_key, collection_date, interest_rate
              FROM historical_savings_rates
              WHERE collection_date >= date('now', '-30 days')
+               AND ${ACTIVE_HISTORICAL_RATE_ROW_SQL}
              UNION ALL
              SELECT 'term_deposits' AS dataset, series_key, collection_date, interest_rate
              FROM historical_term_deposit_rates
              WHERE collection_date >= date('now', '-30 days')
+               AND ${ACTIVE_HISTORICAL_RATE_ROW_SQL}
            ),
            ordered AS (
              SELECT
@@ -573,14 +578,17 @@ export async function runHistoricalAnomalyChecks(db: D1Database): Promise<Integr
              SELECT 'home_loans' AS dataset, series_key, collection_date, interest_rate
              FROM historical_loan_rates
              WHERE collection_date >= date('now', '-30 days')
+               AND ${ACTIVE_HISTORICAL_RATE_ROW_SQL}
              UNION ALL
              SELECT 'savings' AS dataset, series_key, collection_date, interest_rate
              FROM historical_savings_rates
              WHERE collection_date >= date('now', '-30 days')
+               AND ${ACTIVE_HISTORICAL_RATE_ROW_SQL}
              UNION ALL
              SELECT 'term_deposits' AS dataset, series_key, collection_date, interest_rate
              FROM historical_term_deposit_rates
              WHERE collection_date >= date('now', '-30 days')
+               AND ${ACTIVE_HISTORICAL_RATE_ROW_SQL}
            ),
            ordered AS (
              SELECT
