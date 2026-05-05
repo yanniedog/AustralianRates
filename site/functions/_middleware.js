@@ -18,8 +18,6 @@ const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 const SNAPSHOT_KV_VERSION = 12;
 // Keep in sync with PUBLIC_DAILY_CACHE_TTL_SECONDS in workers/api/src/db/public-cache-freshness.ts.
 const SNAPSHOT_FRESH_MS = 36 * 60 * 60 * 1000;
-// Keep in sync with PUBLIC_DAILY_CACHE_MAX_STALENESS_DAYS.
-const SNAPSHOT_MAX_STALENESS_DAYS = 14;
 const MELBOURNE_FORMATTER = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' });
 
 function melbourneDateYmdOffset(offsetDays) {
@@ -38,13 +36,7 @@ function snapshotPayloadFresh(payload) {
     var endDate = filtersResolved && typeof filtersResolved.endDate === 'string' ? filtersResolved.endDate : '';
     var today = melbourneDateYmd();
     var yesterday = melbourneDateYmdOffset(-1);
-    if (endDate === today || endDate === yesterday) return true;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return false;
-    var endMs = Date.parse(endDate + 'T00:00:00.000Z');
-    var todayMs = Date.parse(today + 'T00:00:00.000Z');
-    if (!Number.isFinite(endMs) || !Number.isFinite(todayMs)) return false;
-    var ageDays = Math.floor((todayMs - endMs) / 86400000);
-    return ageDays >= 0 && ageDays <= SNAPSHOT_MAX_STALENESS_DAYS;
+    return endDate === today || endDate === yesterday;
 }
 
 function wrapSnapshotPayload(parsed, data) {
