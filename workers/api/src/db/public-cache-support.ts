@@ -5,18 +5,34 @@ import { queryLatestTdMaxCollectionDate } from './term-deposits/latest'
 import { log } from '../utils/logger'
 
 export const KV_VALUE_SAFE_BYTE_LIMIT = 24 * 1024 * 1024
+const OVERSIZE_KV_LOG_LIMIT_PER_ISOLATE = 20
+const LATEST_SECTION_MAX_CACHE_TTL_MS = 60_000
 
-const oversizeKvLogCounts = new Map<string, number>()
+let oversizeKvLogCount = 0
+const latestSectionMaxCache = new Map<ChartCacheSection, { expiresAt: number; value: string | null }>()
 
 function jsonByteLength(value: string): number {
   return typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(value).length : value.length
 }
 
-function shouldLogOversizeKv(source: string, key: string): boolean {
-  const signature = `${source}:${key.slice(0, 96)}`
-  const count = oversizeKvLogCounts.get(signature) ?? 0
-  oversizeKvLogCounts.set(signature, count + 1)
-  return count < 3
+function shouldLogOversizeKv(): boolean {
+  oversizeKvLogCount += 1
+  return oversizeKvLogCount <= OVERSIZE_KV_LOG_LIMIT_PER_ISOLATE
+}
+
+function safeLogContext(context: Record<string, unknown>): Record<string, unknown> {
+  try {
+    JSON.stringify(context)
+    return context
+  } catch {
+    return {
+      source: context.source,
+      key: context.key,
+      bytes: context.bytes,
+      limit: context.limit,
+      context_serialization_failed: true,
+    }
+  }
 }
 
 export function serializeJsonForKv(
@@ -27,10 +43,10 @@ export function serializeJsonForKv(
   const serialized = JSON.stringify(payload)
   const bytes = jsonByteLength(serialized)
   if (bytes < KV_VALUE_SAFE_BYTE_LIMIT) return serialized
-  if (shouldLogOversizeKv(input.source, key)) {
+  if (shouldLogOversizeKv()) {
     log.warn('public_cache', 'kv_write_skipped_oversize', {
       code: 'kv_write_skipped_oversize',
-      context: JSON.stringify({
+      context: safeLogContext({
         source: input.source,
         key: key.slice(0, 160),
         bytes,
@@ -65,6 +81,27 @@ export function logPublicCacheWedgedSection(input: {
   })
 }
 
+export type PublicCacheReadFreshnessOptions = {
+  latestRunFinishedAt?: string | null
+  latestAvailableCollectionDate?: string | null
+  now?: Date
+  timeZone?: string
+}
+
+export function buildPublicCacheReadFreshnessOptions(
+  options?: PublicCacheReadFreshnessOptions,
+): PublicCacheReadFreshnessOptions {
+  const readOptions: PublicCacheReadFreshnessOptions = {
+    latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    now: options?.now,
+    timeZone: options?.timeZone,
+  }
+  if (options && Object.prototype.hasOwnProperty.call(options, 'latestRunFinishedAt')) {
+    readOptions.latestRunFinishedAt = options.latestRunFinishedAt ?? null
+  }
+  return readOptions
+}
+
 export async function queryLatestSectionMaxCollectionDate(
   db: D1Database,
   section: ChartCacheSection,
@@ -76,4 +113,16 @@ export async function queryLatestSectionMaxCollectionDate(
   } catch {
     return null
   }
+}
+
+export async function queryCachedLatestSectionMaxCollectionDate(
+  db: D1Database,
+  section: ChartCacheSection,
+): Promise<string | null> {
+  const now = Date.now()
+  const cached = latestSectionMaxCache.get(section)
+  if (cached && cached.expiresAt > now) return cached.value
+  const value = await queryLatestSectionMaxCollectionDate(db, section)
+  latestSectionMaxCache.set(section, { value, expiresAt: now + LATEST_SECTION_MAX_CACHE_TTL_MS })
+  return value
 }

@@ -15,7 +15,12 @@ import {
   type ChartCacheScope,
   type ChartCacheSection,
 } from './chart-cache'
-import { logPublicCacheWedgedSection, serializeJsonForKv } from './public-cache-support'
+import {
+  buildPublicCacheReadFreshnessOptions,
+  logPublicCacheWedgedSection,
+  serializeJsonForKv,
+  type PublicCacheReadFreshnessOptions,
+} from './public-cache-support'
 import { getMelbourneNowParts } from '../utils/time'
 import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
 import {
@@ -45,7 +50,7 @@ function snapshotFiltersResolved(payload: SnapshotPayload): PublicCacheMetadata[
 
 function isSnapshotPayloadFresh(
   payload: SnapshotPayload,
-  options?: { latestAvailableCollectionDate?: string | null; now?: Date; timeZone?: string },
+  options?: PublicCacheReadFreshnessOptions,
 ): boolean {
   return publicCacheFreshnessStatus({
     builtAt: payload.builtAt,
@@ -108,6 +113,7 @@ export async function writeSnapshotKvBundles(
     context: { section, scope, variant: 'full' },
   })
   let trimmed: ReturnType<typeof trimSnapshotDataForHtmlInline> | undefined
+  let inlineSerialized: string | null | undefined
   for (const date of datesToWrite) {
     const key = buildSnapshotKvKey(section, scope, date)
     if (serialized) {
@@ -132,11 +138,13 @@ export async function writeSnapshotKvBundles(
       }
       const inlineKey = buildSnapshotInlineKvKey(section, scope, date)
       if (trimmed) {
-        const inlinePayload: SnapshotPayload = { ...payload, data: trimmed }
-        const inlineSerialized = serializeJsonForKv(inlineKey, inlinePayload, {
-          source: 'snapshot_cache',
-          context: { section, scope, variant: 'inline' },
-        })
+        if (inlineSerialized === undefined) {
+          const inlinePayload: SnapshotPayload = { ...payload, data: trimmed }
+          inlineSerialized = serializeJsonForKv(inlineKey, inlinePayload, {
+            source: 'snapshot_cache',
+            context: { section, scope, variant: 'inline' },
+          })
+        }
         if (inlineSerialized) {
           await kv.put(inlineKey, inlineSerialized, { expirationTtl: CHART_CACHE_KV_TTL })
         }
@@ -157,12 +165,7 @@ export async function readD1SnapshotCache(
   db: D1Database,
   section: ChartCacheSection,
   scope: SnapshotScope = 'default',
-  options?: {
-    latestRunFinishedAt?: string | null
-    latestAvailableCollectionDate?: string | null
-    now?: Date
-    timeZone?: string
-  },
+  options?: PublicCacheReadFreshnessOptions,
 ): Promise<SnapshotPayload | null> {
   let row: { payload_json: string; built_at: string } | null = null
   try {
@@ -294,11 +297,7 @@ export async function getCachedOrComputeSnapshot(
   options?: {
     allowD1Fallback?: boolean
     allowLiveCompute?: boolean
-    latestRunFinishedAt?: string | null
-    latestAvailableCollectionDate?: string | null
-    now?: Date
-    timeZone?: string
-  },
+  } & PublicCacheReadFreshnessOptions,
 ): Promise<SnapshotPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const kvKey = buildSnapshotKvKey(section, scope)
   if (env.CHART_CACHE_KV) {
@@ -321,14 +320,7 @@ export async function getCachedOrComputeSnapshot(
   }
 
   if (options?.allowD1Fallback !== false) {
-    const readOptions: NonNullable<Parameters<typeof readD1SnapshotCache>[3]> = {
-      latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
-      now: options?.now,
-      timeZone: options?.timeZone,
-    }
-    if (options && Object.prototype.hasOwnProperty.call(options, 'latestRunFinishedAt')) {
-      readOptions.latestRunFinishedAt = options.latestRunFinishedAt ?? null
-    }
+    const readOptions = buildPublicCacheReadFreshnessOptions(options)
     const d1Cached = await readD1SnapshotCache(env.DB, section, scope, readOptions)
     if (d1Cached) {
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, d1Cached)
