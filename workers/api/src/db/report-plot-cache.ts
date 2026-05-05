@@ -24,6 +24,7 @@ import {
   publicCacheStaleServeStatus,
   type PublicCacheMetadata,
 } from './public-cache-freshness'
+import { log } from '../utils/logger'
 
 const REPORT_PLOT_CACHE_TABLE = 'report_plot_request_cache'
 const REPORT_PLOT_PAYLOAD_VERSION = 7
@@ -279,6 +280,21 @@ export async function getCachedOrComputeReportPlot(
   }
 
   const payload = await compute()
-  await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, kvKey, payload)
+  const kvWrite = writeReportPlotPayloadToKv(env.CHART_CACHE_KV, kvKey, payload)
+  if (scope) {
+    const d1Write = writeD1ReportPlotCache(env.DB, section, mode, scope, payload, {
+      sourceRunFinishedAt: options?.latestRunFinishedAt,
+    }).catch((error) => {
+      // Live responses should not fail just because durable cache write-through failed.
+      log.warn('report_plot_cache', 'report-plot D1 write-through failed', {
+        code: 'report_plot_d1_write_failed',
+        error,
+        context: { section, mode, scope },
+      })
+    })
+    await Promise.all([kvWrite, d1Write])
+  } else {
+    await kvWrite
+  }
   return { ...payload, fromCache: 'live' }
 }
