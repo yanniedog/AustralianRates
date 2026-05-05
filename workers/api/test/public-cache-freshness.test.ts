@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isPublicDailyCacheFresh,
   publicCacheFreshnessStatus,
+  publicCacheStaleServeStatus,
 } from '../src/db/public-cache-freshness'
 
 describe('public daily cache freshness', () => {
@@ -106,6 +107,32 @@ describe('public daily cache freshness', () => {
     })
 
     expect(result.fresh).toBe(false)
+    expect(result.reason).toBe('end_date_beyond_max_staleness')
+  })
+
+  it('allows bounded stale serving when latest data advanced but the D1 cache is within the canary', () => {
+    const result = publicCacheStaleServeStatus({
+      now: new Date('2026-05-06T10:00:00.000Z'),
+      builtAt: '2026-05-03T08:00:00.000Z',
+      filtersResolved: { startDate: '2026-04-01', endDate: '2026-05-03' },
+      latestAvailableCollectionDate: '2026-05-06',
+      latestRunFinishedAt: '2026-05-06T01:00:00.000Z',
+      sourceRunFinishedAt: '2026-05-03T01:00:00.000Z',
+    })
+
+    expect(result.canServe).toBe(true)
+    expect(result.reason).toBe('built_at_too_old')
+  })
+
+  it('does not allow bounded stale serving beyond the 14 Melbourne day canary', () => {
+    const result = publicCacheStaleServeStatus({
+      now: new Date('2026-05-20T10:00:00.000Z'),
+      builtAt: '2026-05-03T08:00:00.000Z',
+      filtersResolved: { startDate: '2026-04-01', endDate: '2026-05-03' },
+      latestAvailableCollectionDate: '2026-05-20',
+    })
+
+    expect(result.canServe).toBe(false)
     expect(result.reason).toBe('end_date_beyond_max_staleness')
   })
 })

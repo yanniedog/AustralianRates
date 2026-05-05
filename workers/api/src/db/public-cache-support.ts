@@ -6,9 +6,11 @@ import { log } from '../utils/logger'
 
 export const KV_VALUE_SAFE_BYTE_LIMIT = 24 * 1024 * 1024
 const OVERSIZE_KV_LOG_LIMIT_PER_ISOLATE = 20
+const STALE_CACHE_LOG_LIMIT_PER_ISOLATE = 20
 const LATEST_SECTION_MAX_CACHE_TTL_MS = 60_000
 
 let oversizeKvLogCount = 0
+let staleCacheLogCount = 0
 const latestSectionMaxCache = new Map<ChartCacheSection, { expiresAt: number; value: string | null }>()
 
 function jsonByteLength(value: string): number {
@@ -81,9 +83,37 @@ export function logPublicCacheWedgedSection(input: {
   })
 }
 
+export function logPublicCacheServedBoundedStale(input: {
+  source: string
+  section: ChartCacheSection
+  scope: string
+  builtAt: string
+  endDate: string | null
+  latestAvailableCollectionDate?: string | null
+  cacheKind?: string
+  reason?: string | null
+}): void {
+  staleCacheLogCount += 1
+  if (staleCacheLogCount > STALE_CACHE_LOG_LIMIT_PER_ISOLATE) return
+  log.warn('public_cache', 'public_cache_served_bounded_stale', {
+    code: 'public_cache_served_bounded_stale',
+    context: JSON.stringify({
+      source: input.source,
+      section: input.section,
+      scope: input.scope,
+      cache_kind: input.cacheKind ?? null,
+      built_at: input.builtAt,
+      end_date: input.endDate,
+      latest_available_collection_date: input.latestAvailableCollectionDate ?? null,
+      reason: input.reason ?? null,
+    }),
+  })
+}
+
 export type PublicCacheReadFreshnessOptions = {
   latestRunFinishedAt?: string | null
   latestAvailableCollectionDate?: string | null
+  allowStaleWithinCanary?: boolean
   now?: Date
   timeZone?: string
 }
@@ -93,6 +123,7 @@ export function buildPublicCacheReadFreshnessOptions(
 ): PublicCacheReadFreshnessOptions {
   const readOptions: PublicCacheReadFreshnessOptions = {
     latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    allowStaleWithinCanary: options?.allowStaleWithinCanary ?? false,
     now: options?.now,
     timeZone: options?.timeZone,
   }

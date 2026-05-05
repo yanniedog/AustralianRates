@@ -17,6 +17,7 @@ import {
 } from './chart-cache'
 import {
   buildPublicCacheReadFreshnessOptions,
+  logPublicCacheServedBoundedStale,
   logPublicCacheWedgedSection,
   serializeJsonForKv,
   type PublicCacheReadFreshnessOptions,
@@ -26,6 +27,7 @@ import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
 import {
   publicCacheFreshnessStatus,
   publicCacheMetadata,
+  publicCacheStaleServeStatus,
   type PublicCacheMetadata,
 } from './public-cache-freshness'
 
@@ -204,16 +206,21 @@ export async function readD1SnapshotCache(
         ? options.latestRunFinishedAt ?? null
         : await latestRunFinishedAtOrNull(db)
     const builtAt = String(parsed.meta?.builtAt || parsed.builtAt || row.built_at || parsed.payload.builtAt || '')
-    const freshness = publicCacheFreshnessStatus({
+    const filtersResolved = { startDate, endDate }
+    const freshnessInput = {
       builtAt,
-      filtersResolved: { startDate, endDate },
+      filtersResolved,
       sourceRunFinishedAt: parsed.meta?.sourceRunFinishedAt ?? parsed.sourceRunFinishedAt ?? null,
       latestRunFinishedAt,
       latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
       now: options?.now,
       timeZone: options?.timeZone,
-    })
+    }
+    const freshness = publicCacheFreshnessStatus(freshnessInput)
     if (!freshness.fresh) {
+      const staleStatus = options?.allowStaleWithinCanary
+        ? publicCacheStaleServeStatus(freshnessInput, freshness)
+        : null
       if (freshness.reason === 'end_date_beyond_max_staleness') {
         logPublicCacheWedgedSection({
           source: 'snapshot_cache',
@@ -225,7 +232,20 @@ export async function readD1SnapshotCache(
           cacheKind: 'snapshot',
         })
       }
-      return null
+      if (staleStatus?.canServe) {
+        logPublicCacheServedBoundedStale({
+          source: 'snapshot_cache',
+          section,
+          scope,
+          builtAt,
+          endDate: staleStatus.endDate,
+          latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+          cacheKind: 'snapshot',
+          reason: staleStatus.reason,
+        })
+      } else {
+        return null
+      }
     }
     return parsed.payload
   } catch {
@@ -320,7 +340,10 @@ export async function getCachedOrComputeSnapshot(
   }
 
   if (options?.allowD1Fallback !== false) {
-    const readOptions = buildPublicCacheReadFreshnessOptions(options)
+    const readOptions = buildPublicCacheReadFreshnessOptions({
+      ...options,
+      allowStaleWithinCanary: true,
+    })
     const d1Cached = await readD1SnapshotCache(env.DB, section, scope, readOptions)
     if (d1Cached) {
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, d1Cached)

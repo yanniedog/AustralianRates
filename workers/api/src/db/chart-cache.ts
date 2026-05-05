@@ -28,9 +28,11 @@ import {
   inferFiltersResolvedFromRows,
   publicCacheFreshnessStatus,
   publicCacheMetadata,
+  publicCacheStaleServeStatus,
   type PublicCacheMetadata,
 } from './public-cache-freshness'
 import {
+  logPublicCacheServedBoundedStale,
   logPublicCacheWedgedSection,
   serializeJsonForKv,
 } from './public-cache-support'
@@ -524,6 +526,7 @@ export async function readD1ChartCache(
   options?: {
     latestRunFinishedAt?: string | null
     latestAvailableCollectionDate?: string | null
+    allowStaleWithinCanary?: boolean
     now?: Date
     timeZone?: string
   },
@@ -577,7 +580,7 @@ export async function readD1ChartCache(
     options && Object.prototype.hasOwnProperty.call(options, 'latestRunFinishedAt')
       ? options.latestRunFinishedAt ?? null
       : await latestRunFinishedAtOrNull(db)
-  const freshness = publicCacheFreshnessStatus({
+  const freshnessInput = {
     builtAt: meta.builtAt || builtAt,
     filtersResolved: meta.filtersResolved,
     sourceRunFinishedAt: meta.sourceRunFinishedAt,
@@ -585,8 +588,12 @@ export async function readD1ChartCache(
     latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
     now: options?.now,
     timeZone: options?.timeZone,
-  })
+  }
+  const freshness = publicCacheFreshnessStatus(freshnessInput)
   if (!freshness.fresh) {
+    const staleStatus = options?.allowStaleWithinCanary
+      ? publicCacheStaleServeStatus(freshnessInput, freshness)
+      : null
     if (freshness.reason === 'end_date_beyond_max_staleness') {
       logPublicCacheWedgedSection({
         source: 'chart_cache',
@@ -598,12 +605,25 @@ export async function readD1ChartCache(
         cacheKind: representation,
       })
     }
-    return null
+    if (staleStatus?.canServe) {
+      logPublicCacheServedBoundedStale({
+        source: 'chart_cache',
+        section,
+        scope,
+        builtAt: meta.builtAt || builtAt,
+        endDate: staleStatus.endDate,
+        latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+        cacheKind: representation,
+        reason: staleStatus.reason,
+      })
+    } else {
+      return null
+    }
   }
   return {
     rows,
     representation,
-    fallbackReason: null,
+    fallbackReason: freshness.fresh ? null : freshness.reason,
     builtAt,
   }
 }
@@ -777,9 +797,12 @@ export async function getCachedOrCompute(
   const cacheScope = resolveChartCacheScope(section, params)
   if (cacheScope) {
     const latestRunFinishedAt = await latestRunFinishedAtOrNull(env.DB)
+    const now = new Date()
     const d1Cached = await readD1ChartCache(env.DB, section, representation, cacheScope, {
       latestRunFinishedAt,
       latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+      allowStaleWithinCanary: true,
+      now,
     })
     if (d1Cached) {
       const d1Payload = {
@@ -797,6 +820,8 @@ export async function getCachedOrCompute(
       const fallbackCached = await readD1ChartCache(env.DB, section, representation, fallbackScope, {
         latestRunFinishedAt,
         latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+        allowStaleWithinCanary: true,
+        now,
       })
       if (!fallbackCached) continue
       const d1Payload = {
