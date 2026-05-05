@@ -150,4 +150,13 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('CREATE VIEW vw_latest_rates AS')
     expect(sql).toContain('CREATE VIEW vw_rate_timeseries AS')
   })
+
+  it('includes integrity health row repair migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0056_repair_integrity_health_rows.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('UPDATE historical_loan_rates')
+    expect(sql).toContain('product_id IS NOT NULL')
+    expect(sql).toContain('known_cdr_anomaly:td_zero_point_one_outlier')
+    expect(sql).toContain('UPDATE historical_term_deposit_rates')
+  })
 })

@@ -413,6 +413,7 @@ async function loadCollectionStatusRows(
          ldr.index_fetch_succeeded AS index_fetch_succeeded,
          ldr.accepted_row_count AS accepted_row_count,
          ldr.written_row_count AS written_row_count,
+         COALESCE(ldr.unchanged_row_count, 0) AS unchanged_row_count,
          ldr.detail_fetch_event_count AS detail_fetch_event_count,
          ldr.lineage_error_count AS lineage_error_count,
          ldr.completed_detail_count AS completed_detail_count,
