@@ -683,11 +683,14 @@ body.ar-legal .legal-support-card {
         border-radius: 8px;
     }
 
-    body.ar-public .market-intro-live-label,
+    body.ar-public .market-intro-live-label {
+        white-space: normal;
+        overflow-wrap: normal;
+    }
+
     body.ar-public .market-intro-live-card strong {
         white-space: nowrap;
         overflow-wrap: normal;
-        word-break: normal;
     }
 
     body.ar-section-economic-data .economic-hero {
