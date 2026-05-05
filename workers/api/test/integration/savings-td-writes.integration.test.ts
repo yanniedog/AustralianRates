@@ -27,6 +27,8 @@ async function resetWriteTables(): Promise<void> {
     'historical_term_deposit_rates',
     'product_catalog',
     'series_catalog',
+    'series_presence_status',
+    'product_presence_status',
   ]
   for (const table of tables) {
     await env.DB.exec(`DELETE FROM ${table};`)
@@ -174,6 +176,67 @@ describe('batched savings and td writers', () => {
     expect(Number(changeFeed?.n || 0)).toBeGreaterThan(0)
   })
 
+  it('advances savings current state when unchanged historical rows are skipped', async () => {
+    await resetWriteTables()
+
+    const base = {
+      ...savingsFixture(),
+      bankName: 'ANZ',
+      productId: `sav-unchanged-${crypto.randomUUID()}`,
+      sourceUrl: 'https://api.anz/cds-au/v1/banking/products/sav-unchanged',
+      productUrl: 'https://www.anz.com.au/personal/bank-accounts/savings-accounts/',
+      runSource: 'scheduled' as const,
+      retrievalType: 'present_scrape_same_date' as const,
+      interestRate: 4.65,
+      fetchEventId: 301,
+    }
+    const first: NormalizedSavingsRow = {
+      ...base,
+      collectionDate: '2026-04-01',
+      runId: `daily:test:${crypto.randomUUID()}`,
+    }
+    const second: NormalizedSavingsRow = {
+      ...base,
+      collectionDate: '2026-04-02',
+      runId: `daily:test:${crypto.randomUUID()}`,
+      fetchEventId: 302,
+    }
+
+    const initial = await upsertSavingsRateRows(env.DB, [first])
+    const repeated = await upsertSavingsRateRows(env.DB, [second], { skipUnchangedRows: true })
+
+    const historical = await env.DB
+      .prepare('SELECT COUNT(*) AS n FROM historical_savings_rates WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ n: number }>()
+    const latest = await env.DB
+      .prepare('SELECT collection_date, interest_rate FROM latest_savings_series WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ collection_date: string; interest_rate: number }>()
+    const interval = await env.DB
+      .prepare('SELECT effective_from_collection_date, last_confirmed_collection_date FROM savings_rate_intervals WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ effective_from_collection_date: string; last_confirmed_collection_date: string }>()
+    const productPresence = await env.DB
+      .prepare('SELECT last_seen_collection_date FROM product_presence_status WHERE section = ? AND bank_name = ? AND product_id = ?')
+      .bind('savings', base.bankName, base.productId)
+      .first<{ last_seen_collection_date: string }>()
+    const seriesPresence = await env.DB
+      .prepare('SELECT last_seen_collection_date FROM series_presence_status WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ last_seen_collection_date: string }>()
+
+    expect(initial).toMatchObject({ written: 1, unchanged: 0 })
+    expect(repeated).toMatchObject({ written: 0, unchanged: 1 })
+    expect(Number(historical?.n || 0)).toBe(1)
+    expect(latest?.collection_date).toBe('2026-04-02')
+    expect(Number(latest?.interest_rate || 0)).toBe(4.65)
+    expect(interval?.effective_from_collection_date).toBe('2026-04-01')
+    expect(interval?.last_confirmed_collection_date).toBe('2026-04-02')
+    expect(productPresence?.last_seen_collection_date).toBe('2026-04-02')
+    expect(seriesPresence?.last_seen_collection_date).toBe('2026-04-02')
+  })
+
   it('advances term-deposit current state when unchanged historical rows are skipped', async () => {
     await resetWriteTables()
 
@@ -219,6 +282,14 @@ describe('batched savings and td writers', () => {
       .prepare('SELECT COUNT(*) AS n FROM td_rate_events WHERE product_id = ?')
       .bind(base.productId)
       .first<{ n: number }>()
+    const productPresence = await env.DB
+      .prepare('SELECT last_seen_collection_date FROM product_presence_status WHERE section = ? AND bank_name = ? AND product_id = ?')
+      .bind('term_deposits', base.bankName, base.productId)
+      .first<{ last_seen_collection_date: string }>()
+    const seriesPresence = await env.DB
+      .prepare('SELECT last_seen_collection_date FROM series_presence_status WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ last_seen_collection_date: string }>()
 
     expect(initial).toMatchObject({ written: 1, unchanged: 0 })
     expect(repeated).toMatchObject({ written: 0, unchanged: 1 })
@@ -228,5 +299,7 @@ describe('batched savings and td writers', () => {
     expect(interval?.effective_from_collection_date).toBe('2026-04-01')
     expect(interval?.last_confirmed_collection_date).toBe('2026-04-02')
     expect(Number(events?.n || 0)).toBe(1)
+    expect(productPresence?.last_seen_collection_date).toBe('2026-04-02')
+    expect(seriesPresence?.last_seen_collection_date).toBe('2026-04-02')
   })
 })
