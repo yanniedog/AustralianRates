@@ -48,6 +48,10 @@ export type ScopedFilters = {
   accountType?: 'savings'
 }
 
+export type ResolveFiltersOptions = {
+  latestAvailableCollectionDate?: string | null
+}
+
 function todayYmd(): string {
   return getMelbourneNowParts().date
 }
@@ -61,10 +65,15 @@ function boundedLookbackStartDate(endDate: string): string {
 export function defaultDateRangeFromCollectionBounds(
   minDate: string | null | undefined,
   maxDate: string | null | undefined,
+  latestAvailableCollectionDate?: string | null,
 ): { startDate: string; endDate: string } {
   const normalizedMax = maxDate && /^\d{4}-\d{2}-\d{2}$/.test(maxDate) ? maxDate : null
+  const normalizedLatest =
+    latestAvailableCollectionDate && /^\d{4}-\d{2}-\d{2}$/.test(latestAvailableCollectionDate)
+      ? latestAvailableCollectionDate
+      : null
   const normalizedMin = minDate && /^\d{4}-\d{2}-\d{2}$/.test(minDate) ? minDate : null
-  const endDate = normalizedMax ?? todayYmd()
+  const endDate = normalizedLatest ?? normalizedMax ?? todayYmd()
   const boundedStartDate = boundedLookbackStartDate(endDate)
   const startDate = normalizedMin && normalizedMin > boundedStartDate ? normalizedMin : boundedStartDate
   return { startDate, endDate }
@@ -74,12 +83,13 @@ export function defaultDateRangeFromCollectionBounds(
 async function getDefaultDateRangeForSection(
   db: D1Database,
   section: ChartCacheSection,
+  options?: ResolveFiltersOptions,
 ): Promise<{ startDate: string; endDate: string }> {
   const table = SECTION_TABLES[section]
   const row = await db
     .prepare(`SELECT MIN(collection_date) AS min_date, MAX(collection_date) AS max_date FROM ${table}`)
     .first<{ min_date: string | null; max_date: string | null }>()
-  return defaultDateRangeFromCollectionBounds(row?.min_date, row?.max_date)
+  return defaultDateRangeFromCollectionBounds(row?.min_date, row?.max_date, options?.latestAvailableCollectionDate)
 }
 
 /** Split a scope string into its window / preset components. */
@@ -129,8 +139,9 @@ export function applyPresetFilters(
 async function defaultFilters(
   db: D1Database,
   section: ChartCacheSection,
+  options?: ResolveFiltersOptions,
 ): Promise<ScopedFilters> {
-  const { startDate, endDate } = await getDefaultDateRangeForSection(db, section)
+  const { startDate, endDate } = await getDefaultDateRangeForSection(db, section, options)
   return {
     startDate,
     endDate,
@@ -145,10 +156,11 @@ export async function resolveFiltersForScope(
   db: D1Database,
   section: ChartCacheSection,
   scope: ChartCacheScope,
+  options?: ResolveFiltersOptions,
 ): Promise<ScopedFilters> {
   const { window, preset } = parseChartCacheScope(scope)
   const base: ScopedFilters = !window
-    ? await defaultFilters(db, section)
+    ? await defaultFilters(db, section, options)
     : ((await resolveChartDateRangeFromDb(
         db,
         section,

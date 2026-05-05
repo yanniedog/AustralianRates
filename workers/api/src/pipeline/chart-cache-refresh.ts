@@ -112,7 +112,10 @@ export async function refreshPublicSnapshotPackages(
         skipped++
         continue
       }
-      const snapshot = await buildSnapshotPayload(env, section, cacheScope, { sourceRunFinishedAt: latestRunFinishedAt })
+      const snapshot = await buildSnapshotPayload(env, section, cacheScope, {
+        sourceRunFinishedAt: latestRunFinishedAt,
+        latestAvailableCollectionDate: latestAvailableBySection.get(section) ?? null,
+      })
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
       refreshed++
     } catch (e) {
@@ -140,6 +143,14 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
   const errors: string[] = []
   let refreshed = 0
   const sourceRunFinishedAt = await resolveLatestRunFinishedAt(env)
+  const latestAvailableBySection = new Map(
+    await Promise.all(
+      PUBLIC_PACKAGE_SECTIONS.map(async (section) => [
+        section,
+        await queryLatestSectionMaxCollectionDate(db, section),
+      ] as const),
+    ),
+  )
 
   try {
     await refreshAllReportDeltaTables(db)
@@ -155,7 +166,8 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
   for (const dataset of PUBLIC_CACHE_DATASETS) {
     const section = dataset.section
     for (const cacheScope of precomputedSnapshotScopesForSection(section)) {
-      const filters = await resolveFiltersForScope(rd, section, cacheScope)
+      const latestAvailableCollectionDate = latestAvailableBySection.get(section) ?? null
+      const filters = await resolveFiltersForScope(rd, section, cacheScope, { latestAvailableCollectionDate })
       for (const rep of REPRESENTATIONS) {
         try {
           const result = await dataset.collectAnalyticsRows(dbs, rep, {
@@ -193,7 +205,10 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
       }
 
       try {
-        const snapshot = await buildSnapshotPayload(env, section, cacheScope, { sourceRunFinishedAt })
+        const snapshot = await buildSnapshotPayload(env, section, cacheScope, {
+          sourceRunFinishedAt,
+          latestAvailableCollectionDate,
+        })
         await writeD1SnapshotCache(db, section, cacheScope, snapshot, { sourceRunFinishedAt })
         await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
         refreshed++
