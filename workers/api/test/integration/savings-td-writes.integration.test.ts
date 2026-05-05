@@ -173,4 +173,60 @@ describe('batched savings and td writers', () => {
     expect(Number(events?.n || 0)).toBe(2)
     expect(Number(changeFeed?.n || 0)).toBeGreaterThan(0)
   })
+
+  it('advances term-deposit current state when unchanged historical rows are skipped', async () => {
+    await resetWriteTables()
+
+    const base = {
+      ...tdFixture(),
+      bankName: 'ANZ',
+      productId: `td-unchanged-${crypto.randomUUID()}`,
+      sourceUrl: 'https://api.anz/cds-au/v1/banking/products/td-unchanged',
+      productUrl: 'https://www.anz.com.au/personal/bank-accounts/term-deposits/',
+      runSource: 'scheduled' as const,
+      retrievalType: 'present_scrape_same_date' as const,
+      interestRate: 4.2,
+      fetchEventId: 301,
+    }
+    const first: NormalizedTdRow = {
+      ...base,
+      collectionDate: '2026-04-01',
+      runId: `daily:test:${crypto.randomUUID()}`,
+    }
+    const second: NormalizedTdRow = {
+      ...base,
+      collectionDate: '2026-04-02',
+      runId: `daily:test:${crypto.randomUUID()}`,
+      fetchEventId: 302,
+    }
+
+    const initial = await upsertTdRateRows(env.DB, [first])
+    const repeated = await upsertTdRateRows(env.DB, [second], { skipUnchangedRows: true })
+
+    const historical = await env.DB
+      .prepare('SELECT COUNT(*) AS n FROM historical_term_deposit_rates WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ n: number }>()
+    const latest = await env.DB
+      .prepare('SELECT collection_date, interest_rate FROM latest_td_series WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ collection_date: string; interest_rate: number }>()
+    const interval = await env.DB
+      .prepare('SELECT effective_from_collection_date, last_confirmed_collection_date FROM td_rate_intervals WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ effective_from_collection_date: string; last_confirmed_collection_date: string }>()
+    const events = await env.DB
+      .prepare('SELECT COUNT(*) AS n FROM td_rate_events WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ n: number }>()
+
+    expect(initial).toMatchObject({ written: 1, unchanged: 0 })
+    expect(repeated).toMatchObject({ written: 0, unchanged: 1 })
+    expect(Number(historical?.n || 0)).toBe(1)
+    expect(latest?.collection_date).toBe('2026-04-02')
+    expect(Number(latest?.interest_rate || 0)).toBe(4.2)
+    expect(interval?.effective_from_collection_date).toBe('2026-04-01')
+    expect(interval?.last_confirmed_collection_date).toBe('2026-04-02')
+    expect(Number(events?.n || 0)).toBe(1)
+  })
 })

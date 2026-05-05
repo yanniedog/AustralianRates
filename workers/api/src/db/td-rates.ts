@@ -103,6 +103,7 @@ function chunk<T>(rows: T[], size: number): T[][] {
 
 async function filterChangedTdRows(db: D1Database, rows: NormalizedTdRow[]): Promise<{
   changed: NormalizedTdRow[]
+  unchangedRows: NormalizedTdRow[]
   unchanged: number
 }> {
   const keyed = rows.map((row) => ({ row, seriesKey: tdSeriesKey(row) }))
@@ -120,16 +121,25 @@ async function filterChangedTdRows(db: D1Database, rows: NormalizedTdRow[]): Pro
     for (const current of result.results ?? []) currentByKey.set(String(current.series_key || ''), current)
   }
   const changed: NormalizedTdRow[] = []
+  const unchangedRows: NormalizedTdRow[] = []
   let unchanged = 0
   for (const item of keyed) {
     const current = currentByKey.get(item.seriesKey)
-    if (current && Number(current.is_removed ?? 0) === 0 && tdRowUnchanged(current, item.row)) unchanged += 1
-    else changed.push(item.row)
+    if (current && Number(current.is_removed ?? 0) === 0 && tdRowUnchanged(current, item.row)) {
+      unchanged += 1
+      unchangedRows.push(item.row)
+    } else {
+      changed.push(item.row)
+    }
   }
-  return { changed, unchanged }
+  return { changed, unchangedRows, unchanged }
 }
 
-async function prepareTdRow(db: D1Database, row: NormalizedTdRow): Promise<PreparedTdRow> {
+async function prepareTdRow(
+  db: D1Database,
+  row: NormalizedTdRow,
+  options: { storeCdrDetailPayload?: boolean } = {},
+): Promise<PreparedTdRow> {
   const parsedAt = nowIso()
   const seriesKey = tdSeriesKey(row)
   const productCode = row.productId
@@ -142,7 +152,7 @@ async function prepareTdRow(db: D1Database, row: NormalizedTdRow): Promise<Prepa
   })
   const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
   const cdrProductDetailHash =
-    row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
+    options.storeCdrDetailPayload !== false && row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
       ? await storeCdrDetailPayload(db, row.cdrProductDetailJson)
       : null
 
@@ -402,6 +412,28 @@ async function upsertTdRateRowsBatched(
   return result
 }
 
+async function touchUnchangedTdRowsCurrentState(
+  db: D1Database,
+  rows: NormalizedTdRow[],
+  options: TdRateWriteOptions,
+): Promise<void> {
+  const touchOptions: TdRateWriteOptions = {
+    ...options,
+    emitCanonicalFeed: false,
+    emitProjectionChangeFeed: false,
+    updateCatalogs: false,
+    markSeriesSeen: false,
+  }
+  for (const part of chunk(rows, 32)) {
+    const preparedRows = await Promise.all(
+      part.map((row) => prepareTdRow(db, row, { storeCdrDetailPayload: false })),
+    )
+    for (const prepared of preparedRows) {
+      await runTdPostWriteSideEffects(db, prepared, touchOptions)
+    }
+  }
+}
+
 export async function upsertTdRateRows(
   db: D1Database,
   rows: NormalizedTdRow[],
@@ -414,6 +446,9 @@ export async function upsertTdRateRows(
     const filtered = await filterChangedTdRows(db, rows)
     inputRows = filtered.changed
     unchanged = filtered.unchanged
+    if (filtered.unchangedRows.length > 0) {
+      await touchUnchangedTdRowsCurrentState(db, filtered.unchangedRows, options)
+    }
     if (inputRows.length === 0) return { written: 0, unchanged, skippedSideEffects: 0 }
   }
   const result = await upsertTdRateRowsBatched(db, inputRows, options)
