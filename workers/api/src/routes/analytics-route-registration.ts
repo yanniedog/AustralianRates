@@ -15,6 +15,7 @@ import { log } from '../utils/logger'
 import { jsonError, withPublicCache } from '../utils/http'
 import { isPublicLiveD1FallbackDisabled } from '../utils/d1-budget'
 import type { ChartWindow } from '../utils/chart-window'
+import type { PublicQueryParams } from '../utils/query-params'
 import { defaultPublicSnapshotScopeForQuery } from '../pipeline/public-package-scopes'
 import {
   parseAnalyticsRepresentation,
@@ -23,8 +24,6 @@ import {
 import type { ResolvedAnalyticsRows } from './analytics-data'
 
 const CHART_CACHE_MAX_AGE = 300
-
-type QueryRecord = Record<string, string | undefined>
 
 type AnalyticsDbs = {
   canonicalDb: D1Database
@@ -41,7 +40,7 @@ type AnalyticsResult = Pick<ResolvedAnalyticsRows, 'rows' | 'representation' | '
 
 type AnalyticsRouteOptions<TFilters extends AnalyticsFilters> = {
   section: ChartCacheSection
-  buildFilters: (query: QueryRecord) => TFilters
+  buildFilters: (query: PublicQueryParams) => TFilters
   collectRowsResolved: (
     dbs: AnalyticsDbs,
     representation: AnalyticsRepresentation,
@@ -49,15 +48,15 @@ type AnalyticsRouteOptions<TFilters extends AnalyticsFilters> = {
   ) => Promise<AnalyticsResult>
 }
 
-function toQueryParams(input: QueryRecord): QueryRecord {
-  const params: QueryRecord = {}
+function toQueryParams(input: PublicQueryParams): PublicQueryParams {
+  const params: PublicQueryParams = {}
   for (const [key, value] of Object.entries(input)) {
     params[key] = value == null ? undefined : String(value)
   }
   return params
 }
 
-function wantsCompactRows(query: QueryRecord): boolean {
+function wantsCompactRows(query: PublicQueryParams): boolean {
   const value = String(query.compact || '').trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
 }
@@ -70,7 +69,7 @@ async function getPackagedCompactSeries(
   c: Context<AppContext>,
   section: ChartCacheSection,
   representation: AnalyticsRepresentation,
-  params: QueryRecord,
+  params: PublicQueryParams,
   latestAvailableCollectionDate: string | null,
 ): Promise<{ payload: Record<string, unknown>; cache: 'kv' | 'd1' | 'live'; scope: ChartCacheScope } | null> {
   if (!wantsCompactRows(params) || representation !== 'day') return null
@@ -118,7 +117,7 @@ function clampAnalyticsFiltersToToday<TFilters extends AnalyticsFilters>(filters
 async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   c: Context<AppContext>,
   options: AnalyticsRouteOptions<TFilters>,
-  merged: QueryRecord,
+  merged: PublicQueryParams,
 ) {
   const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
   const db = getReadDb(c)
@@ -231,15 +230,15 @@ export function registerAnalyticsRoutes<TFilters extends AnalyticsFilters>(
   options: AnalyticsRouteOptions<TFilters>,
 ): void {
   publicRoutes.get('/analytics/series', async (c) =>
-    handleAnalyticsRequest(c, options, { ...c.req.query() } as QueryRecord),
+    handleAnalyticsRequest(c, options, { ...c.req.query() } as PublicQueryParams),
   )
 
   publicRoutes.post('/analytics/pivot', async (c) => {
     const body =
-      (await c.req.json<Record<string, string | undefined>>().catch(() => ({}))) as QueryRecord
+      (await c.req.json<Record<string, string | undefined>>().catch(() => ({}))) as PublicQueryParams
     return handleAnalyticsRequest(c, options, {
       ...c.req.query(),
       ...body,
-    } as QueryRecord)
+    } as PublicQueryParams)
   })
 }

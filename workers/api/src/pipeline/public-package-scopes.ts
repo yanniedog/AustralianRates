@@ -8,6 +8,7 @@ import {
 } from '../db/chart-cache'
 import { parseChartCacheScope, type ScopePreset } from '../db/scope-filters'
 import { parseChartWindow, type ChartWindow } from '../utils/chart-window'
+import type { PublicQueryParams } from '../utils/query-params'
 import {
   defaultPublicChartWindowForSection,
   PUBLIC_CACHE_SECTIONS,
@@ -18,8 +19,6 @@ export type PublicPackageScope = {
   section: ChartCacheSection
   scope: ChartCacheScope
 }
-
-type QueryRecord = Record<string, string | undefined>
 
 export const PUBLIC_PACKAGE_SECTIONS: readonly ChartCacheSection[] = PUBLIC_CACHE_SECTIONS
 // The bare `default` scope (no window, no preset) is what `/snapshot` returns
@@ -75,7 +74,7 @@ export function normalizePublicSnapshotScope(
 
 export function defaultPublicSnapshotScopeForQuery(
   section: ChartCacheSection,
-  params: QueryRecord,
+  params: PublicQueryParams,
 ): ChartCacheScope | null {
   const scope = resolveDefaultChartCacheScope(section, params)
   return scope ? normalizePublicSnapshotScope(section, scope) : null

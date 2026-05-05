@@ -24,10 +24,6 @@ async function latestSourceRunFinishedAt(): Promise<string | null> {
   }
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function liveFallbackDisabledEnv(): EnvBindings {
   const usage = JSON.stringify({
     reads: D1_INCLUDED_MONTHLY_READS,
@@ -35,7 +31,7 @@ function liveFallbackDisabledEnv(): EnvBindings {
     updated_at: '2026-05-05T00:00:00.000Z',
   })
   const idempotencyKv = {
-    get: async (key: string) => (key === `d1-budget:${today()}` ? usage : null),
+    get: async (key: string) => (key.startsWith('d1-budget:') ? usage : null),
     put: async () => undefined,
   } as unknown as KVNamespace
   return {

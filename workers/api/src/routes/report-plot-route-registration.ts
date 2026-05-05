@@ -13,11 +13,11 @@ import { jsonError, withPublicCache } from '../utils/http'
 import type { ChartWindow } from '../utils/chart-window'
 import { isPublicLiveD1FallbackDisabled } from '../utils/d1-budget'
 import { getMelbourneNowParts } from '../utils/time'
+import type { PublicQueryParams } from '../utils/query-params'
 
 const REPORT_PLOT_CACHE_MAX_AGE = 300
 const IMPLICIT_BAND_END_DATE_ALIGNED_SECTIONS = new Set<ChartCacheSection>(['term_deposits'])
 
-type QueryRecord = Record<string, string | undefined>
 type ReportFilters = Record<string, unknown> & {
   startDate?: string
   endDate?: string
@@ -26,11 +26,11 @@ type ReportFilters = Record<string, unknown> & {
 
 type ReportPlotRouteOptions<TFilters extends ReportFilters> = {
   section: ChartCacheSection
-  buildFilters: (query: QueryRecord) => TFilters
+  buildFilters: (query: PublicQueryParams) => TFilters
 }
 
-function toQueryParams(input: QueryRecord): QueryRecord {
-  const params: QueryRecord = {}
+function toQueryParams(input: PublicQueryParams): PublicQueryParams {
+  const params: PublicQueryParams = {}
   for (const [key, value] of Object.entries(input)) {
     params[key] = value == null ? undefined : String(value)
   }
@@ -60,7 +60,7 @@ function parseReportPlotMode(value: string | undefined): ReportPlotMode | null {
   return null
 }
 
-function hasExplicitEndDate(query: QueryRecord): boolean {
+function hasExplicitEndDate(query: PublicQueryParams): boolean {
   return typeof query.end_date === 'string' && query.end_date.trim().length > 0
 }
 
@@ -69,7 +69,7 @@ function addCalendarDaysUtcYmd(ymd: string, deltaDays: number): string {
   return new Date(t).toISOString().slice(0, 10)
 }
 
-function shouldAlignImplicitBandEndDate(section: ChartCacheSection, mode: ReportPlotMode, query: QueryRecord): boolean {
+function shouldAlignImplicitBandEndDate(section: ChartCacheSection, mode: ReportPlotMode, query: PublicQueryParams): boolean {
   return IMPLICIT_BAND_END_DATE_ALIGNED_SECTIONS.has(section) && mode === 'bands' && !hasExplicitEndDate(query)
 }
 
@@ -77,7 +77,7 @@ export function alignTdImplicitBandEndDateToToday<TFilters extends ReportFilters
   filters: TFilters,
   section: ChartCacheSection,
   mode: ReportPlotMode,
-  query: QueryRecord,
+  query: PublicQueryParams,
   today: string,
 ): TFilters {
   if (!shouldAlignImplicitBandEndDate(section, mode, query)) return filters
@@ -99,11 +99,11 @@ export function alignTdImplicitBandEndDateToToday<TFilters extends ReportFilters
 }
 
 function buildReportPlotCacheParams(
-  query: QueryRecord,
+  query: PublicQueryParams,
   section: ChartCacheSection,
   mode: ReportPlotMode,
   effectiveFilters: ReportFilters,
-): QueryRecord {
+): PublicQueryParams {
   const params = toQueryParams(query)
   if (shouldAlignImplicitBandEndDate(section, mode, query) && typeof effectiveFilters.endDate === 'string') {
     params.__implicit_end_date = effectiveFilters.endDate
@@ -114,7 +114,7 @@ function buildReportPlotCacheParams(
 async function handleReportPlotRequest<TFilters extends ReportFilters>(
   c: Context<AppContext>,
   options: ReportPlotRouteOptions<TFilters>,
-  merged: QueryRecord,
+  merged: PublicQueryParams,
 ) {
   const mode = parseReportPlotMode(merged.mode)
   if (!mode) {
@@ -186,6 +186,6 @@ export function registerReportPlotRoutes<TFilters extends ReportFilters>(
   options: ReportPlotRouteOptions<TFilters>,
 ): void {
   publicRoutes.get('/analytics/report-plot', async (c) =>
-    handleReportPlotRequest(c, options, { ...c.req.query() } as QueryRecord),
+    handleReportPlotRequest(c, options, { ...c.req.query() } as PublicQueryParams),
   )
 }

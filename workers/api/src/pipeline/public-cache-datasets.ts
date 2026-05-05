@@ -77,10 +77,10 @@ export function sectionSupportsConsumerDefaultPreset(section: ChartCacheSection)
   return publicCacheDatasetForSection(section).supportsConsumerDefaultPreset
 }
 
-export function publicApiBasePathForSection(section: ChartCacheSection): string {
+export function publicApiBasePathForSection(section: ChartCacheSection): PublicCacheDatasetConfig['apiBasePath'] {
   return publicCacheDatasetForSection(section).apiBasePath
 }
 
-export function defaultPublicChartWindowForSection(section: ChartCacheSection): ChartWindow {
+export function defaultPublicChartWindowForSection(section: ChartCacheSection): PublicCacheDatasetConfig['defaultChartWindow'] {
   return publicCacheDatasetForSection(section).defaultChartWindow
 }
