@@ -116,15 +116,16 @@
         return true;
     }
 
-    function reloadStartupSurfaces() {
+    function reloadHeroSurfaces() {
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
+        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
+    }
+
+    function reloadStartupSurfaces() {
+        reloadHeroSurfaces();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
         }
-    }
-
-    function scheduleStartupQuickCompare() {
-        // Quick compare UI removed; no-op.
     }
 
     function ensureExplorerReady() {
@@ -225,7 +226,7 @@
         setFilterLiveStatus(opts.source === 'live' ? 'Syncing...' : 'Refreshing...', 'is-pending');
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
-        if (hero && hero.loadHeroStats) hero.loadHeroStats();
+        reloadHeroSurfaces();
         if (charts && charts.drawChart) charts.drawChart();
         else if (charts && charts.markStale) charts.markStale('STALE');
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
@@ -256,8 +257,7 @@
 
         applyUiMode(state && state.getUiMode ? state.getUiMode() : 'analyst', { skipRefresh: true });
         if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'chart', { skipHash: false });
-        if (hero && hero.loadHeroStats) hero.loadHeroStats();
-        scheduleStartupQuickCompare();
+        reloadHeroSurfaces();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
         }
