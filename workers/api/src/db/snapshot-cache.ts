@@ -15,10 +15,16 @@ import {
   type ChartCacheScope,
   type ChartCacheSection,
 } from './chart-cache'
+import {
+  buildPublicCacheReadFreshnessOptions,
+  logPublicCacheWedgedSection,
+  serializeJsonForKv,
+  type PublicCacheReadFreshnessOptions,
+} from './public-cache-support'
 import { getMelbourneNowParts } from '../utils/time'
 import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
 import {
-  isPublicDailyCacheFresh,
+  publicCacheFreshnessStatus,
   publicCacheMetadata,
   type PublicCacheMetadata,
 } from './public-cache-freshness'
@@ -42,12 +48,18 @@ function snapshotFiltersResolved(payload: SnapshotPayload): PublicCacheMetadata[
     ?.filtersResolved
 }
 
-function isSnapshotPayloadFresh(payload: SnapshotPayload): boolean {
-  return isPublicDailyCacheFresh({
+function isSnapshotPayloadFresh(
+  payload: SnapshotPayload,
+  options?: PublicCacheReadFreshnessOptions,
+): boolean {
+  return publicCacheFreshnessStatus({
     builtAt: payload.builtAt,
     filtersResolved: snapshotFiltersResolved(payload),
     sourceRunFinishedAt: payload.sourceRunFinishedAt ?? null,
-  })
+    latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    now: options?.now,
+    timeZone: options?.timeZone,
+  }).fresh
 }
 
 export function buildSnapshotKvKey(section: ChartCacheSection, scope: SnapshotScope, melbourneDate?: string): string {
@@ -75,15 +87,6 @@ async function latestRunFinishedAtOrNull(db: D1Database): Promise<string | null>
   }
 }
 
-/**
- * Cloudflare KV value size hard limit is 25 MiB; serialized snapshots that
- * exceed this fail on `put` with `400 KV value size of N bytes is over the
- * 25 MiB limit`. Treat anything above this as a refresh failure rather than
- * silently retaining the prior bundle, which is how stale ribbons used to
- * survive ingest cycles for a full day.
- */
-const KV_VALUE_BYTE_LIMIT = 25 * 1024 * 1024
-
 /** Writes full snapshot KV plus a byte-capped inline variant for Pages `_middleware`. */
 export async function writeSnapshotKvBundles(
   kv: KVNamespace | undefined,
@@ -105,28 +108,24 @@ export async function writeSnapshotKvBundles(
       : undefined
   const melbourneNow = getMelbourneNowParts().date
   const datesToWrite = dateOverride ? Array.from(new Set([dateOverride, melbourneNow])) : [melbourneNow]
-  const serialized = JSON.stringify(payload)
-  const byteLength =
-    typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(serialized).length : serialized.length
-  if (byteLength > KV_VALUE_BYTE_LIMIT) {
-    log.error('snapshot_cache', 'snapshot KV bundle exceeds 25 MiB limit', {
-      code: 'snapshot_kv_value_too_large',
-      context: `section=${section} scope=${scope} bytes=${byteLength} limit=${KV_VALUE_BYTE_LIMIT} chars=${serialized.length}`,
-    })
-    return
-  }
+  const serialized = serializeJsonForKv(buildSnapshotKvKey(section, scope), payload, {
+    source: 'snapshot_cache',
+    context: { section, scope, variant: 'full' },
+  })
   let trimmed: ReturnType<typeof trimSnapshotDataForHtmlInline> | undefined
+  let inlineSerialized: string | null | undefined
   for (const date of datesToWrite) {
     const key = buildSnapshotKvKey(section, scope, date)
-    try {
-      await kv.put(key, serialized, { expirationTtl: CHART_CACHE_KV_TTL })
-    } catch (error) {
-      log.error('snapshot_cache', 'snapshot KV put failed', {
-        code: 'snapshot_kv_put_failed',
-        error,
-        context: `key=${key} bytes=${byteLength}`,
-      })
-      continue
+    if (serialized) {
+      try {
+        await kv.put(key, serialized, { expirationTtl: CHART_CACHE_KV_TTL })
+      } catch (error) {
+        log.error('snapshot_cache', 'snapshot KV put failed', {
+          code: 'snapshot_kv_put_failed',
+          error,
+          context: `key=${key}`,
+        })
+      }
     }
     try {
       if (trimmed === undefined) {
@@ -139,8 +138,16 @@ export async function writeSnapshotKvBundles(
       }
       const inlineKey = buildSnapshotInlineKvKey(section, scope, date)
       if (trimmed) {
-        const inlinePayload: SnapshotPayload = { ...payload, data: trimmed }
-        await kv.put(inlineKey, JSON.stringify(inlinePayload), { expirationTtl: CHART_CACHE_KV_TTL })
+        if (inlineSerialized === undefined) {
+          const inlinePayload: SnapshotPayload = { ...payload, data: trimmed }
+          inlineSerialized = serializeJsonForKv(inlineKey, inlinePayload, {
+            source: 'snapshot_cache',
+            context: { section, scope, variant: 'inline' },
+          })
+        }
+        if (inlineSerialized) {
+          await kv.put(inlineKey, inlineSerialized, { expirationTtl: CHART_CACHE_KV_TTL })
+        }
       } else {
         await kv.delete(inlineKey)
       }
@@ -158,6 +165,7 @@ export async function readD1SnapshotCache(
   db: D1Database,
   section: ChartCacheSection,
   scope: SnapshotScope = 'default',
+  options?: PublicCacheReadFreshnessOptions,
 ): Promise<SnapshotPayload | null> {
   let row: { payload_json: string; built_at: string } | null = null
   try {
@@ -191,15 +199,32 @@ export async function readD1SnapshotCache(
       ?.filtersResolved?.endDate
     const startDate = (parsed.payload.data as { filtersResolved?: { startDate?: unknown } } | undefined)
       ?.filtersResolved?.startDate
-    const latestRunFinishedAt = await latestRunFinishedAtOrNull(db)
-    if (
-      !isPublicDailyCacheFresh({
-        builtAt: String(parsed.meta?.builtAt || parsed.builtAt || row.built_at || parsed.payload.builtAt || ''),
-        filtersResolved: { startDate, endDate },
-        sourceRunFinishedAt: parsed.meta?.sourceRunFinishedAt ?? parsed.sourceRunFinishedAt ?? null,
-        latestRunFinishedAt,
-      })
-    ) {
+    const latestRunFinishedAt =
+      options && Object.prototype.hasOwnProperty.call(options, 'latestRunFinishedAt')
+        ? options.latestRunFinishedAt ?? null
+        : await latestRunFinishedAtOrNull(db)
+    const builtAt = String(parsed.meta?.builtAt || parsed.builtAt || row.built_at || parsed.payload.builtAt || '')
+    const freshness = publicCacheFreshnessStatus({
+      builtAt,
+      filtersResolved: { startDate, endDate },
+      sourceRunFinishedAt: parsed.meta?.sourceRunFinishedAt ?? parsed.sourceRunFinishedAt ?? null,
+      latestRunFinishedAt,
+      latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+      now: options?.now,
+      timeZone: options?.timeZone,
+    })
+    if (!freshness.fresh) {
+      if (freshness.reason === 'end_date_beyond_max_staleness') {
+        logPublicCacheWedgedSection({
+          source: 'snapshot_cache',
+          section,
+          scope,
+          builtAt,
+          endDate: freshness.endDate,
+          latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+          cacheKind: 'snapshot',
+        })
+      }
       return null
     }
     return parsed.payload
@@ -269,7 +294,10 @@ export async function getCachedOrComputeSnapshot(
   section: ChartCacheSection,
   scope: SnapshotScope,
   compute: () => Promise<SnapshotPayload>,
-  options?: { allowD1Fallback?: boolean; allowLiveCompute?: boolean },
+  options?: {
+    allowD1Fallback?: boolean
+    allowLiveCompute?: boolean
+  } & PublicCacheReadFreshnessOptions,
 ): Promise<SnapshotPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const kvKey = buildSnapshotKvKey(section, scope)
   if (env.CHART_CACHE_KV) {
@@ -277,7 +305,13 @@ export async function getCachedOrComputeSnapshot(
     if (kvCached) {
       try {
         const payload = JSON.parse(kvCached) as SnapshotPayload
-        if (!isSnapshotPayloadFresh(payload)) throw new Error('snapshot_kv_stale')
+        if (
+          !isSnapshotPayloadFresh(payload, {
+            latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+            now: options?.now,
+            timeZone: options?.timeZone,
+          })
+        ) throw new Error('snapshot_kv_stale')
         return { ...payload, fromCache: 'kv' }
       } catch {
         /* ignore invalid KV entry */
@@ -286,7 +320,8 @@ export async function getCachedOrComputeSnapshot(
   }
 
   if (options?.allowD1Fallback !== false) {
-    const d1Cached = await readD1SnapshotCache(env.DB, section, scope)
+    const readOptions = buildPublicCacheReadFreshnessOptions(options)
+    const d1Cached = await readD1SnapshotCache(env.DB, section, scope, readOptions)
     if (d1Cached) {
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, d1Cached)
       return { ...d1Cached, fromCache: 'd1' }

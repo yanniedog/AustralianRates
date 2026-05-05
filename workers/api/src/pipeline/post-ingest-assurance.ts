@@ -10,6 +10,7 @@ import {
 import { listCoverageGapRows } from '../db/lender-dataset-status'
 import { buildSnapshotKvKey } from '../db/snapshot-cache'
 import { getLatestCompletedDailyRunFinishedAt } from '../db/run-reports'
+import { queryLatestSectionMaxCollectionDate } from '../db/public-cache-support'
 import { isPublicDailyCacheFresh } from '../db/public-cache-freshness'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
@@ -449,6 +450,14 @@ async function packageFreshness(env: EnvBindings): Promise<PackageFreshness[]> {
       reason: 'missing_kv_binding',
     }))
   }
+  const latestAvailableBySection = new Map(
+    await Promise.all(
+      DATASETS.map(async (section) => [
+        section,
+        await queryLatestSectionMaxCollectionDate(env.DB, section),
+      ] as const),
+    ),
+  )
   const results: PackageFreshness[] = []
   for (const item of PUBLIC_PACKAGE_SCOPES) {
     const raw = await env.CHART_CACHE_KV.get(buildSnapshotKvKey(item.section, item.scope))
@@ -470,6 +479,7 @@ async function packageFreshness(env: EnvBindings): Promise<PackageFreshness[]> {
           filtersResolved: parsed.data?.filtersResolved,
           sourceRunFinishedAt: parsed.sourceRunFinishedAt ?? null,
           latestRunFinishedAt,
+          latestAvailableCollectionDate: latestAvailableBySection.get(item.section) ?? null,
         })
         reason = ok ? null : 'stale_or_malformed_package'
       } catch {

@@ -2,6 +2,7 @@ import { getMelbourneNowParts } from '../utils/time'
 
 export const PUBLIC_DAILY_CACHE_TTL_SECONDS = 36 * 60 * 60
 const PUBLIC_DAILY_CACHE_TTL_MS = PUBLIC_DAILY_CACHE_TTL_SECONDS * 1000
+export const PUBLIC_DAILY_CACHE_MAX_STALENESS_DAYS = 14
 
 export type PublicCacheMetadata = {
   payloadVersion: number
@@ -22,8 +23,25 @@ export type PublicCacheFreshnessInput = {
   }
   sourceRunFinishedAt?: string | null
   latestRunFinishedAt?: string | null
+  latestAvailableCollectionDate?: string | null
   now?: Date
   timeZone?: string
+}
+
+export type PublicCacheFreshnessRejectionReason =
+  | 'invalid_built_at'
+  | 'built_at_too_old'
+  | 'invalid_end_date'
+  | 'end_date_beyond_max_staleness'
+  | 'end_date_not_current_or_latest'
+  | 'source_older_than_latest_run'
+
+export type PublicCacheFreshnessStatus = {
+  fresh: boolean
+  reason: PublicCacheFreshnessRejectionReason | null
+  endDate: string | null
+  today: string
+  yesterday: string
 }
 
 function parseMs(value: string | null | undefined): number | null {
@@ -38,6 +56,19 @@ function melbourneDateFor(date: Date, timeZone = 'Australia/Melbourne'): string 
 
 function previousMelbourneDate(now: Date, timeZone = 'Australia/Melbourne'): string {
   return melbourneDateFor(new Date(now.getTime() - 86400000), timeZone)
+}
+
+function parseYmdMs(value: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const ms = Date.parse(`${value}T00:00:00.000Z`)
+  return Number.isFinite(ms) ? ms : null
+}
+
+function calendarDaysBetween(startYmd: string, endYmd: string): number | null {
+  const startMs = parseYmdMs(startYmd)
+  const endMs = parseYmdMs(endYmd)
+  if (startMs == null || endMs == null) return null
+  return Math.round((endMs - startMs) / 86400000)
 }
 
 export function inferFiltersResolvedFromRows(
@@ -76,21 +107,49 @@ export function publicCacheMetadata(
   }
 }
 
-export function isPublicDailyCacheFresh(input: PublicCacheFreshnessInput): boolean {
+export function publicCacheFreshnessStatus(input: PublicCacheFreshnessInput): PublicCacheFreshnessStatus {
   const now = input.now ?? new Date()
-  const builtMs = parseMs(input.builtAt)
-  if (builtMs == null) return false
-  if (now.getTime() - builtMs > PUBLIC_DAILY_CACHE_TTL_MS) return false
-
-  const endDate = input.filtersResolved?.endDate
-  if (typeof endDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return false
   const today = melbourneDateFor(now, input.timeZone)
   const yesterday = previousMelbourneDate(now, input.timeZone)
-  if (endDate !== today && endDate !== yesterday) return false
+  const reject = (
+    reason: PublicCacheFreshnessRejectionReason,
+    endDate: string | null = null,
+  ): PublicCacheFreshnessStatus => ({
+    fresh: false,
+    reason,
+    endDate,
+    today,
+    yesterday,
+  })
+  const builtMs = parseMs(input.builtAt)
+  if (builtMs == null) return reject('invalid_built_at')
+  if (now.getTime() - builtMs > PUBLIC_DAILY_CACHE_TTL_MS) return reject('built_at_too_old')
+
+  const endDate = input.filtersResolved?.endDate
+  if (typeof endDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return reject('invalid_end_date')
+  const daysBehindToday = calendarDaysBetween(endDate, today)
+  if (daysBehindToday != null && daysBehindToday > PUBLIC_DAILY_CACHE_MAX_STALENESS_DAYS) {
+    return reject('end_date_beyond_max_staleness', endDate)
+  }
+
+  const latestAvailable =
+    typeof input.latestAvailableCollectionDate === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(input.latestAvailableCollectionDate)
+      ? input.latestAvailableCollectionDate
+      : null
+  if (endDate !== today && endDate !== yesterday && endDate !== latestAvailable) {
+    return reject('end_date_not_current_or_latest', endDate)
+  }
 
   const latestRunMs = parseMs(input.latestRunFinishedAt)
-  if (latestRunMs == null) return true
+  if (latestRunMs == null) return { fresh: true, reason: null, endDate, today, yesterday }
   const sourceRunMs = parseMs(input.sourceRunFinishedAt)
-  if (sourceRunMs != null) return sourceRunMs >= latestRunMs
-  return builtMs >= latestRunMs
+  const sourceFresh = sourceRunMs != null ? sourceRunMs >= latestRunMs : builtMs >= latestRunMs
+  return sourceFresh
+    ? { fresh: true, reason: null, endDate, today, yesterday }
+    : reject('source_older_than_latest_run', endDate)
+}
+
+export function isPublicDailyCacheFresh(input: PublicCacheFreshnessInput): boolean {
+  return publicCacheFreshnessStatus(input).fresh
 }

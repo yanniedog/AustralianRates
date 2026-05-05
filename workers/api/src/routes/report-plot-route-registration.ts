@@ -3,8 +3,9 @@ import {
   resolveChartDateRangeFromDb,
   type ChartCacheSection,
 } from '../db/chart-cache'
+import { queryCachedLatestSectionMaxCollectionDate } from '../db/public-cache-support'
 import { getReadDb } from '../db/read-db'
-import { getCachedOrComputeReportPlot } from '../db/report-plot-cache'
+import { getCachedOrComputeReportPlot, resolveDefaultReportPlotCacheScope } from '../db/report-plot-cache'
 import { queryReportPlotPayload } from '../db/report-plot'
 import type { ReportPlotMode } from '../db/report-plot-types'
 import type { AppContext } from '../types'
@@ -142,6 +143,9 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
   )
   const effectiveFilters = alignTdImplicitBandEndDateToToday(resolvedFilters, options.section, mode, merged, todayYmd())
   const cacheParams = buildReportPlotCacheParams(merged, options.section, mode, effectiveFilters)
+  const latestAvailableCollectionDate = resolveDefaultReportPlotCacheScope(options.section, cacheParams)
+    ? await queryCachedLatestSectionMaxCollectionDate(getReadDb(c), options.section)
+    : null
 
   const liveAllowed = !(await isPublicLiveD1FallbackDisabled(c.env))
   let payload: Awaited<ReturnType<typeof getCachedOrComputeReportPlot>>
@@ -152,7 +156,10 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
       mode,
       cacheParams,
       () => queryReportPlotPayload(getReadDb(c), options.section, mode, effectiveFilters),
-      { allowLiveCompute: liveAllowed },
+      {
+        allowLiveCompute: liveAllowed,
+        latestAvailableCollectionDate,
+      },
     )
   } catch (error) {
     if (!liveAllowed) {

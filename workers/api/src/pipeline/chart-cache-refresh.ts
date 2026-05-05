@@ -1,15 +1,14 @@
 import { getReadDbFromEnv } from '../db/read-db'
-import {
-  writeD1ChartCache,
-} from '../db/chart-cache'
+import { writeD1ChartCache } from '../db/chart-cache'
+import { queryLatestSectionMaxCollectionDate } from '../db/public-cache-support'
 import { resolveFiltersForScope } from '../db/scope-filters'
 import { queryReportPlotPayload, refreshAllReportDeltaTables, REPORT_BANDS_SOURCE_VERSION } from '../db/report-plot'
 import { writeD1ReportPlotCache } from '../db/report-plot-cache'
 import { getLatestCompletedDailyRunFinishedAt } from '../db/run-reports'
 import { buildSnapshotKvKey, writeD1SnapshotCache, writeSnapshotKvBundles } from '../db/snapshot-cache'
+import { publicCacheFreshnessStatus } from '../db/public-cache-freshness'
 import { buildSnapshotPayload } from '../routes/snapshot-public'
 import type { EnvBindings } from '../types'
-import { getMelbourneNowParts } from '../utils/time'
 import { log } from '../utils/logger'
 import { PUBLIC_CACHE_DATASETS } from './public-cache-datasets'
 import {
@@ -37,7 +36,8 @@ async function isFreshPublicSnapshotPackage(
   env: EnvBindings,
   section: (typeof PUBLIC_PACKAGE_SECTIONS)[number],
   scope: string,
-  latestRunFinishedMs: number | null,
+  latestRunFinishedAt: string | null,
+  latestAvailableCollectionDate: string | null,
 ): Promise<boolean> {
   const kv = env.CHART_CACHE_KV
   if (!kv) return false
@@ -52,21 +52,15 @@ async function isFreshPublicSnapshotPackage(
       }
     }
     if (parsed.data?.reportPlotBands?.meta?.band_source_version !== REPORT_BANDS_SOURCE_VERSION) return false
-    const builtAt = new Date(String(parsed.builtAt || '')).getTime()
-    if (!Number.isFinite(builtAt) || Date.now() - builtAt >= PUBLIC_PACKAGE_REFRESH_FRESH_MS) return false
-    if (latestRunFinishedMs != null && latestRunFinishedMs > builtAt) return false
-    // Reject snapshots whose endDate is more than one Melbourne day old. Allow
-    // previous-day endDate for early-morning hours (after Melbourne midnight but
-    // before today's data is ingested) to avoid cron rebuilding every cycle.
-    const endDate = parsed.data?.filtersResolved?.endDate
-    if (endDate) {
-      const melbourneToday = getMelbourneNowParts().date
-      const melbourneYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(
-        new Date(Date.now() - 86400000),
-      )
-      if (endDate !== melbourneToday && endDate !== melbourneYesterday) return false
-    }
-    return true
+    const builtAt = String(parsed.builtAt || '')
+    const builtAtMs = new Date(builtAt).getTime()
+    if (!Number.isFinite(builtAtMs) || Date.now() - builtAtMs >= PUBLIC_PACKAGE_REFRESH_FRESH_MS) return false
+    return publicCacheFreshnessStatus({
+      builtAt,
+      filtersResolved: parsed.data?.filtersResolved,
+      latestRunFinishedAt,
+      latestAvailableCollectionDate,
+    }).fresh
   } catch {
     return false
   }
@@ -93,16 +87,28 @@ export async function refreshPublicSnapshotPackages(
   // regardless of how many (section, scope) pairs we iterate.
   const skipFreshnessCheck = options?.allScopes || options?.force
   const latestRunFinishedAt = await resolveLatestRunFinishedAt(env)
-  const latestRunFinishedMs = skipFreshnessCheck
-    ? null
-    : latestRunFinishedAt
-      ? new Date(latestRunFinishedAt).getTime()
-      : null
+  const latestAvailableBySection = new Map(
+    await Promise.all(
+      PUBLIC_PACKAGE_SECTIONS.map(async (section) => [
+        section,
+        skipFreshnessCheck ? null : await queryLatestSectionMaxCollectionDate(env.DB, section),
+      ] as const),
+    ),
+  )
   const overallStartedAt = Date.now()
   for (const { section, scope: cacheScope } of items) {
     const itemStartedAt = Date.now()
     try {
-      if (!skipFreshnessCheck && (await isFreshPublicSnapshotPackage(env, section, cacheScope, latestRunFinishedMs))) {
+      if (
+        !skipFreshnessCheck &&
+        (await isFreshPublicSnapshotPackage(
+          env,
+          section,
+          cacheScope,
+          latestRunFinishedAt,
+          latestAvailableBySection.get(section) ?? null,
+        ))
+      ) {
         skipped++
         continue
       }

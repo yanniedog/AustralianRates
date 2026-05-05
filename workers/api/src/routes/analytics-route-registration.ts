@@ -6,6 +6,7 @@ import {
   type ChartCacheScope,
   type ChartCacheSection,
 } from '../db/chart-cache'
+import { queryCachedLatestSectionMaxCollectionDate } from '../db/public-cache-support'
 import { getCachedOrComputeSnapshot } from '../db/snapshot-cache'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
@@ -87,6 +88,7 @@ async function getPackagedCompactSeries(
   section: ChartCacheSection,
   representation: AnalyticsRepresentation,
   params: QueryRecord,
+  latestAvailableCollectionDate: string | null,
 ): Promise<{ payload: Record<string, unknown>; cache: 'kv' | 'd1' | 'live'; scope: ChartCacheScope } | null> {
   if (!wantsCompactRows(params) || representation !== 'day') return null
   const scope = defaultSnapshotScope(section, params)
@@ -99,7 +101,11 @@ async function getPackagedCompactSeries(
       async () => {
         throw new Error('snapshot_live_compute_disabled')
       },
-      { allowD1Fallback: false, allowLiveCompute: false },
+      {
+        allowD1Fallback: false,
+        allowLiveCompute: false,
+        latestAvailableCollectionDate,
+      },
     )
     const entry = asRecord(asRecord(snapshot.data)?.analyticsSeries)
     if (!entry || entry.ok !== true || entry.rows_format !== 'grouped_v1') return null
@@ -135,8 +141,21 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   const db = getReadDb(c)
   const dbs = { canonicalDb: db, analyticsDb: db }
   const baseFilters = options.buildFilters(merged)
+  const params = toQueryParams(merged)
+  const couldUsePublicCache =
+    Boolean(defaultSnapshotScope(options.section, params)) ||
+    Boolean(resolveDefaultChartCacheScope(options.section, params))
+  const latestAvailableCollectionDate = couldUsePublicCache
+    ? await queryCachedLatestSectionMaxCollectionDate(db, options.section)
+    : null
 
-  const packaged = await getPackagedCompactSeries(c, options.section, requestedRepresentation, toQueryParams(merged))
+  const packaged = await getPackagedCompactSeries(
+    c,
+    options.section,
+    requestedRepresentation,
+    params,
+    latestAvailableCollectionDate,
+  )
   if (packaged) {
     withPublicCache(c, CHART_CACHE_MAX_AGE)
     if (c.req.method === 'GET') {
@@ -155,7 +174,7 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
       c.env,
       options.section,
       requestedRepresentation,
-      toQueryParams(merged),
+      params,
       () =>
         Promise.resolve()
           .then(async () => {
@@ -175,7 +194,10 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
             representation: rows.representation,
             fallbackReason: rows.fallbackReason,
           })),
-      { allowLiveCompute: liveAllowed },
+      {
+        allowLiveCompute: liveAllowed,
+        latestAvailableCollectionDate,
+      },
     )
   } catch (error) {
     if (!liveAllowed) {
