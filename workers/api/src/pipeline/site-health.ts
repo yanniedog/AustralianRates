@@ -1,6 +1,7 @@
 import { attachEconomicCoverageProbes, runEconomicCoverageAudit, type EconomicCoverageProbe, type EconomicCoverageReport } from '../db/economic-coverage-audit'
 import { runIntegrityChecks } from '../db/integrity-checks'
-import { ECONOMIC_SERIES_DEFINITIONS } from '../economic/registry'
+import { createEconomicVisibilityContext, shouldExcludeEconomicSeriesFromPublic, todayIso, type EconomicVisibilityStatus } from '../economic/public-visibility'
+import { ECONOMIC_SERIES_DEFINITIONS, isDerivedEconomicSeries } from '../economic/registry'
 import { getIngestPauseConfig } from '../db/app-config'
 import {
   getLatestHealthCheckRun,
@@ -456,12 +457,35 @@ function chunkSeriesIds(seriesIds: string[], size: number): string[][] {
   return chunks
 }
 
+function visibilityStatusFromCoverageRow(
+  row: EconomicCoverageReport['per_series'][number] | undefined,
+): EconomicVisibilityStatus | undefined {
+  if (!row?.status_row_present) return undefined
+  return {
+    last_observation_date: row.last_observation_date,
+    status: String(row.stored_status || ''),
+  }
+}
+
+function publicProbeSeriesIdsFromCoverage(coverage: EconomicCoverageReport, endDate: string): string[] {
+  const visibility = createEconomicVisibilityContext(endDate)
+  const coverageById = new Map(coverage.per_series.map((row) => [row.series_id, row]))
+  return ECONOMIC_SERIES_DEFINITIONS
+    .filter((definition) => {
+      if (isDerivedEconomicSeries(definition)) return true
+      const status = visibilityStatusFromCoverageRow(coverageById.get(definition.id))
+      return !shouldExcludeEconomicSeriesFromPublic(status, definition.frequency, visibility)
+    })
+    .map((definition) => definition.id)
+}
+
 async function checkEconomicData(
   env: EnvBindings,
   origin: string,
   capturePolicy: ProbeCapturePolicy,
+  coverage: EconomicCoverageReport,
 ): Promise<{ components: ComponentStatus[]; probes: EconomicCoverageProbe[] }> {
-  const allSeriesIds = ECONOMIC_SERIES_DEFINITIONS.map((definition) => definition.id)
+  const allSeriesIds = publicProbeSeriesIdsFromCoverage(coverage, todayIso())
   const batches = chunkSeriesIds(allSeriesIds, ECONOMIC_SERIES_PROBE_BATCH_SIZE)
   const probeResults = await Promise.all([
     requestProbe(env, {
@@ -628,7 +652,7 @@ export async function runSiteHealthChecks(
     runE2ECheck(env, { origin, capturePolicy }),
     queryProblemLogs(env.DB, { sinceTs: actionableSinceTs, limit: actionableLogLimit }),
     pauseConfigPromise,
-    checkEconomicData(env, origin, capturePolicy),
+    economicPromise.then((coverage) => checkEconomicData(env, origin, capturePolicy, coverage)),
     economicPromise,
     loadCoverageGapAuditReport(env.DB).catch(() => null),
     getLatestHealthCheckRun(env.DB).catch(() => null),
