@@ -121,6 +121,11 @@
         if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
     }
 
+    function reloadHeroSurfacesFromSnapshot(event) {
+        if (!event || !event.detail) return;
+        reloadHeroSurfaces();
+    }
+
     function reloadStartupSurfaces() {
         reloadHeroSurfaces();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
@@ -316,6 +321,7 @@
     }
 
     if (els.applyFilters) els.applyFilters.addEventListener('click', applyFilters);
+    window.addEventListener('AR:snapshot-ready', reloadHeroSurfacesFromSnapshot);
     if (els.workspaceStatusRetry) {
         els.workspaceStatusRetry.addEventListener('click', function () {
             retryStartup();
