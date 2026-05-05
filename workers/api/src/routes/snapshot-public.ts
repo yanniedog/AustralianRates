@@ -265,10 +265,18 @@ export async function buildSnapshotPayload(
   env: { DB: D1Database; CHART_CACHE_KV?: KVNamespace },
   section: DatasetKind,
   scope: SnapshotScope = 'default',
-  options?: { sourceRunFinishedAt?: string | null },
+  options?: {
+    sourceRunFinishedAt?: string | null
+    latestAvailableCollectionDate?: string | null
+    filters?: ScopedFilters
+  },
 ): Promise<SnapshotPayload> {
   const db = env.DB
-  const filters = await resolveFiltersForScope(db, section, scope)
+  const filters =
+    options?.filters ??
+    (await resolveFiltersForScope(db, section, scope, {
+      latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    }))
   const includeSeries = await shouldIncludeAnalyticsSeries(db)
 
   // Fetch analytics rows once (if bundling); derive both the grouped wire form and
@@ -374,7 +382,7 @@ async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKin
     // KV-only would 503 after SNAPSHOT_PAYLOAD_VERSION bumps until cron repopulates.
     // D1 then live compute backfill cache; responses still use public Cache-Control.
     payload = await getCachedOrComputeSnapshot(c.env, section, scope, () =>
-      buildSnapshotPayload(c.env, section, scope),
+      buildSnapshotPayload(c.env, section, scope, { latestAvailableCollectionDate }),
       { latestAvailableCollectionDate },
     )
   } catch {

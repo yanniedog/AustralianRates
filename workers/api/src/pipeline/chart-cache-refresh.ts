@@ -74,6 +74,17 @@ async function resolveLatestRunFinishedAt(env: EnvBindings): Promise<string | nu
   }
 }
 
+async function queryLatestAvailableBySection(db: D1Database): Promise<Map<(typeof PUBLIC_PACKAGE_SECTIONS)[number], string | null>> {
+  return new Map(
+    await Promise.all(
+      PUBLIC_PACKAGE_SECTIONS.map(async (section) => [
+        section,
+        await queryLatestSectionMaxCollectionDate(db, section),
+      ] as const),
+    ),
+  )
+}
+
 export async function refreshPublicSnapshotPackages(
   env: EnvBindings,
   options?: { allScopes?: boolean; force?: boolean; items?: PublicPackageScope[] },
@@ -87,14 +98,7 @@ export async function refreshPublicSnapshotPackages(
   // regardless of how many (section, scope) pairs we iterate.
   const skipFreshnessCheck = options?.allScopes || options?.force
   const latestRunFinishedAt = await resolveLatestRunFinishedAt(env)
-  const latestAvailableBySection = new Map(
-    await Promise.all(
-      PUBLIC_PACKAGE_SECTIONS.map(async (section) => [
-        section,
-        skipFreshnessCheck ? null : await queryLatestSectionMaxCollectionDate(env.DB, section),
-      ] as const),
-    ),
-  )
+  const latestAvailableBySection = await queryLatestAvailableBySection(env.DB)
   const overallStartedAt = Date.now()
   for (const { section, scope: cacheScope } of items) {
     const itemStartedAt = Date.now()
@@ -112,7 +116,10 @@ export async function refreshPublicSnapshotPackages(
         skipped++
         continue
       }
-      const snapshot = await buildSnapshotPayload(env, section, cacheScope, { sourceRunFinishedAt: latestRunFinishedAt })
+      const snapshot = await buildSnapshotPayload(env, section, cacheScope, {
+        sourceRunFinishedAt: latestRunFinishedAt,
+        latestAvailableCollectionDate: latestAvailableBySection.get(section) ?? null,
+      })
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
       refreshed++
     } catch (e) {
@@ -140,6 +147,7 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
   const errors: string[] = []
   let refreshed = 0
   const sourceRunFinishedAt = await resolveLatestRunFinishedAt(env)
+  const latestAvailableBySection = await queryLatestAvailableBySection(db)
 
   try {
     await refreshAllReportDeltaTables(db)
@@ -155,7 +163,8 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
   for (const dataset of PUBLIC_CACHE_DATASETS) {
     const section = dataset.section
     for (const cacheScope of precomputedSnapshotScopesForSection(section)) {
-      const filters = await resolveFiltersForScope(rd, section, cacheScope)
+      const latestAvailableCollectionDate = latestAvailableBySection.get(section) ?? null
+      const filters = await resolveFiltersForScope(rd, section, cacheScope, { latestAvailableCollectionDate })
       for (const rep of REPRESENTATIONS) {
         try {
           const result = await dataset.collectAnalyticsRows(dbs, rep, {
@@ -193,7 +202,11 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
       }
 
       try {
-        const snapshot = await buildSnapshotPayload(env, section, cacheScope, { sourceRunFinishedAt })
+        const snapshot = await buildSnapshotPayload(env, section, cacheScope, {
+          sourceRunFinishedAt,
+          latestAvailableCollectionDate,
+          filters,
+        })
         await writeD1SnapshotCache(db, section, cacheScope, snapshot, { sourceRunFinishedAt })
         await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
         refreshed++
