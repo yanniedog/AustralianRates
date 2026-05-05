@@ -10,7 +10,7 @@ import { upsertLatestSavingsSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
 import { markProductsSeen } from './product-status'
 import { nowIso } from '../utils/time'
-import { equalStateValue, filterChangedRows } from './change-aware-writes'
+import { chunkRows, equalStateValue, filterChangedRows } from './change-aware-writes'
 import {
   assertHistoricalWriteAllowed,
   isHistoricalWriteContractError,
@@ -86,14 +86,6 @@ function savingsRowUnchanged(current: Record<string, unknown>, row: NormalizedSa
     [current.monthly_fee, row.monthlyFee ?? null],
   ]
   return comparisons.every(([left, right]) => equalStateValue(left, right))
-}
-
-function chunk<T>(rows: T[], size: number): T[][] {
-  const output: T[][] = []
-  for (let index = 0; index < rows.length; index += size) {
-    output.push(rows.slice(index, index + size))
-  }
-  return output
 }
 
 async function filterChangedSavingsRows(db: D1Database, rows: NormalizedSavingsRow[]): Promise<{
@@ -361,7 +353,7 @@ async function upsertSavingsRateRowsBatched(
   const preparedRows = await Promise.all(rows.map((row) => prepareSavingsRow(db, row)))
   const result = emptyWriteResult()
 
-  for (const part of chunk(preparedRows, 32)) {
+  for (const part of chunkRows(preparedRows, 32)) {
     try {
       await db.batch(part.map((prepared) => buildHistoricalSavingsRateStatement(db, prepared)))
       for (const prepared of part) {
@@ -418,26 +410,26 @@ async function upsertSavingsRateRowsBatched(
 async function touchUnchangedSavingsRowsCurrentState(
   db: D1Database,
   rows: NormalizedSavingsRow[],
+  options: SavingsRateWriteOptions,
 ): Promise<void> {
-  for (const part of chunk(rows, 32)) {
+  const touchOptions: SavingsRateWriteOptions = {
+    emitCanonicalFeed: false,
+    emitProjectionChangeFeed: false,
+    updateCatalogs: options.updateCatalogs !== false,
+    markSeriesSeen: options.markSeriesSeen !== false,
+    upsertLatestSeries: options.upsertLatestSeries !== false,
+    writeProjection: options.writeProjection !== false,
+  }
+  const touchProductPresence = options.markSeriesSeen !== false
+  for (const part of chunkRows(rows, 32)) {
     const preparedRows = await Promise.all(
       part.map((row) => prepareSavingsRow(db, row, { storeCdrDetailPayload: false })),
     )
-    for (const prepared of preparedRows) {
-      await runSavingsPostWriteSideEffects(
-        db,
-        prepared,
-        {
-          emitCanonicalFeed: false,
-          emitProjectionChangeFeed: false,
-          updateCatalogs: true,
-          markSeriesSeen: true,
-          upsertLatestSeries: true,
-          writeProjection: true,
-        },
-        true,
-      )
-    }
+    await Promise.all(
+      preparedRows.map((prepared) =>
+        runSavingsPostWriteSideEffects(db, prepared, touchOptions, touchProductPresence),
+      ),
+    )
   }
 }
 
@@ -454,7 +446,7 @@ export async function upsertSavingsRateRows(
     inputRows = filtered.changed
     unchanged = filtered.unchanged
     if (filtered.unchangedRows.length > 0) {
-      await touchUnchangedSavingsRowsCurrentState(db, filtered.unchangedRows)
+      await touchUnchangedSavingsRowsCurrentState(db, filtered.unchangedRows, options)
     }
     if (inputRows.length === 0) return { written: 0, unchanged, skippedSideEffects: 0 }
   }

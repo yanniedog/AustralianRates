@@ -10,7 +10,7 @@ import { upsertLatestHomeLoanSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
 import { markProductsSeen } from './product-status'
 import { nowIso } from '../utils/time'
-import { equalStateValue, filterChangedRows } from './change-aware-writes'
+import { chunkRows, equalStateValue, filterChangedRows } from './change-aware-writes'
 import {
   assertHistoricalWriteAllowed,
   isHistoricalWriteContractError,
@@ -110,14 +110,6 @@ const UPSERT_LATEST_HOME_LOAN_SERIES_SQL = `INSERT INTO latest_home_loan_series 
             excluded.collection_date = latest_home_loan_series.collection_date
             AND excluded.parsed_at >= latest_home_loan_series.parsed_at
           )`
-
-function chunk<T>(rows: T[], size: number): T[][] {
-  const output: T[][] = []
-  for (let index = 0; index < rows.length; index += size) {
-    output.push(rows.slice(index, index + size))
-  }
-  return output
-}
 
 type PreparedHomeLoanRow = {
   row: NormalizedRateRow
@@ -460,7 +452,7 @@ async function upsertHistoricalRateRowsFastPath(
   const preparedRows = await Promise.all(rows.map((row) => prepareHomeLoanRow(db, row)))
   const result = emptyWriteResult()
 
-  for (const part of chunk(preparedRows, 32)) {
+  for (const part of chunkRows(preparedRows, 32)) {
     try {
       const statements: D1PreparedStatement[] = []
       for (const prepared of part) {
@@ -635,26 +627,26 @@ export async function upsertHistoricalRateRow(
 async function touchUnchangedHomeLoanRowsCurrentState(
   db: D1Database,
   rows: NormalizedRateRow[],
+  options: HistoricalRateWriteOptions,
 ): Promise<void> {
-  for (const part of chunk(rows, 32)) {
+  const touchOptions: HistoricalRateWriteOptions = {
+    emitCanonicalFeed: false,
+    emitProjectionChangeFeed: false,
+    updateCatalogs: options.updateCatalogs !== false,
+    markSeriesSeen: options.markSeriesSeen !== false,
+    upsertLatestSeries: options.upsertLatestSeries !== false,
+    writeProjection: options.writeProjection !== false,
+  }
+  const touchProductPresence = options.markSeriesSeen !== false
+  for (const part of chunkRows(rows, 32)) {
     const preparedRows = await Promise.all(
       part.map((row) => prepareHomeLoanRow(db, row, { storeCdrDetailPayload: false })),
     )
-    for (const prepared of preparedRows) {
-      await runHomeLoanPostWriteSideEffects(
-        db,
-        prepared,
-        {
-          emitCanonicalFeed: false,
-          emitProjectionChangeFeed: false,
-          updateCatalogs: true,
-          markSeriesSeen: true,
-          upsertLatestSeries: true,
-          writeProjection: true,
-        },
-        true,
-      )
-    }
+    await Promise.all(
+      preparedRows.map((prepared) =>
+        runHomeLoanPostWriteSideEffects(db, prepared, touchOptions, touchProductPresence),
+      ),
+    )
   }
 }
 
@@ -671,7 +663,7 @@ export async function upsertHistoricalRateRows(
     inputRows = filtered.changed
     unchanged = filtered.unchanged
     if (filtered.unchangedRows.length > 0) {
-      await touchUnchangedHomeLoanRowsCurrentState(db, filtered.unchangedRows)
+      await touchUnchangedHomeLoanRowsCurrentState(db, filtered.unchangedRows, options)
     }
     if (inputRows.length === 0) return { written: 0, unchanged, skippedSideEffects: 0 }
   }

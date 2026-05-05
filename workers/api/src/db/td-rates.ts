@@ -10,7 +10,7 @@ import { upsertLatestTdSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
 import { markProductsSeen } from './product-status'
 import { nowIso } from '../utils/time'
-import { equalStateValue, filterChangedRows } from './change-aware-writes'
+import { chunkRows, equalStateValue, filterChangedRows } from './change-aware-writes'
 import {
   assertHistoricalWriteAllowed,
   isHistoricalWriteContractError,
@@ -82,14 +82,6 @@ function tdRowUnchanged(current: Record<string, unknown>, row: NormalizedTdRow):
     [current.max_deposit, row.maxDeposit ?? null],
   ]
   return comparisons.every(([left, right]) => equalStateValue(left, right))
-}
-
-function chunk<T>(rows: T[], size: number): T[][] {
-  const output: T[][] = []
-  for (let index = 0; index < rows.length; index += size) {
-    output.push(rows.slice(index, index + size))
-  }
-  return output
 }
 
 async function filterChangedTdRows(db: D1Database, rows: NormalizedTdRow[]): Promise<{
@@ -349,7 +341,7 @@ async function upsertTdRateRowsBatched(
   const preparedRows = await Promise.all(rows.map((row) => prepareTdRow(db, row)))
   const result = emptyWriteResult()
 
-  for (const part of chunk(preparedRows, 32)) {
+  for (const part of chunkRows(preparedRows, 32)) {
     try {
       await db.batch(part.map((prepared) => buildHistoricalTdRateStatement(db, prepared)))
       for (const prepared of part) {
@@ -406,22 +398,26 @@ async function upsertTdRateRowsBatched(
 async function touchUnchangedTdRowsCurrentState(
   db: D1Database,
   rows: NormalizedTdRow[],
+  options: TdRateWriteOptions,
 ): Promise<void> {
   const touchOptions: TdRateWriteOptions = {
     emitCanonicalFeed: false,
     emitProjectionChangeFeed: false,
-    updateCatalogs: true,
-    markSeriesSeen: true,
-    upsertLatestSeries: true,
-    writeProjection: true,
+    updateCatalogs: options.updateCatalogs !== false,
+    markSeriesSeen: options.markSeriesSeen !== false,
+    upsertLatestSeries: options.upsertLatestSeries !== false,
+    writeProjection: options.writeProjection !== false,
   }
-  for (const part of chunk(rows, 32)) {
+  const touchProductPresence = options.markSeriesSeen !== false
+  for (const part of chunkRows(rows, 32)) {
     const preparedRows = await Promise.all(
       part.map((row) => prepareTdRow(db, row, { storeCdrDetailPayload: false })),
     )
-    for (const prepared of preparedRows) {
-      await runTdPostWriteSideEffects(db, prepared, touchOptions, true)
-    }
+    await Promise.all(
+      preparedRows.map((prepared) =>
+        runTdPostWriteSideEffects(db, prepared, touchOptions, touchProductPresence),
+      ),
+    )
   }
 }
 
@@ -438,7 +434,7 @@ export async function upsertTdRateRows(
     inputRows = filtered.changed
     unchanged = filtered.unchanged
     if (filtered.unchangedRows.length > 0) {
-      await touchUnchangedTdRowsCurrentState(db, filtered.unchangedRows)
+      await touchUnchangedTdRowsCurrentState(db, filtered.unchangedRows, options)
     }
     if (inputRows.length === 0) return { written: 0, unchanged, skippedSideEffects: 0 }
   }
