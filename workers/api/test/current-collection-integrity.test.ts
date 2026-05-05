@@ -62,6 +62,18 @@ describe('summarizeCurrentCollectionRoster', () => {
     expect(summary.accountedProductIds).toEqual(['p1', 'p2'])
     expect(summary.missingExpectedProductIds).toEqual(['p3'])
   })
+
+  it('does not treat stored products as unexpected when the upstream roster is absent', () => {
+    const summary = summarizeCurrentCollectionRoster({
+      expectedProductIds: [],
+      storedProductIds: ['p1', 'p2'],
+      successfulDetailFetchProductIds: ['p1', 'p2'],
+    })
+
+    expect(summary.accountedProductIds).toEqual(['p1', 'p2'])
+    expect(summary.missingExpectedProductIds).toEqual([])
+    expect(summary.unexpectedStoredProductIds).toEqual([])
+  })
 })
 
 describe('pickCurrentCollectionStatusRow', () => {

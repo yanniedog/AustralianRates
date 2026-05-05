@@ -4,7 +4,11 @@ import {
   pickBestDailyLenderDatasetStatusRows,
   type DailyLenderDatasetStatusRow,
 } from './lender-dataset-status'
-import { isLenderDatasetCollectionComplete, assessLenderDatasetCoverage } from '../utils/lender-dataset-invariants'
+import {
+  assessLenderDatasetCoverage,
+  isFinalizedPartialDetailCompletionAccountedByRoster,
+  isLenderDatasetCollectionComplete,
+} from '../utils/lender-dataset-invariants'
 
 type IntegrityCheckResult = {
   name: string
@@ -122,15 +126,18 @@ export function summarizeCurrentCollectionRoster(input: {
   const successfulDetailFetches = new Set(sortedUnique(input.successfulDetailFetchProductIds ?? []))
   const anomalies = new Set(sortedUnique(input.anomalyProductIds ?? []))
   const accounted = unionProductSets(stored, successfulDetailFetches, anomalies)
+  const hasExpectedRoster = expected.size > 0
 
   return {
     accountedProductIds: Array.from(accounted).sort(),
     missingExpectedProductIds: Array.from(expected)
       .filter((productId) => !accounted.has(productId))
       .sort(),
-    unexpectedStoredProductIds: Array.from(stored)
-      .filter((productId) => !expected.has(productId))
-      .sort(),
+    unexpectedStoredProductIds: hasExpectedRoster
+      ? Array.from(stored)
+        .filter((productId) => !expected.has(productId))
+        .sort()
+      : [],
   }
 }
 
@@ -463,6 +470,7 @@ async function runCurrentCollectionExpectedProductRosterCheck(
   let missingRunScopeCount = 0
   let incompleteScopeCount = 0
   let rosterMismatchScopeCount = 0
+  let missingRosterSourceScopeCount = 0
   let missingExpectedProductCount = 0
   let unexpectedStoredProductCount = 0
 
@@ -500,26 +508,6 @@ async function runCurrentCollectionExpectedProductRosterCheck(
         continue
       }
 
-      if (!isLenderDatasetCollectionComplete(row)) {
-        const assessment = assessLenderDatasetCoverage(row)
-        issues.push({
-          lender_code: row.lender_code,
-          bank_name: row.bank_name,
-          dataset_kind: row.dataset_kind,
-          collection_date: row.collection_date,
-          run_id: row.run_id,
-          reasons: assessment.reasons.length > 0 ? assessment.reasons : ['collection_incomplete'],
-          expected_product_count: 0,
-          accounted_product_count: 0,
-          stored_product_count: 0,
-          missing_expected_product_ids: [],
-          unexpected_stored_product_ids: [],
-        })
-        incompleteScopeCount += 1
-        byDataset[dataset].failing_scopes += 1
-        continue
-      }
-
       const seenKey = `${row.run_id}|${row.lender_code}|${row.dataset_kind}|${row.bank_name}`
       const storedKey = `${row.run_id}|${row.dataset_kind}|${row.bank_name}`
       const outcomeKey = `${row.run_id}|${row.lender_code}|${row.dataset_kind}`
@@ -535,10 +523,48 @@ async function runCurrentCollectionExpectedProductRosterCheck(
       })
       const missingExpectedProductIds = rosterSummary.missingExpectedProductIds
       const unexpectedStoredProductIds = rosterSummary.unexpectedStoredProductIds
+
+      const completeByStatus = isLenderDatasetCollectionComplete(row)
+      if (!completeByStatus) {
+        const assessment = assessLenderDatasetCoverage(row)
+        const onlyDetailIncomplete =
+          assessment.reasons.length === 1 && assessment.reasons[0] === 'detail_processing_incomplete'
+        const completeByRosterAccountedPartial =
+          onlyDetailIncomplete &&
+          isFinalizedPartialDetailCompletionAccountedByRoster(row, {
+            expectedProductCount: expectedProducts.size,
+            missingExpectedProductCount: missingExpectedProductIds.length,
+          })
+        if (!completeByRosterAccountedPartial) {
+          issues.push({
+            lender_code: row.lender_code,
+            bank_name: row.bank_name,
+            dataset_kind: row.dataset_kind,
+            collection_date: row.collection_date,
+            run_id: row.run_id,
+            reasons: assessment.reasons.length > 0 ? assessment.reasons : ['collection_incomplete'],
+            expected_product_count: expectedProducts.size,
+            accounted_product_count: rosterSummary.accountedProductIds.length,
+            stored_product_count: storedProducts.size,
+            missing_expected_product_ids: missingExpectedProductIds.slice(0, 12),
+            unexpected_stored_product_ids: unexpectedStoredProductIds.slice(0, 12),
+          })
+          incompleteScopeCount += 1
+          byDataset[dataset].failing_scopes += 1
+          continue
+        }
+      }
+
       const reasons: string[] = []
 
-      if (expectedProducts.size === 0 && (Number(row.expected_detail_count ?? 0) > 0 || Number(row.written_row_count ?? 0) > 0)) {
-        reasons.push('missing_upstream_product_roster')
+      if (
+        expectedProducts.size === 0 &&
+        (Number(row.expected_detail_count ?? 0) > 0 ||
+          Number(row.accepted_row_count ?? 0) > 0 ||
+          Number(row.written_row_count ?? 0) > 0 ||
+          Number(row.unchanged_row_count ?? 0) > 0)
+      ) {
+        missingRosterSourceScopeCount += 1
       }
       if (missingExpectedProductIds.length > 0) {
         reasons.push('missing_expected_products')
@@ -580,6 +606,7 @@ async function runCurrentCollectionExpectedProductRosterCheck(
       missing_run_scope_count: missingRunScopeCount,
       incomplete_scope_count: incompleteScopeCount,
       roster_mismatch_scope_count: rosterMismatchScopeCount,
+      missing_roster_source_scope_count: missingRosterSourceScopeCount,
       missing_expected_product_count: missingExpectedProductCount,
       unexpected_stored_product_count: unexpectedStoredProductCount,
       by_dataset: byDataset,

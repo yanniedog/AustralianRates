@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   assessLenderDatasetCoverage,
+  isFinalizedPartialDetailCompletionAccountedByRoster,
   isLenderDatasetCollectionComplete,
   isLenderDatasetReadyForFinalization,
 } from '../src/utils/lender-dataset-invariants'
@@ -164,6 +165,83 @@ describe('lender dataset invariants', () => {
 
     expect(assessment.severity).toBe('error')
     expect(assessment.reasons).toContain('accepted_written_mismatch')
+  })
+
+  it('keeps generic readiness strict for finalized partial detail completion without roster proof', () => {
+    const assessment = assessLenderDatasetCoverage({
+      expected_detail_count: 9,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 154,
+      written_row_count: 91,
+      unchanged_row_count: 63,
+      detail_fetch_event_count: 8,
+      lineage_error_count: 0,
+      completed_detail_count: 8,
+      failed_detail_count: 0,
+      finalized_at: '2026-05-05T11:27:14.858Z',
+    })
+
+    expect(assessment.severity).toBe('error')
+    expect(assessment.reasons).toContain('detail_processing_incomplete')
+    expect(isLenderDatasetReadyForFinalization({
+      expected_detail_count: 9,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 154,
+      written_row_count: 91,
+      unchanged_row_count: 63,
+      detail_fetch_event_count: 8,
+      lineage_error_count: 0,
+      completed_detail_count: 8,
+      failed_detail_count: 0,
+      finalized_at: '2026-05-05T11:27:14.858Z',
+    })).toEqual({ ready: false, reason: 'detail_processing_incomplete' })
+    expect(isLenderDatasetReadyForFinalization({
+      expected_detail_count: 9,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 154,
+      written_row_count: 91,
+      unchanged_row_count: 63,
+      detail_fetch_event_count: 8,
+      lineage_error_count: 0,
+      completed_detail_count: 8,
+      failed_detail_count: 0,
+      finalized_at: null,
+    })).toEqual({ ready: false, reason: 'detail_processing_incomplete' })
+  })
+
+  it('accepts finalized partial detail completion only with full expected-roster coverage', () => {
+    const snapshot = {
+      expected_detail_count: 9,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 154,
+      written_row_count: 91,
+      unchanged_row_count: 63,
+      detail_fetch_event_count: 8,
+      lineage_error_count: 0,
+      completed_detail_count: 8,
+      failed_detail_count: 0,
+      finalized_at: '2026-05-05T11:27:14.858Z',
+    }
+
+    expect(isFinalizedPartialDetailCompletionAccountedByRoster(snapshot, {
+      expectedProductCount: 9,
+      missingExpectedProductCount: 0,
+    })).toBe(true)
+    expect(isFinalizedPartialDetailCompletionAccountedByRoster(snapshot, {
+      expectedProductCount: 9,
+      missingExpectedProductCount: 1,
+    })).toBe(false)
+    expect(isFinalizedPartialDetailCompletionAccountedByRoster(snapshot, {
+      expectedProductCount: 0,
+      missingExpectedProductCount: 0,
+    })).toBe(false)
+    expect(isFinalizedPartialDetailCompletionAccountedByRoster({
+      ...snapshot,
+      finalized_at: null,
+    }, {
+      expectedProductCount: 9,
+      missingExpectedProductCount: 0,
+    })).toBe(false)
   })
 
   it('does not flag terminal no-row completion as zero-accepted coverage error', () => {

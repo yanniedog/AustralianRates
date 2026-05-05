@@ -25,6 +25,30 @@ export type LenderDatasetCoverageAssessment = {
   detailFetchEvents: number
 }
 
+type PartialCompletionSnapshot = Pick<
+  LenderDatasetInvariantSnapshot,
+  | 'expected_detail_count'
+  | 'accepted_row_count'
+  | 'written_row_count'
+  | 'unchanged_row_count'
+  | 'detail_fetch_event_count'
+  | 'completed_detail_count'
+  | 'failed_detail_count'
+>
+
+type CoverageSnapshot = PartialCompletionSnapshot & Pick<
+  LenderDatasetInvariantSnapshot,
+  | 'index_fetch_succeeded'
+  | 'lineage_error_count'
+  | 'finalized_at'
+>
+
+type ReadinessSnapshot = PartialCompletionSnapshot & Pick<
+  LenderDatasetInvariantSnapshot,
+  | 'index_fetch_succeeded'
+  | 'lineage_error_count'
+> & { finalized_at?: string | null }
+
 function asCount(value: number | string | null | undefined): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 0
@@ -35,46 +59,48 @@ function hasIndexSuccess(snapshot: Pick<LenderDatasetInvariantSnapshot, 'index_f
   return asCount(snapshot.index_fetch_succeeded) > 0
 }
 
+function hasAccountedPartialCompletion(snapshot: PartialCompletionSnapshot): boolean {
+  const expectedDetails = asCount(snapshot.expected_detail_count)
+  const completedDetails = asCount(snapshot.completed_detail_count)
+  if (expectedDetails <= 0) return false
+  if (asCount(snapshot.accepted_row_count) <= 0) return false
+  if (asCount(snapshot.written_row_count) <= 0 && asCount(snapshot.unchanged_row_count) <= 0) return false
+  if (asCount(snapshot.detail_fetch_event_count) <= 0) return false
+  const minCompleted = Math.ceil(expectedDetails * MIN_COMPLETED_RATIO_FOR_PARTIAL_FINALIZATION)
+  return completedDetails >= minCompleted
+}
+
 /** Partial detail failures are acceptable once enough details completed and at least some rows persisted. */
-function allowsPartialFailureFinalization(
-  snapshot: Pick<
-    LenderDatasetInvariantSnapshot,
-    | 'expected_detail_count'
-    | 'accepted_row_count'
-    | 'written_row_count'
-    | 'detail_fetch_event_count'
-    | 'completed_detail_count'
-    | 'failed_detail_count'
-  >,
-): boolean {
+function allowsPartialFailureFinalization(snapshot: PartialCompletionSnapshot): boolean {
   const expectedDetails = asCount(snapshot.expected_detail_count)
   const completedDetails = asCount(snapshot.completed_detail_count)
   const failedDetails = asCount(snapshot.failed_detail_count)
   const processedDetails = completedDetails + failedDetails
   if (expectedDetails <= 0 || failedDetails <= 0) return false
   if (processedDetails < expectedDetails) return false
-  if (asCount(snapshot.accepted_row_count) <= 0) return false
-  if (asCount(snapshot.written_row_count) <= 0) return false
-  if (asCount(snapshot.detail_fetch_event_count) <= 0) return false
-  const minCompleted = Math.ceil(expectedDetails * MIN_COMPLETED_RATIO_FOR_PARTIAL_FINALIZATION)
-  return completedDetails >= minCompleted
+  return hasAccountedPartialCompletion(snapshot)
 }
 
-export function assessLenderDatasetCoverage(
-  snapshot: Pick<
-    LenderDatasetInvariantSnapshot,
-    | 'expected_detail_count'
-    | 'index_fetch_succeeded'
-    | 'accepted_row_count'
-    | 'written_row_count'
-    | 'unchanged_row_count'
-    | 'detail_fetch_event_count'
-    | 'lineage_error_count'
-    | 'completed_detail_count'
-    | 'failed_detail_count'
-    | 'finalized_at'
-  >,
-): LenderDatasetCoverageAssessment {
+function isFinalizedPartialDetailCompletion(snapshot: PartialCompletionSnapshot & { finalized_at?: string | null }): boolean {
+  const expectedDetails = asCount(snapshot.expected_detail_count)
+  const completedDetails = asCount(snapshot.completed_detail_count)
+  const failedDetails = asCount(snapshot.failed_detail_count)
+  const processedDetails = completedDetails + failedDetails
+  if (!snapshot.finalized_at) return false
+  if (expectedDetails <= 0 || processedDetails >= expectedDetails) return false
+  return hasAccountedPartialCompletion(snapshot)
+}
+
+export function isFinalizedPartialDetailCompletionAccountedByRoster(
+  snapshot: CoverageSnapshot,
+  roster: { expectedProductCount: number; missingExpectedProductCount: number },
+): boolean {
+  if (asCount(roster.expectedProductCount) <= 0) return false
+  if (asCount(roster.missingExpectedProductCount) > 0) return false
+  return isFinalizedPartialDetailCompletion(snapshot)
+}
+
+export function assessLenderDatasetCoverage(snapshot: CoverageSnapshot): LenderDatasetCoverageAssessment {
   const expectedDetails = asCount(snapshot.expected_detail_count)
   const completedDetails = asCount(snapshot.completed_detail_count)
   const failedDetails = asCount(snapshot.failed_detail_count)
@@ -164,18 +190,7 @@ function isCompletedWithNoAcceptedRows(
 }
 
 export function isLenderDatasetReadyForFinalization(
-  snapshot: Pick<
-    LenderDatasetInvariantSnapshot,
-    | 'expected_detail_count'
-    | 'index_fetch_succeeded'
-    | 'accepted_row_count'
-    | 'written_row_count'
-    | 'unchanged_row_count'
-    | 'detail_fetch_event_count'
-    | 'lineage_error_count'
-    | 'completed_detail_count'
-    | 'failed_detail_count'
-  >,
+  snapshot: ReadinessSnapshot,
 ): { ready: boolean; reason: string | null } {
   if (asCount(snapshot.lineage_error_count) > 0) {
     return { ready: false, reason: 'lineage_errors_present' }
@@ -215,7 +230,9 @@ export function isLenderDatasetReadyForFinalization(
   if (asCount(snapshot.detail_fetch_event_count) <= 0) {
     return { ready: false, reason: 'detail_fetch_events_missing' }
   }
-  if (processedDetails < expectedDetails) return { ready: false, reason: 'detail_processing_incomplete' }
+  if (processedDetails < expectedDetails) {
+    return { ready: false, reason: 'detail_processing_incomplete' }
+  }
   if (failedDetails > 0 && !allowsPartialFailureFinalization(snapshot)) {
     return { ready: false, reason: 'failed_detail_fetches_present' }
   }
