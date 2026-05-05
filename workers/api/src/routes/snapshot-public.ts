@@ -59,6 +59,7 @@ import {
   buildPrecomputedChartScopeForPreset,
   type ChartCacheSection,
 } from '../db/chart-cache'
+import { queryLatestSectionMaxCollectionDate } from '../db/public-cache-support'
 import { resolveFiltersForScope, type ScopedFilters, type ScopePreset } from '../db/scope-filters'
 import { parseChartWindow, type ChartWindow } from '../utils/chart-window'
 import { getAppConfig } from '../db/app-config'
@@ -367,12 +368,14 @@ async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKin
   const query = c.req.query()
   const scope = resolveRequestScope(section, query.chart_window, query.preset)
   const wantsLite = parseBooleanQuery(query.lite)
+  const latestAvailableCollectionDate = await queryLatestSectionMaxCollectionDate(getReadDb(c), section)
   let payload: Awaited<ReturnType<typeof getCachedOrComputeSnapshot>>
   try {
     // KV-only would 503 after SNAPSHOT_PAYLOAD_VERSION bumps until cron repopulates.
     // D1 then live compute backfill cache; responses still use public Cache-Control.
     payload = await getCachedOrComputeSnapshot(c.env, section, scope, () =>
       buildSnapshotPayload(c.env, section, scope),
+      { latestAvailableCollectionDate },
     )
   } catch {
     c.header('Cache-Control', 'no-store')

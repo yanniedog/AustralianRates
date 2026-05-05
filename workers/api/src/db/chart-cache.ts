@@ -26,10 +26,14 @@ import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
 import {
   PUBLIC_DAILY_CACHE_TTL_SECONDS,
   inferFiltersResolvedFromRows,
-  isPublicDailyCacheFresh,
+  publicCacheFreshnessStatus,
   publicCacheMetadata,
   type PublicCacheMetadata,
 } from './public-cache-freshness'
+import {
+  logPublicCacheWedgedSection,
+  serializeJsonForKv,
+} from './public-cache-support'
 
 export type ChartCacheSection = 'home_loans' | 'savings' | 'term_deposits'
 type ChartCachePreset = 'consumer-default'
@@ -509,7 +513,12 @@ export async function readD1ChartCache(
   section: ChartCacheSection,
   representation: 'day' | 'change',
   scope: ChartCacheScope = 'default',
-  options?: { latestRunFinishedAt?: string | null },
+  options?: {
+    latestRunFinishedAt?: string | null
+    latestAvailableCollectionDate?: string | null
+    now?: Date
+    timeZone?: string
+  },
 ): Promise<{ rows: Array<Record<string, unknown>>; representation: 'day' | 'change'; fallbackReason: string | null; builtAt: string } | null> {
   let row: ChartCacheRow | null = null
   try {
@@ -560,14 +569,27 @@ export async function readD1ChartCache(
     options && Object.prototype.hasOwnProperty.call(options, 'latestRunFinishedAt')
       ? options.latestRunFinishedAt ?? null
       : await latestRunFinishedAtOrNull(db)
-  if (
-    !isPublicDailyCacheFresh({
-      builtAt: meta.builtAt || builtAt,
-      filtersResolved: meta.filtersResolved,
-      sourceRunFinishedAt: meta.sourceRunFinishedAt,
-      latestRunFinishedAt,
-    })
-  ) {
+  const freshness = publicCacheFreshnessStatus({
+    builtAt: meta.builtAt || builtAt,
+    filtersResolved: meta.filtersResolved,
+    sourceRunFinishedAt: meta.sourceRunFinishedAt,
+    latestRunFinishedAt,
+    latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    now: options?.now,
+    timeZone: options?.timeZone,
+  })
+  if (!freshness.fresh) {
+    if (freshness.reason === 'end_date_beyond_max_staleness') {
+      logPublicCacheWedgedSection({
+        source: 'chart_cache',
+        section,
+        scope,
+        builtAt: meta.builtAt || builtAt,
+        endDate: freshness.endDate,
+        latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+        cacheKind: representation,
+      })
+    }
     return null
   }
   return {
@@ -712,8 +734,10 @@ async function writeChartPayloadToKv(
   payload: ChartAnalyticsPayload,
 ): Promise<void> {
   if (!kv) return
+  const serialized = serializeJsonForKv(key, payload, { source: 'chart_cache' })
+  if (!serialized) return
   try {
-    await kv.put(key, JSON.stringify(payload), { expirationTtl: CHART_CACHE_KV_TTL })
+    await kv.put(key, serialized, { expirationTtl: CHART_CACHE_KV_TTL })
   } catch {
     /* ignore KV write failure */
   }
@@ -726,7 +750,7 @@ export async function getCachedOrCompute(
   representation: 'day' | 'change',
   params: Record<string, string | undefined>,
   compute: () => Promise<ChartAnalyticsPayload>,
-  options?: { allowLiveCompute?: boolean },
+  options?: { allowLiveCompute?: boolean; latestAvailableCollectionDate?: string | null },
 ): Promise<ChartAnalyticsPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const key = buildChartCacheKey(section, representation, { ...params, __kvDay: getMelbourneNowParts().date })
 
@@ -745,7 +769,10 @@ export async function getCachedOrCompute(
   const cacheScope = resolveChartCacheScope(section, params)
   if (cacheScope) {
     const latestRunFinishedAt = await latestRunFinishedAtOrNull(env.DB)
-    const d1Cached = await readD1ChartCache(env.DB, section, representation, cacheScope, { latestRunFinishedAt })
+    const d1Cached = await readD1ChartCache(env.DB, section, representation, cacheScope, {
+      latestRunFinishedAt,
+      latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    })
     if (d1Cached) {
       const d1Payload = {
         rows: d1Cached.rows,
@@ -761,6 +788,7 @@ export async function getCachedOrCompute(
     for (const fallbackScope of widerFallbackScopes(cacheScope)) {
       const fallbackCached = await readD1ChartCache(env.DB, section, representation, fallbackScope, {
         latestRunFinishedAt,
+        latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
       })
       if (!fallbackCached) continue
       const d1Payload = {

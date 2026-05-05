@@ -8,11 +8,12 @@ import {
   resolveDefaultChartCacheScope,
   type ChartCacheScope,
 } from './chart-cache'
+import { logPublicCacheWedgedSection, serializeJsonForKv } from './public-cache-support'
 import type { ReportPlotMode, ReportPlotPayload, ReportPlotSection } from './report-plot-types'
 import { getMelbourneNowParts } from '../utils/time'
 import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
 import {
-  isPublicDailyCacheFresh,
+  publicCacheFreshnessStatus,
   publicCacheMetadata,
   type PublicCacheMetadata,
 } from './public-cache-freshness'
@@ -75,8 +76,13 @@ async function writeReportPlotPayloadToKv(
   payload: ReportPlotPayload,
 ): Promise<void> {
   if (!kv) return
+  const serialized = serializeJsonForKv(key, payload, {
+    source: 'report_plot_cache',
+    context: { mode: payload.mode },
+  })
+  if (!serialized) return
   try {
-    await kv.put(key, JSON.stringify(payload), { expirationTtl: CHART_CACHE_KV_TTL })
+    await kv.put(key, serialized, { expirationTtl: CHART_CACHE_KV_TTL })
   } catch {
     /* ignore KV write failure */
   }
@@ -87,6 +93,12 @@ export async function readD1ReportPlotCache(
   section: ReportPlotSection,
   mode: ReportPlotMode,
   scope: ChartCacheScope,
+  options?: {
+    latestRunFinishedAt?: string | null
+    latestAvailableCollectionDate?: string | null
+    now?: Date
+    timeZone?: string
+  },
 ): Promise<ReportPlotPayload | null> {
   let row: ReportPlotCacheRow | null = null
   try {
@@ -120,15 +132,32 @@ export async function readD1ReportPlotCache(
       startDate: parsed.payload.meta.start_date,
       endDate: parsed.payload.meta.end_date,
     }
-    const latestRunFinishedAt = await latestRunFinishedAtOrNull(db)
-    if (
-      !isPublicDailyCacheFresh({
-        builtAt: String(parsed.meta?.builtAt || parsed.builtAt || row.built_at || ''),
-        filtersResolved,
-        sourceRunFinishedAt: parsed.meta?.sourceRunFinishedAt ?? parsed.sourceRunFinishedAt ?? null,
-        latestRunFinishedAt,
-      })
-    ) {
+    const latestRunFinishedAt =
+      options && Object.prototype.hasOwnProperty.call(options, 'latestRunFinishedAt')
+        ? options.latestRunFinishedAt ?? null
+        : await latestRunFinishedAtOrNull(db)
+    const builtAt = String(parsed.meta?.builtAt || parsed.builtAt || row.built_at || '')
+    const freshness = publicCacheFreshnessStatus({
+      builtAt,
+      filtersResolved,
+      sourceRunFinishedAt: parsed.meta?.sourceRunFinishedAt ?? parsed.sourceRunFinishedAt ?? null,
+      latestRunFinishedAt,
+      latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+      now: options?.now,
+      timeZone: options?.timeZone,
+    })
+    if (!freshness.fresh) {
+      if (freshness.reason === 'end_date_beyond_max_staleness') {
+        logPublicCacheWedgedSection({
+          source: 'report_plot_cache',
+          section,
+          scope,
+          builtAt,
+          endDate: freshness.endDate,
+          latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+          cacheKind: mode,
+        })
+      }
       return null
     }
     return parsed.payload
@@ -195,7 +224,11 @@ export async function getCachedOrComputeReportPlot(
   mode: ReportPlotMode,
   params: Record<string, string | undefined>,
   compute: () => Promise<ReportPlotPayload>,
-  options?: { allowLiveCompute?: boolean },
+  options?: {
+    allowLiveCompute?: boolean
+    latestRunFinishedAt?: string | null
+    latestAvailableCollectionDate?: string | null
+  },
 ): Promise<ReportPlotPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   // Include Melbourne date in KV key so entries don't serve across day boundaries.
   // D1 cache uses scope (date-agnostic) with a 90-min TTL — no change needed there.
@@ -213,7 +246,13 @@ export async function getCachedOrComputeReportPlot(
 
   const scope = resolveDefaultReportPlotCacheScope(section, params)
   if (scope) {
-    const d1Cached = await readD1ReportPlotCache(env.DB, section, mode, scope)
+    const readOptions: NonNullable<Parameters<typeof readD1ReportPlotCache>[4]> = {
+      latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    }
+    if (options && Object.prototype.hasOwnProperty.call(options, 'latestRunFinishedAt')) {
+      readOptions.latestRunFinishedAt = options.latestRunFinishedAt ?? null
+    }
+    const d1Cached = await readD1ReportPlotCache(env.DB, section, mode, scope, readOptions)
     if (d1Cached) {
       await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, kvKey, d1Cached)
       return { ...d1Cached, fromCache: 'd1' }
