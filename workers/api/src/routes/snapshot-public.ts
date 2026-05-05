@@ -55,13 +55,11 @@ import {
   type SnapshotPayload,
   type SnapshotScope,
 } from '../db/snapshot-cache'
-import {
-  buildPrecomputedChartScopeForPreset,
-  type ChartCacheSection,
-} from '../db/chart-cache'
+import type { ChartCacheSection } from '../db/chart-cache'
 import { queryCachedLatestSectionMaxCollectionDate } from '../db/public-cache-support'
-import { resolveFiltersForScope, type ScopedFilters, type ScopePreset } from '../db/scope-filters'
-import { parseChartWindow, type ChartWindow } from '../utils/chart-window'
+import { resolveFiltersForScope, type ScopedFilters } from '../db/scope-filters'
+import { publicApiBasePathForSection } from '../pipeline/public-cache-datasets'
+import { resolvePublicSnapshotRequestScope } from '../pipeline/public-package-scopes'
 import { getAppConfig } from '../db/app-config'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
@@ -76,20 +74,9 @@ const SNAPSHOT_INCLUDE_SERIES_KEY = 'snapshot_include_series'
 
 type DatasetKind = ChartCacheSection
 
-const SECTION_API_BASE: Record<DatasetKind, string> = {
-  home_loans: '/api/home-loan-rates',
-  savings: '/api/savings-rates',
-  term_deposits: '/api/term-deposit-rates',
-}
-
-function parsePreset(value: string | undefined | null): ScopePreset | null {
-  const normalized = String(value ?? '').trim().toLowerCase()
-  return normalized === 'consumer-default' ? 'consumer-default' : null
-}
-
 /** Map a snapshot data entry to the concrete URL(s) the client would otherwise have requested. */
 function buildEntryUrls(section: DatasetKind): Record<string, string[]> {
-  const base = SECTION_API_BASE[section]
+  const base = publicApiBasePathForSection(section)
   return {
     siteUi: [`${base}/site-ui`],
     filters: [`${base}/filters`],
@@ -358,13 +345,7 @@ export async function buildSnapshotPayload(
 }
 
 function resolveRequestScope(section: DatasetKind, windowRaw: string | undefined, presetRaw: string | undefined): SnapshotScope {
-  const window: ChartWindow | null = parseChartWindow(windowRaw)
-  let preset: ScopePreset | null = parsePreset(presetRaw)
-  if (preset === 'consumer-default' && section === 'term_deposits') {
-    // TD has no consumer-default preset in the cache enumeration; fall back to base scope.
-    preset = null
-  }
-  return buildPrecomputedChartScopeForPreset(window, preset)
+  return resolvePublicSnapshotRequestScope(section, windowRaw, presetRaw)
 }
 
 function parseBooleanQuery(value: string | undefined): boolean {

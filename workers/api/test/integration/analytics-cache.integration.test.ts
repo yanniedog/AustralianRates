@@ -1,6 +1,7 @@
 import { SELF, env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import { getCachedOrCompute, resolveChartDateRangeFromDb, writeD1ChartCache } from '../../src/db/chart-cache'
+import { D1_INCLUDED_MONTHLY_READS } from '../../src/utils/d1-budget'
 import { getReadDbFromEnv } from '../../src/db/read-db'
 import { queryReportPlotPayload } from '../../src/db/report-plot'
 import { writeD1ReportPlotCache } from '../../src/db/report-plot-cache'
@@ -18,6 +19,33 @@ async function latestSourceRunFinishedAt(): Promise<string | null> {
     return await getLatestCompletedDailyRunFinishedAt(env.DB)
   } catch {
     return null
+  }
+}
+
+function ymdWithOffset(offsetDays: number): string {
+  const date = new Date()
+  date.setUTCDate(date.getUTCDate() + offsetDays)
+  return date.toISOString().slice(0, 10)
+}
+
+async function seedLiveFallbackDisabledBudgetRows(): Promise<() => Promise<void>> {
+  const dates = Array.from({ length: 37 }, (_, index) => ymdWithOffset(1 - index))
+  await Promise.all(
+    dates.map((date) =>
+      env.IDEMPOTENCY_KV.put(
+        `d1-budget:${date}`,
+        JSON.stringify({
+          date,
+          reads: D1_INCLUDED_MONTHLY_READS,
+          writes: 0,
+          updated_at: `${date}T00:00:00.000Z`,
+        }),
+        { expirationTtl: 60 },
+      ),
+    ),
+  )
+  return async () => {
+    await Promise.all(dates.map((date) => env.IDEMPOTENCY_KV.delete(`d1-budget:${date}`)))
   }
 }
 
@@ -174,5 +202,26 @@ describe('analytics cache headers', () => {
     expect(reportSecondResponse.status).toBe(200)
     expect(reportSecondResponse.headers.get('X-AR-Cache')).toBe('kv')
     await reportSecondResponse.text()
+  })
+
+  it('blocks public live chart and report fallbacks when D1 guardrails are active', async () => {
+    const cleanupBudgetRows = await seedLiveFallbackDisabledBudgetRows()
+    try {
+      const seriesResponse = await SELF.fetch(
+        'https://example.com/api/savings-rates/analytics/series?compact=1&representation=change&bank=ANZ&cache_bust=guardrail-series',
+      )
+      expect(seriesResponse.status).toBe(503)
+      const seriesJson = (await seriesResponse.json()) as { error?: { code?: string } }
+      expect(seriesJson.error?.code).toBe('PUBLIC_LIVE_D1_FALLBACK_DISABLED')
+
+      const reportResponse = await SELF.fetch(
+        'https://example.com/api/home-loan-rates/analytics/report-plot?mode=moves&bank=ANZ&cache_bust=guardrail-report',
+      )
+      expect(reportResponse.status).toBe(503)
+      const reportJson = (await reportResponse.json()) as { error?: { code?: string } }
+      expect(reportJson.error?.code).toBe('PUBLIC_LIVE_D1_FALLBACK_DISABLED')
+    } finally {
+      await cleanupBudgetRows()
+    }
   })
 })

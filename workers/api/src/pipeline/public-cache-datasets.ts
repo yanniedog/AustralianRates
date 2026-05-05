@@ -6,6 +6,7 @@ import {
   type ResolvedAnalyticsRows,
 } from '../routes/analytics-data'
 import type { ChartCacheSection } from '../db/chart-cache'
+import type { ChartWindow } from '../utils/chart-window'
 
 type PublicCacheDbPair = Parameters<typeof collectHomeLoanAnalyticsRowsResolved>[0]
 type PublicCacheFilters = Record<string, unknown>
@@ -13,6 +14,8 @@ type PublicCacheFilters = Record<string, unknown>
 type PublicCacheDatasetConfig = {
   section: ChartCacheSection
   routeSlug: 'home-loan-rates' | 'savings-rates' | 'term-deposit-rates'
+  apiBasePath: '/api/home-loan-rates' | '/api/savings-rates' | '/api/term-deposit-rates'
+  defaultChartWindow: ChartWindow
   supportsConsumerDefaultPreset: boolean
   collectAnalyticsRows: (
     dbs: PublicCacheDbPair,
@@ -28,6 +31,8 @@ export const PUBLIC_CACHE_DATASETS = [
   {
     section: 'home_loans',
     routeSlug: 'home-loan-rates',
+    apiBasePath: '/api/home-loan-rates',
+    defaultChartWindow: '90D',
     supportsConsumerDefaultPreset: true,
     collectAnalyticsRows: (dbs, representation, filters) =>
       collectHomeLoanAnalyticsRowsResolved(
@@ -39,6 +44,8 @@ export const PUBLIC_CACHE_DATASETS = [
   {
     section: 'savings',
     routeSlug: 'savings-rates',
+    apiBasePath: '/api/savings-rates',
+    defaultChartWindow: '90D',
     supportsConsumerDefaultPreset: true,
     collectAnalyticsRows: (dbs, representation, filters) =>
       collectSavingsAnalyticsRowsResolved(
@@ -50,6 +57,8 @@ export const PUBLIC_CACHE_DATASETS = [
   {
     section: 'term_deposits',
     routeSlug: 'term-deposit-rates',
+    apiBasePath: '/api/term-deposit-rates',
+    defaultChartWindow: '30D',
     supportsConsumerDefaultPreset: false,
     collectAnalyticsRows: (dbs, representation, filters) =>
       collectTdAnalyticsRowsResolved(dbs, representation, filters as Parameters<typeof collectTdAnalyticsRowsResolved>[2]),
@@ -66,4 +75,12 @@ export function publicCacheDatasetForSection(section: ChartCacheSection): Public
 
 export function sectionSupportsConsumerDefaultPreset(section: ChartCacheSection): boolean {
   return publicCacheDatasetForSection(section).supportsConsumerDefaultPreset
+}
+
+export function publicApiBasePathForSection(section: ChartCacheSection): PublicCacheDatasetConfig['apiBasePath'] {
+  return publicCacheDatasetForSection(section).apiBasePath
+}
+
+export function defaultPublicChartWindowForSection(section: ChartCacheSection): PublicCacheDatasetConfig['defaultChartWindow'] {
+  return publicCacheDatasetForSection(section).defaultChartWindow
 }
