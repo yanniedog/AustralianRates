@@ -45,6 +45,10 @@ export type PublicCacheFreshnessStatus = {
   yesterday: string
 }
 
+export type PublicCacheStaleServeStatus = PublicCacheFreshnessStatus & {
+  canServe: boolean
+}
+
 function parseMs(value: string | null | undefined): number | null {
   if (!value) return null
   const ms = new Date(value).getTime()
@@ -156,4 +160,36 @@ export function publicCacheFreshnessStatus(input: PublicCacheFreshnessInput): Pu
 
 export function isPublicDailyCacheFresh(input: PublicCacheFreshnessInput): boolean {
   return publicCacheFreshnessStatus(input).fresh
+}
+
+export function publicCacheStaleServeStatus(
+  input: PublicCacheFreshnessInput,
+  freshness: PublicCacheFreshnessStatus = publicCacheFreshnessStatus(input),
+): PublicCacheStaleServeStatus {
+  if (freshness.fresh) {
+    return { ...freshness, canServe: true }
+  }
+  const { today, yesterday } = freshness
+  const rawEndDate = freshness.endDate ?? input.filtersResolved?.endDate
+  if (parseMs(input.builtAt) == null || typeof rawEndDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(rawEndDate)) {
+    return { ...freshness, canServe: false }
+  }
+  const endDate = rawEndDate
+  const daysBehindToday = calendarDaysBetween(endDate, today)
+  if (daysBehindToday != null && daysBehindToday > PUBLIC_DAILY_CACHE_MAX_STALENESS_DAYS) {
+    return { ...freshness, canServe: false, reason: 'end_date_beyond_max_staleness', endDate }
+  }
+
+  const latestAvailable =
+    typeof input.latestAvailableCollectionDate === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(input.latestAvailableCollectionDate)
+      ? input.latestAvailableCollectionDate
+      : null
+  if (latestAvailable != null && endDate > latestAvailable) {
+    return { ...freshness, canServe: false, reason: 'end_date_after_latest_available', endDate }
+  }
+  if (latestAvailable == null && endDate !== today && endDate !== yesterday) {
+    return { ...freshness, canServe: false, endDate }
+  }
+  return { ...freshness, canServe: true, endDate }
 }

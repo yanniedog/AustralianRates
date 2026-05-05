@@ -41,7 +41,7 @@ easy to bisect if a visual regression appears.
 | `tools/node-scripts/src/integrity/repair-presence-prod.ts` | 1359 | Split by repair stage (detect / plan / apply / verify). |
 | `tools/node-scripts/src/integrity/data-integrity-audit-prod.ts` | 1340 | Split by audit dimension (CDR coverage, presence, duplicates, timestamps). |
 | `workers/api/src/db/integrity-checks.ts` | 945 | Below 1000 but trending up — plan a split when next touched. |
-| `workers/api/src/db/chart-cache.ts` | 594 | Below 1000 but above the refactor trigger and touched by cost-control work. Split gzip/KV helpers, scope resolution, and D1 cache read/write operations into sibling modules before the next cache behavior change. |
+| `workers/api/src/db/chart-cache.ts` | 851 | Above the 800 LOC workflow ceiling and touched by cache cost-control work. Split gzip/KV helpers, scope resolution, D1 cache read/write operations, and stale-cache fallback policy into sibling modules in the next cache-focused PR. |
 | `workers/api/src/routes/snapshot-public.ts` | 321 | Over the review threshold. Split public package request handling from package construction when replacing the current snapshot shape with the v2 `meta`/`dict`/`hierarchy`/`ribbon` package. |
 | `workers/api/src/pipeline/scheduler-dispatch.ts` | 323 | Over the review threshold after adding public package refresh. Split task routing from task execution if more scheduled job logic is added. |
 

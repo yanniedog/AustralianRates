@@ -10,6 +10,7 @@ import {
 } from './chart-cache'
 import {
   buildPublicCacheReadFreshnessOptions,
+  logPublicCacheServedBoundedStale,
   logPublicCacheWedgedSection,
   serializeJsonForKv,
   type PublicCacheReadFreshnessOptions,
@@ -20,6 +21,7 @@ import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
 import {
   publicCacheFreshnessStatus,
   publicCacheMetadata,
+  publicCacheStaleServeStatus,
   type PublicCacheMetadata,
 } from './public-cache-freshness'
 
@@ -137,7 +139,7 @@ export async function readD1ReportPlotCache(
         ? options.latestRunFinishedAt ?? null
         : await latestRunFinishedAtOrNull(db)
     const builtAt = String(parsed.meta?.builtAt || parsed.builtAt || row.built_at || '')
-    const freshness = publicCacheFreshnessStatus({
+    const freshnessInput = {
       builtAt,
       filtersResolved,
       sourceRunFinishedAt: parsed.meta?.sourceRunFinishedAt ?? parsed.sourceRunFinishedAt ?? null,
@@ -145,8 +147,12 @@ export async function readD1ReportPlotCache(
       latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
       now: options?.now,
       timeZone: options?.timeZone,
-    })
+    }
+    const freshness = publicCacheFreshnessStatus(freshnessInput)
     if (!freshness.fresh) {
+      const staleStatus = options?.allowStaleWithinCanary
+        ? publicCacheStaleServeStatus(freshnessInput, freshness)
+        : null
       if (freshness.reason === 'end_date_beyond_max_staleness') {
         logPublicCacheWedgedSection({
           source: 'report_plot_cache',
@@ -158,7 +164,20 @@ export async function readD1ReportPlotCache(
           cacheKind: mode,
         })
       }
-      return null
+      if (staleStatus?.canServe) {
+        logPublicCacheServedBoundedStale({
+          source: 'report_plot_cache',
+          section,
+          scope,
+          builtAt,
+          endDate: staleStatus.endDate,
+          latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+          cacheKind: mode,
+          reason: staleStatus.reason,
+        })
+      } else {
+        return null
+      }
     }
     return parsed.payload
   } catch {
@@ -244,7 +263,10 @@ export async function getCachedOrComputeReportPlot(
 
   const scope = resolveDefaultReportPlotCacheScope(section, params)
   if (scope) {
-    const readOptions = buildPublicCacheReadFreshnessOptions(options)
+    const readOptions = buildPublicCacheReadFreshnessOptions({
+      ...options,
+      allowStaleWithinCanary: true,
+    })
     const d1Cached = await readD1ReportPlotCache(env.DB, section, mode, scope, readOptions)
     if (d1Cached) {
       await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, kvKey, d1Cached)
