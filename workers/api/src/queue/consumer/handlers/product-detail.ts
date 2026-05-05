@@ -80,7 +80,8 @@ function logDetailFetchOutcome(input: {
       context:
         `dataset=${input.dataset} product=${input.productId} status=${input.status}` +
         ` retry=${policy.retry} mark_progress=${policy.markProgress}` +
-        ` preserve_previous_latest=${policy.preservePreviousLatest} fatal=${policy.fatal}`,
+        ` preserve_previous_latest=${policy.preservePreviousLatest}` +
+        ` fatal=${policy.fatal} actionable=${policy.actionable}`,
     })
   }
   return outcome
@@ -194,9 +195,9 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
           lenderCode: job.lenderCode,
           dataset: 'home_loans',
           failed: true,
-          errorMessage: `detail_fetch_failed:home_loans:${job.productId}:status=${fetchStatus}`,
+          errorMessage: `detail_fetch_failed:home_loans:${job.productId}:status=${fetchStatus}:outcome=${fetchOutcome}`,
         })
-        throw new Error(`detail_fetch_failed:home_loans:${job.productId}:status=${fetchStatus}`)
+        throw new Error(`detail_fetch_failed:home_loans:${job.productId}:status=${fetchStatus}:outcome=${fetchOutcome}`)
       }
       for (const row of details.rows) {
         row.fetchEventId = resolveRowFetchEventId({
@@ -328,9 +329,9 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
           lenderCode: job.lenderCode,
           dataset: 'savings',
           failed: true,
-          errorMessage: `detail_fetch_failed:savings:${job.productId}:status=${fetchStatus}`,
+          errorMessage: `detail_fetch_failed:savings:${job.productId}:status=${fetchStatus}:outcome=${fetchOutcome}`,
         })
-        throw new Error(`detail_fetch_failed:savings:${job.productId}:status=${fetchStatus}`)
+        throw new Error(`detail_fetch_failed:savings:${job.productId}:status=${fetchStatus}:outcome=${fetchOutcome}`)
       }
       for (const row of details.savingsRows) {
         row.fetchEventId = resolveRowFetchEventId({
@@ -461,9 +462,9 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
           lenderCode: job.lenderCode,
           dataset: 'term_deposits',
           failed: true,
-          errorMessage: `detail_fetch_failed:term_deposits:${job.productId}:status=${fetchStatus}`,
+          errorMessage: `detail_fetch_failed:term_deposits:${job.productId}:status=${fetchStatus}:outcome=${fetchOutcome}`,
         })
-        throw new Error(`detail_fetch_failed:term_deposits:${job.productId}:status=${fetchStatus}`)
+        throw new Error(`detail_fetch_failed:term_deposits:${job.productId}:status=${fetchStatus}:outcome=${fetchOutcome}`)
       }
       for (const row of details.tdRows) {
         row.fetchEventId = resolveRowFetchEventId({

@@ -9,46 +9,53 @@ export type IngestOutcome =
 export type IngestOutcomePolicy = {
   retry: 'no' | 'yes' | 'bounded_transient_only'
   markProgress: 'yes' | 'terminal_retry_only'
-  preservePreviousLatest: boolean | 'n/a'
-  fatal: boolean | 'policy'
+  preservePreviousLatest: boolean
+  fatal: boolean
+  actionable: 'no' | 'policy' | 'yes'
 }
 
 export const INGEST_OUTCOME_POLICY: Record<IngestOutcome, IngestOutcomePolicy> = {
   ok: {
     retry: 'no',
     markProgress: 'yes',
-    preservePreviousLatest: 'n/a',
+    preservePreviousLatest: false,
     fatal: false,
+    actionable: 'no',
   },
   no_rows_currently_available: {
     retry: 'no',
     markProgress: 'yes',
     preservePreviousLatest: true,
     fatal: false,
+    actionable: 'no',
   },
   upstream_blocked: {
     retry: 'bounded_transient_only',
     markProgress: 'yes',
     preservePreviousLatest: true,
-    fatal: 'policy',
+    fatal: false,
+    actionable: 'policy',
   },
   transient_fetch: {
     retry: 'yes',
     markProgress: 'terminal_retry_only',
     preservePreviousLatest: true,
     fatal: false,
+    actionable: 'no',
   },
   parser_rejected: {
     retry: 'no',
     markProgress: 'yes',
     preservePreviousLatest: true,
-    fatal: 'policy',
+    fatal: false,
+    actionable: 'policy',
   },
   fatal: {
     retry: 'no',
     markProgress: 'yes',
     preservePreviousLatest: true,
     fatal: true,
+    actionable: 'yes',
   },
 }
 
@@ -83,5 +90,13 @@ export function isNonRetryableDetailFetchStatus(status: number): boolean {
     status,
     upstreamBlocked: false,
   })
+  return isNonRetryableIngestOutcome(outcome)
+}
+
+export function isKnownIngestOutcome(value: string): value is IngestOutcome {
+  return Object.prototype.hasOwnProperty.call(INGEST_OUTCOME_POLICY, value)
+}
+
+export function isNonRetryableIngestOutcome(outcome: IngestOutcome): boolean {
   return INGEST_OUTCOME_POLICY[outcome].retry === 'no'
 }

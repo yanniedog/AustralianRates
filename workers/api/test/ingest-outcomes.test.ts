@@ -12,36 +12,44 @@ describe('ingest outcome policy', () => {
     expect(INGEST_OUTCOME_POLICY.ok).toEqual({
       retry: 'no',
       markProgress: 'yes',
-      preservePreviousLatest: 'n/a',
+      preservePreviousLatest: false,
       fatal: false,
+      actionable: 'no',
     })
     expect(INGEST_OUTCOME_POLICY.no_rows_currently_available).toMatchObject({
       retry: 'no',
       markProgress: 'yes',
       preservePreviousLatest: true,
       fatal: false,
+      actionable: 'no',
     })
     expect(INGEST_OUTCOME_POLICY.upstream_blocked).toMatchObject({
       retry: 'bounded_transient_only',
       markProgress: 'yes',
       preservePreviousLatest: true,
+      fatal: false,
+      actionable: 'policy',
     })
     expect(INGEST_OUTCOME_POLICY.transient_fetch).toMatchObject({
       retry: 'yes',
       markProgress: 'terminal_retry_only',
       preservePreviousLatest: true,
       fatal: false,
+      actionable: 'no',
     })
     expect(INGEST_OUTCOME_POLICY.parser_rejected).toMatchObject({
       retry: 'no',
       markProgress: 'yes',
       preservePreviousLatest: true,
+      fatal: false,
+      actionable: 'policy',
     })
     expect(INGEST_OUTCOME_POLICY.fatal).toMatchObject({
       retry: 'no',
       markProgress: 'yes',
       preservePreviousLatest: true,
       fatal: true,
+      actionable: 'yes',
     })
   })
 
@@ -62,9 +70,11 @@ describe('ingest outcome policy', () => {
   it('keeps transient detail fetches retryable and terminal status failures non-retryable', () => {
     expect(isNonRetryableDetailFetchStatus(400)).toBe(true)
     expect(isNonRetryableDetailFetchStatus(406)).toBe(true)
+    expect(isNonRetryableDetailFetchStatus(403)).toBe(true)
     expect(isNonRetryableDetailFetchStatus(429)).toBe(false)
     expect(isNonRetryableDetailFetchStatus(503)).toBe(false)
     expect(isNonRetryableErrorMessage('detail_fetch_failed:term_deposits:TD:status=400:outcome=fatal')).toBe(true)
     expect(isNonRetryableErrorMessage('detail_fetch_failed:term_deposits:TD:status=429:outcome=transient_fetch')).toBe(false)
+    expect(isNonRetryableErrorMessage('detail_fetch_failed:home_loans:HL:status=403:outcome=upstream_blocked')).toBe(false)
   })
 })
