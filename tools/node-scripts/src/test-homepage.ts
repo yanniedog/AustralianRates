@@ -475,6 +475,25 @@ async function verifyHeroStats(page, results, label) {
     }
 }
 
+async function verifyHeroLeaderMetric(page, results, label) {
+    await page.waitForFunction(() => {
+        const el = document.querySelector('#market-intro-live-leader');
+        const text = String(el?.textContent || '').replace(/\s+/g, ' ').trim();
+        return /\d/.test(text) && text.includes('%') && text !== '—';
+    }, null, { timeout: 15000 }).catch(() => null);
+
+    const text = await page.evaluate(() => {
+        const el = document.querySelector('#market-intro-live-leader');
+        return String(el?.textContent || '').replace(/\s+/g, ' ').trim();
+    });
+
+    if (/\d/.test(text) && text.includes('%') && text !== '—') {
+        pass(results, `${label}: hero leader metric loaded`);
+    } else {
+        fail(results, `${label}: hero leader metric missing (${text || 'empty'})`);
+    }
+}
+
 /** Production: hero Updated must reflect snapshot filtersResolved.endDate (aligned with charts). */
 async function verifyHeroUpdatedAlignsWithSnapshot(page, results, label, apiBasePath, pathname = '/') {
     const base = apiBasePath.replace(/\/?$/, '');
@@ -1647,6 +1666,7 @@ async function verifySectionSmoke(page, results, section, noscriptBatchPromise) 
     await verifyExplorerHeading(page, results, section.name);
     await verifyExplorerTable(page, results, section.name, section.expectComparisonRate);
     await verifyHeroStats(page, results, section.name);
+    await verifyHeroLeaderMetric(page, results, section.name);
     await verifyStartupSettled(page, results, section.name);
     await verifyPublicFooter(page, results, section.name);
     await verifyClientLog(page, results, section.name);
@@ -1789,6 +1809,7 @@ async function runTests() {
         await verifyWorkspaceShell(page, results, 'Homepage', '/');
         await verifyExplorerHeading(page, results, 'Homepage');
         await verifyExplorerTable(page, results, 'Homepage', true);
+        await verifyHeroLeaderMetric(page, results, 'Homepage');
         await verifyStartupSettled(page, results, 'Homepage');
         await verifyHeroUpdatedAlignsWithSnapshot(page, results, 'Homepage', '/api/home-loan-rates');
         await verifyPublicFooter(page, results, 'Homepage');

@@ -770,7 +770,7 @@
 
     async function loadQuickCompare() {
         var root = quickCompareRoot();
-        if (!root || !apiBase) {
+        if (!apiBase) {
             if (root && !apiBase) root.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
             return;
         }
@@ -788,6 +788,8 @@
             }
             if (snapshotRows) {
                 ladderRows = snapshotRows;
+            } else if (!root) {
+                return;
             } else if (section === 'home-loans' && context.activeCount === 0) {
                 ladderRows = await loadHomeLoanScenarioRibbon(params);
             } else {
@@ -815,7 +817,7 @@
             clientLog('error', 'Quick compare load failed', {
                 message: describeError(err, 'Leaders rail is temporarily unavailable.'),
             });
-            root.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
+            if (root) root.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
         }
     }
 
