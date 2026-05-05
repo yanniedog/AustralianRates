@@ -33,6 +33,7 @@ export type PublicCacheFreshnessRejectionReason =
   | 'built_at_too_old'
   | 'invalid_end_date'
   | 'end_date_beyond_max_staleness'
+  | 'end_date_after_latest_available'
   | 'end_date_not_current_or_latest'
   | 'source_older_than_latest_run'
 
@@ -137,6 +138,9 @@ export function publicCacheFreshnessStatus(input: PublicCacheFreshnessInput): Pu
     /^\d{4}-\d{2}-\d{2}$/.test(input.latestAvailableCollectionDate)
       ? input.latestAvailableCollectionDate
       : null
+  if (latestAvailable != null && endDate > latestAvailable) {
+    return reject('end_date_after_latest_available', endDate)
+  }
   if (endDate !== today && endDate !== yesterday && endDate !== latestAvailable) {
     return reject('end_date_not_current_or_latest', endDate)
   }

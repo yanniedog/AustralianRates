@@ -50,6 +50,18 @@ describe('public daily cache freshness', () => {
     ).toBe(true)
   })
 
+  it('rejects a current-day cache row when it is ahead of the latest available collection date', () => {
+    const result = publicCacheFreshnessStatus({
+      now,
+      builtAt: '2026-05-03T08:00:00.000Z',
+      filtersResolved: { startDate: '2026-04-01', endDate: '2026-05-03' },
+      latestAvailableCollectionDate: '2026-05-01',
+    })
+
+    expect(result.fresh).toBe(false)
+    expect(result.reason).toBe('end_date_after_latest_available')
+  })
+
   it('does not use a missing latest available collection date as freshness proof', () => {
     expect(
       isPublicDailyCacheFresh({
