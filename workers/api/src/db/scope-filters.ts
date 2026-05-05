@@ -20,6 +20,7 @@ import { parseChartWindow, type ChartWindow } from '../utils/chart-window'
 import { getMelbourneNowParts } from '../utils/time'
 
 const DEFAULT_CACHE_LOOKBACK_DAYS = 365
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/
 
 const SECTION_TABLES: Record<ChartCacheSection, string> = {
   home_loans: 'historical_loan_rates',
@@ -62,17 +63,18 @@ function boundedLookbackStartDate(endDate: string): string {
   return start.toISOString().slice(0, 10)
 }
 
+function normalizeDateYmd(value: string | null | undefined): string | null {
+  return value && YMD_RE.test(value) ? value : null
+}
+
 export function defaultDateRangeFromCollectionBounds(
   minDate: string | null | undefined,
   maxDate: string | null | undefined,
   latestAvailableCollectionDate?: string | null,
 ): { startDate: string; endDate: string } {
-  const normalizedMax = maxDate && /^\d{4}-\d{2}-\d{2}$/.test(maxDate) ? maxDate : null
-  const normalizedLatest =
-    latestAvailableCollectionDate && /^\d{4}-\d{2}-\d{2}$/.test(latestAvailableCollectionDate)
-      ? latestAvailableCollectionDate
-      : null
-  const normalizedMin = minDate && /^\d{4}-\d{2}-\d{2}$/.test(minDate) ? minDate : null
+  const normalizedMax = normalizeDateYmd(maxDate)
+  const normalizedLatest = normalizeDateYmd(latestAvailableCollectionDate)
+  const normalizedMin = normalizeDateYmd(minDate)
   const endDate = normalizedLatest ?? normalizedMax ?? todayYmd()
   const boundedStartDate = boundedLookbackStartDate(endDate)
   const startDate = normalizedMin && normalizedMin > boundedStartDate ? normalizedMin : boundedStartDate
@@ -169,7 +171,7 @@ export async function resolveFiltersForScope(
           includeRemoved: false,
           sourceMode: 'all' as const,
         },
-        { window },
+        { window, latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null },
       )) as ScopedFilters)
   return applyPresetFilters(section, base, preset)
 }

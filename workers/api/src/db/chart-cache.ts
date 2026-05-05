@@ -71,6 +71,10 @@ function clampChartDateRange(startDate: string, endDate: string): { startDate: s
   return { startDate: cappedStartDate, endDate: cappedEndDate }
 }
 
+function normalizeYmd(value: string | null | undefined): string | null {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null
+}
+
 function pickLatestHlFilters(filters: Record<string, unknown>): LatestFilters {
   return {
     bank: filters.bank as string | undefined,
@@ -222,7 +226,7 @@ export async function resolveChartDateRangeFromDb(
   db: D1Database,
   section: ChartCacheSection,
   filters: Record<string, unknown> & { startDate?: string; endDate?: string },
-  options: { window?: ChartWindow | null } = {},
+  options: { window?: ChartWindow | null; latestAvailableCollectionDate?: string | null } = {},
 ): Promise<Record<string, unknown> & { startDate: string; endDate: string }> {
   const start = filters.startDate?.trim()
   const end = filters.endDate?.trim()
@@ -238,8 +242,12 @@ export async function resolveChartDateRangeFromDb(
   range = await bumpHistoricalRangeEndWithLatestTable(db, section, filters, range)
   const fallback = getMelbourneNowParts().date
   const baseRange = clampChartDateRange(range?.startDate || fallback, range?.endDate || fallback)
+  const latestAvailableCollectionDate = normalizeYmd(options.latestAvailableCollectionDate)
   const rangeStart = baseRange.startDate
-  const rangeEnd = baseRange.endDate
+  const rangeEnd =
+    latestAvailableCollectionDate && latestAvailableCollectionDate < baseRange.endDate
+      ? latestAvailableCollectionDate
+      : baseRange.endDate
   if (options.window && !start && !end) {
     const windowStart = resolveChartWindowStart(rangeStart, rangeEnd, options.window)
     const windowRange = clampChartDateRange(windowStart, rangeEnd)

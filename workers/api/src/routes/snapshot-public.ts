@@ -265,12 +265,18 @@ export async function buildSnapshotPayload(
   env: { DB: D1Database; CHART_CACHE_KV?: KVNamespace },
   section: DatasetKind,
   scope: SnapshotScope = 'default',
-  options?: { sourceRunFinishedAt?: string | null; latestAvailableCollectionDate?: string | null },
+  options?: {
+    sourceRunFinishedAt?: string | null
+    latestAvailableCollectionDate?: string | null
+    filters?: ScopedFilters
+  },
 ): Promise<SnapshotPayload> {
   const db = env.DB
-  const filters = await resolveFiltersForScope(db, section, scope, {
-    latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
-  })
+  const filters =
+    options?.filters ??
+    (await resolveFiltersForScope(db, section, scope, {
+      latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    }))
   const includeSeries = await shouldIncludeAnalyticsSeries(db)
 
   // Fetch analytics rows once (if bundling); derive both the grouped wire form and
