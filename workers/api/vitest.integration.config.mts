@@ -7,10 +7,12 @@ export default defineWorkersConfig({
     testTimeout: 30_000,
     hookTimeout: 25_000,
     teardownTimeout: 12_000,
-    fileParallelism: true,
-    maxWorkers: 4,
+    fileParallelism: false,
+    maxWorkers: 1,
     poolOptions: {
       workers: {
+        isolatedStorage: false,
+        singleWorker: true,
         wrangler: {
           configPath: './wrangler.toml',
           environment: 'test',

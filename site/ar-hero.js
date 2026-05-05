@@ -788,9 +788,11 @@
                 var snapshot = window.AR && window.AR.snapshot;
                 if (snapshot && typeof snapshot.awaitReady === 'function') {
                     await snapshot.awaitReady(1400);
+                    if (requestSeq !== quickCompareRequestSeq) return;
                     snapshotRows = loadQuickCompareFromSnapshot(context);
                 }
             }
+            if (requestSeq !== quickCompareRequestSeq) return;
             if (snapshotRows) {
                 ladderRows = snapshotRows;
             } else if (!root) {
@@ -822,6 +824,7 @@
                 clearIntroLeaderMetric('No leaders match the current slice.');
             }
         } catch (err) {
+            if (requestSeq !== quickCompareRequestSeq) return;
             clientLog('error', 'Quick compare load failed', {
                 message: describeError(err, 'Leaders rail is temporarily unavailable.'),
             });
