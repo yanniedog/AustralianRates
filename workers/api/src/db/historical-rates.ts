@@ -8,7 +8,9 @@ import { writeHomeLoanProjection } from './analytics/projection-write'
 import { storeCdrDetailPayload } from './cdr-detail-payloads'
 import { upsertLatestHomeLoanSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
+import { markProductsSeen } from './product-status'
 import { nowIso } from '../utils/time'
+import { equalStateValue, filterChangedRows } from './change-aware-writes'
 import {
   assertHistoricalWriteAllowed,
   isHistoricalWriteContractError,
@@ -143,17 +145,6 @@ function addWriteResult(target: RateBatchWriteResult, source: RateBatchWriteResu
   target.skippedSideEffects += source.skippedSideEffects
 }
 
-function equalStateValue(left: unknown, right: unknown): boolean {
-  if (left == null && right == null) return true
-  if (typeof left === 'number' || typeof right === 'number') {
-    const a = left == null ? null : Number(left)
-    const b = right == null ? null : Number(right)
-    if (a == null || b == null) return a === b
-    return Number.isFinite(a) && Number.isFinite(b) ? a === b : String(left) === String(right)
-  }
-  return String(left ?? '') === String(right ?? '')
-}
-
 function homeLoanRowUnchanged(current: Record<string, unknown>, row: NormalizedRateRow): boolean {
   const comparisons: Array<[unknown, unknown]> = [
     [current.product_id, row.productId],
@@ -173,39 +164,35 @@ function homeLoanRowUnchanged(current: Record<string, unknown>, row: NormalizedR
 
 async function filterChangedHomeLoanRows(db: D1Database, rows: NormalizedRateRow[]): Promise<{
   changed: NormalizedRateRow[]
+  unchangedRows: NormalizedRateRow[]
   unchanged: number
 }> {
-  const keyed = rows.map((row) => ({ row, seriesKey: homeLoanSeriesKey(row) }))
-  const currentByKey = new Map<string, Record<string, unknown>>()
-  for (const part of chunk(Array.from(new Set(keyed.map((item) => item.seriesKey))), 80)) {
-    const result = await db
-      .prepare(
-        `SELECT series_key, product_id, product_name, security_purpose, repayment_type,
-                rate_structure, lvr_tier, feature_set, has_offset_account, interest_rate,
-                comparison_rate, annual_fee, is_removed
-         FROM latest_home_loan_series
-         WHERE series_key IN (${part.map(() => '?').join(',')})`,
-      )
-      .bind(...part)
-      .all<Record<string, unknown>>()
-    for (const current of result.results ?? []) {
-      currentByKey.set(String(current.series_key || ''), current)
-    }
-  }
-  const changed: NormalizedRateRow[] = []
-  let unchanged = 0
-  for (const item of keyed) {
-    const current = currentByKey.get(item.seriesKey)
-    if (current && Number(current.is_removed ?? 0) === 0 && homeLoanRowUnchanged(current, item.row)) {
-      unchanged += 1
-    } else {
-      changed.push(item.row)
-    }
-  }
-  return { changed, unchanged }
+  return filterChangedRows(db, {
+    rows,
+    latestTable: 'latest_home_loan_series',
+    selectColumns: [
+      'product_id',
+      'product_name',
+      'security_purpose',
+      'repayment_type',
+      'rate_structure',
+      'lvr_tier',
+      'feature_set',
+      'has_offset_account',
+      'interest_rate',
+      'comparison_rate',
+      'annual_fee',
+    ],
+    seriesKeyForRow: homeLoanSeriesKey,
+    rowUnchanged: homeLoanRowUnchanged,
+  })
 }
 
-async function prepareHomeLoanRow(db: D1Database, row: NormalizedRateRow): Promise<PreparedHomeLoanRow> {
+async function prepareHomeLoanRow(
+  db: D1Database,
+  row: NormalizedRateRow,
+  options: { storeCdrDetailPayload?: boolean } = {},
+): Promise<PreparedHomeLoanRow> {
   const parsedAt = nowIso()
   const seriesKey = homeLoanSeriesKey(row)
   const productCode = row.productId
@@ -219,7 +206,7 @@ async function prepareHomeLoanRow(db: D1Database, row: NormalizedRateRow): Promi
   })
   const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
   const cdrProductDetailHash =
-    row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
+    options.storeCdrDetailPayload !== false && row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
       ? await storeCdrDetailPayload(db, row.cdrProductDetailJson)
       : null
 
@@ -312,6 +299,157 @@ function shouldUseBatchedHomeLoanFastPath(options: HistoricalRateWriteOptions): 
     options.markSeriesSeen === false &&
     options.emitProjectionChangeFeed !== true
   )
+}
+
+async function runHomeLoanPostWriteSideEffects(
+  db: D1Database,
+  prepared: PreparedHomeLoanRow,
+  options: HistoricalRateWriteOptions,
+  touchProductPresence = false,
+): Promise<void> {
+  const { row, seriesKey, productKey, productCode, retrievalType, parsedAt, cdrProductDetailHash } = prepared
+
+  if (options.emitCanonicalFeed !== false) {
+    await emitCanonicalHistoricalUpsert(
+      db,
+      'home_loans',
+      {
+        bank_name: row.bankName,
+        collection_date: row.collectionDate,
+        product_id: row.productId,
+        lvr_tier: row.lvrTier,
+        rate_structure: row.rateStructure,
+        security_purpose: row.securityPurpose,
+        repayment_type: row.repaymentType,
+        run_source: row.runSource ?? 'scheduled',
+      },
+      row.runId ?? null,
+      row.collectionDate,
+    )
+  }
+
+  if (options.updateCatalogs !== false) {
+    await upsertProductCatalog(db, {
+      dataset: 'home_loans',
+      bankName: row.bankName,
+      productId: row.productId,
+      productCode,
+      productName: row.productName,
+      collectionDate: row.collectionDate,
+      runId: row.runId ?? null,
+      sourceUrl: row.sourceUrl,
+      productUrl: row.productUrl ?? row.sourceUrl,
+      publishedAt: row.publishedAt ?? null,
+    })
+
+    await upsertSeriesCatalog(db, {
+      dataset: 'home_loans',
+      seriesKey,
+      bankName: row.bankName,
+      productId: row.productId,
+      productCode,
+      productName: row.productName,
+      collectionDate: row.collectionDate,
+      runId: row.runId ?? null,
+      sourceUrl: row.sourceUrl,
+      productUrl: row.productUrl ?? row.sourceUrl,
+      publishedAt: row.publishedAt ?? null,
+      rawDimensionsJson: homeLoanDimensionJson(row),
+      securityPurpose: row.securityPurpose,
+      repaymentType: row.repaymentType,
+      lvrTier: row.lvrTier,
+      rateStructure: row.rateStructure,
+    })
+  }
+
+  if (options.markSeriesSeen !== false) {
+    await markSeriesSeen(db, {
+      dataset: 'home_loans',
+      seriesKey,
+      bankName: row.bankName,
+      productId: row.productId,
+      productCode,
+      collectionDate: row.collectionDate,
+      runId: row.runId ?? null,
+    })
+  }
+
+  if (touchProductPresence) {
+    await markProductsSeen(db, {
+      section: 'home_loans',
+      bankName: row.bankName,
+      productIds: [row.productId],
+      collectionDate: row.collectionDate,
+      runId: row.runId ?? null,
+    })
+  }
+
+  if (options.upsertLatestSeries !== false) {
+    await upsertLatestHomeLoanSeries(db, {
+      bankName: row.bankName,
+      collectionDate: row.collectionDate,
+      productId: row.productId,
+      productCode,
+      productName: row.productName,
+      securityPurpose: row.securityPurpose,
+      repaymentType: row.repaymentType,
+      rateStructure: row.rateStructure,
+      lvrTier: row.lvrTier,
+      featureSet: row.featureSet,
+      hasOffsetAccount: row.hasOffsetAccount ?? null,
+      interestRate: row.interestRate,
+      comparisonRate: row.comparisonRate,
+      annualFee: row.annualFee,
+      sourceUrl: row.sourceUrl,
+      productUrl: row.productUrl ?? row.sourceUrl,
+      publishedAt: row.publishedAt ?? null,
+      cdrProductDetailHash,
+      dataQualityFlag: row.dataQualityFlag,
+      confidenceScore: row.confidenceScore,
+      retrievalType,
+      parsedAt,
+      runId: row.runId ?? null,
+      runSource: row.runSource ?? 'scheduled',
+      seriesKey,
+      productKey,
+    })
+  }
+
+  if (options.writeProjection !== false) {
+    await writeHomeLoanProjection(
+      db,
+      {
+        seriesKey,
+        productKey,
+        bankName: row.bankName,
+        productId: row.productId,
+        productName: row.productName,
+        collectionDate: row.collectionDate,
+        parsedAt,
+        securityPurpose: row.securityPurpose,
+        repaymentType: row.repaymentType,
+        rateStructure: row.rateStructure,
+        lvrTier: row.lvrTier,
+        featureSet: row.featureSet,
+        hasOffsetAccount: row.hasOffsetAccount ?? null,
+        interestRate: row.interestRate,
+        comparisonRate: row.comparisonRate,
+        annualFee: row.annualFee,
+        sourceUrl: row.sourceUrl,
+        productUrl: row.productUrl ?? row.sourceUrl,
+        publishedAt: row.publishedAt ?? null,
+        cdrProductDetailHash,
+        dataQualityFlag: row.dataQualityFlag,
+        confidenceScore: row.confidenceScore,
+        retrievalType,
+        runId: row.runId ?? null,
+        runSource: row.runSource ?? 'scheduled',
+      },
+      {
+        emitChangeFeed: options.emitProjectionChangeFeed !== false,
+      },
+    )
+  }
 }
 
 async function upsertHistoricalRateRowsFastPath(
@@ -482,138 +620,42 @@ export async function upsertHistoricalRateRow(
     )
     .run()
 
-  if (options.emitCanonicalFeed !== false) {
-    await emitCanonicalHistoricalUpsert(
-      db,
-      'home_loans',
-      {
-        bank_name: row.bankName,
-        collection_date: row.collectionDate,
-        product_id: row.productId,
-        lvr_tier: row.lvrTier,
-        rate_structure: row.rateStructure,
-        security_purpose: row.securityPurpose,
-        repayment_type: row.repaymentType,
-        run_source: row.runSource ?? 'scheduled',
-      },
-      row.runId ?? null,
-      row.collectionDate,
-    )
-  }
-
-  if (options.updateCatalogs !== false) {
-    await upsertProductCatalog(db, {
-      dataset: 'home_loans',
-      bankName: row.bankName,
-      productId: row.productId,
-      productCode,
-      productName: row.productName,
-      collectionDate: row.collectionDate,
-      runId: row.runId ?? null,
-      sourceUrl: row.sourceUrl,
-      productUrl: row.productUrl ?? row.sourceUrl,
-      publishedAt: row.publishedAt ?? null,
-    })
-
-    await upsertSeriesCatalog(db, {
-      dataset: 'home_loans',
-      seriesKey,
-      bankName: row.bankName,
-      productId: row.productId,
-      productCode,
-      productName: row.productName,
-      collectionDate: row.collectionDate,
-      runId: row.runId ?? null,
-      sourceUrl: row.sourceUrl,
-      productUrl: row.productUrl ?? row.sourceUrl,
-      publishedAt: row.publishedAt ?? null,
-      rawDimensionsJson: homeLoanDimensionJson(row),
-      securityPurpose: row.securityPurpose,
-      repaymentType: row.repaymentType,
-      lvrTier: row.lvrTier,
-      rateStructure: row.rateStructure,
-    })
-  }
-
-  if (options.markSeriesSeen !== false) {
-    await markSeriesSeen(db, {
-      dataset: 'home_loans',
-      seriesKey,
-      bankName: row.bankName,
-      productId: row.productId,
-      productCode,
-      collectionDate: row.collectionDate,
-      runId: row.runId ?? null,
-    })
-  }
-
-  if (options.upsertLatestSeries !== false) {
-    await upsertLatestHomeLoanSeries(db, {
-      bankName: row.bankName,
-      collectionDate: row.collectionDate,
-      productId: row.productId,
-      productCode,
-      productName: row.productName,
-      securityPurpose: row.securityPurpose,
-      repaymentType: row.repaymentType,
-      rateStructure: row.rateStructure,
-      lvrTier: row.lvrTier,
-      featureSet: row.featureSet,
-      hasOffsetAccount: row.hasOffsetAccount ?? null,
-      interestRate: row.interestRate,
-      comparisonRate: row.comparisonRate,
-      annualFee: row.annualFee,
-      sourceUrl: row.sourceUrl,
-      productUrl: row.productUrl ?? row.sourceUrl,
-      publishedAt: row.publishedAt ?? null,
-      cdrProductDetailHash,
-      dataQualityFlag: row.dataQualityFlag,
-      confidenceScore: row.confidenceScore,
-      retrievalType,
-      parsedAt,
-      runId: row.runId ?? null,
-      runSource: row.runSource ?? 'scheduled',
-      seriesKey,
-      productKey,
-    })
-  }
-
-  if (options.writeProjection !== false) {
-    await writeHomeLoanProjection(
-      db,
-      {
-        seriesKey,
-        productKey,
-        bankName: row.bankName,
-        productId: row.productId,
-        productName: row.productName,
-        collectionDate: row.collectionDate,
-        parsedAt,
-        securityPurpose: row.securityPurpose,
-        repaymentType: row.repaymentType,
-        rateStructure: row.rateStructure,
-        lvrTier: row.lvrTier,
-        featureSet: row.featureSet,
-        hasOffsetAccount: row.hasOffsetAccount ?? null,
-        interestRate: row.interestRate,
-        comparisonRate: row.comparisonRate,
-        annualFee: row.annualFee,
-        sourceUrl: row.sourceUrl,
-        productUrl: row.productUrl ?? row.sourceUrl,
-        publishedAt: row.publishedAt ?? null,
-        cdrProductDetailHash,
-        dataQualityFlag: row.dataQualityFlag,
-        confidenceScore: row.confidenceScore,
-        retrievalType,
-        runId: row.runId ?? null,
-        runSource: row.runSource ?? 'scheduled',
-      },
-      {
-        emitChangeFeed: options.emitProjectionChangeFeed !== false,
-      },
-    )
-  }
+  await runHomeLoanPostWriteSideEffects(db, {
+    row,
+    seriesKey,
+    productKey,
+    productCode,
+    retrievalType,
+    parsedAt,
+    cdrProductDetailHash,
+  }, options)
   return { written: 1, unchanged: 0, skippedSideEffects: 0 }
+}
+
+async function touchUnchangedHomeLoanRowsCurrentState(
+  db: D1Database,
+  rows: NormalizedRateRow[],
+): Promise<void> {
+  for (const part of chunk(rows, 32)) {
+    const preparedRows = await Promise.all(
+      part.map((row) => prepareHomeLoanRow(db, row, { storeCdrDetailPayload: false })),
+    )
+    for (const prepared of preparedRows) {
+      await runHomeLoanPostWriteSideEffects(
+        db,
+        prepared,
+        {
+          emitCanonicalFeed: false,
+          emitProjectionChangeFeed: false,
+          updateCatalogs: true,
+          markSeriesSeen: true,
+          upsertLatestSeries: true,
+          writeProjection: true,
+        },
+        true,
+      )
+    }
+  }
 }
 
 export async function upsertHistoricalRateRows(
@@ -628,6 +670,9 @@ export async function upsertHistoricalRateRows(
     const filtered = await filterChangedHomeLoanRows(db, rows)
     inputRows = filtered.changed
     unchanged = filtered.unchanged
+    if (filtered.unchangedRows.length > 0) {
+      await touchUnchangedHomeLoanRowsCurrentState(db, filtered.unchangedRows)
+    }
     if (inputRows.length === 0) return { written: 0, unchanged, skippedSideEffects: 0 }
   }
   if (shouldUseBatchedHomeLoanFastPath(options)) {

@@ -8,7 +8,9 @@ import { writeSavingsProjection } from './analytics/projection-write'
 import { storeCdrDetailPayload } from './cdr-detail-payloads'
 import { upsertLatestSavingsSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
+import { markProductsSeen } from './product-status'
 import { nowIso } from '../utils/time'
+import { equalStateValue, filterChangedRows } from './change-aware-writes'
 import {
   assertHistoricalWriteAllowed,
   isHistoricalWriteContractError,
@@ -70,17 +72,6 @@ function emptyWriteResult(): RateBatchWriteResult {
   return { written: 0, unchanged: 0, skippedSideEffects: 0 }
 }
 
-function equalStateValue(left: unknown, right: unknown): boolean {
-  if (left == null && right == null) return true
-  if (typeof left === 'number' || typeof right === 'number') {
-    const a = left == null ? null : Number(left)
-    const b = right == null ? null : Number(right)
-    if (a == null || b == null) return a === b
-    return Number.isFinite(a) && Number.isFinite(b) ? a === b : String(left) === String(right)
-  }
-  return String(left ?? '') === String(right ?? '')
-}
-
 function savingsRowUnchanged(current: Record<string, unknown>, row: NormalizedSavingsRow): boolean {
   const comparisons: Array<[unknown, unknown]> = [
     [current.product_id, row.productId],
@@ -107,33 +98,34 @@ function chunk<T>(rows: T[], size: number): T[][] {
 
 async function filterChangedSavingsRows(db: D1Database, rows: NormalizedSavingsRow[]): Promise<{
   changed: NormalizedSavingsRow[]
+  unchangedRows: NormalizedSavingsRow[]
   unchanged: number
 }> {
-  const keyed = rows.map((row) => ({ row, seriesKey: savingsSeriesKey(row) }))
-  const currentByKey = new Map<string, Record<string, unknown>>()
-  for (const part of chunk(Array.from(new Set(keyed.map((item) => item.seriesKey))), 80)) {
-    const result = await db
-      .prepare(
-        `SELECT series_key, product_id, product_name, account_type, rate_type, deposit_tier,
-                interest_rate, min_balance, max_balance, conditions, monthly_fee, is_removed
-         FROM latest_savings_series
-         WHERE series_key IN (${part.map(() => '?').join(',')})`,
-      )
-      .bind(...part)
-      .all<Record<string, unknown>>()
-    for (const current of result.results ?? []) currentByKey.set(String(current.series_key || ''), current)
-  }
-  const changed: NormalizedSavingsRow[] = []
-  let unchanged = 0
-  for (const item of keyed) {
-    const current = currentByKey.get(item.seriesKey)
-    if (current && Number(current.is_removed ?? 0) === 0 && savingsRowUnchanged(current, item.row)) unchanged += 1
-    else changed.push(item.row)
-  }
-  return { changed, unchanged }
+  return filterChangedRows(db, {
+    rows,
+    latestTable: 'latest_savings_series',
+    selectColumns: [
+      'product_id',
+      'product_name',
+      'account_type',
+      'rate_type',
+      'deposit_tier',
+      'interest_rate',
+      'min_balance',
+      'max_balance',
+      'conditions',
+      'monthly_fee',
+    ],
+    seriesKeyForRow: savingsSeriesKey,
+    rowUnchanged: savingsRowUnchanged,
+  })
 }
 
-async function prepareSavingsRow(db: D1Database, row: NormalizedSavingsRow): Promise<PreparedSavingsRow> {
+async function prepareSavingsRow(
+  db: D1Database,
+  row: NormalizedSavingsRow,
+  options: { storeCdrDetailPayload?: boolean } = {},
+): Promise<PreparedSavingsRow> {
   const parsedAt = nowIso()
   const seriesKey = savingsSeriesKey(row)
   const productCode = row.productId
@@ -146,7 +138,7 @@ async function prepareSavingsRow(db: D1Database, row: NormalizedSavingsRow): Pro
   })
   const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
   const cdrProductDetailHash =
-    row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
+    options.storeCdrDetailPayload !== false && row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
       ? await storeCdrDetailPayload(db, row.cdrProductDetailJson)
       : null
 
@@ -201,6 +193,7 @@ async function runSavingsPostWriteSideEffects(
   db: D1Database,
   prepared: PreparedSavingsRow,
   options: SavingsRateWriteOptions,
+  touchProductPresence = false,
 ): Promise<void> {
   const { row, seriesKey, productKey, productCode, retrievalType, parsedAt, cdrProductDetailHash } = prepared
 
@@ -262,6 +255,16 @@ async function runSavingsPostWriteSideEffects(
       bankName: row.bankName,
       productId: row.productId,
       productCode,
+      collectionDate: row.collectionDate,
+      runId: row.runId ?? null,
+    })
+  }
+
+  if (touchProductPresence) {
+    await markProductsSeen(db, {
+      section: 'savings',
+      bankName: row.bankName,
+      productIds: [row.productId],
       collectionDate: row.collectionDate,
       runId: row.runId ?? null,
     })
@@ -412,6 +415,32 @@ async function upsertSavingsRateRowsBatched(
   return result
 }
 
+async function touchUnchangedSavingsRowsCurrentState(
+  db: D1Database,
+  rows: NormalizedSavingsRow[],
+): Promise<void> {
+  for (const part of chunk(rows, 32)) {
+    const preparedRows = await Promise.all(
+      part.map((row) => prepareSavingsRow(db, row, { storeCdrDetailPayload: false })),
+    )
+    for (const prepared of preparedRows) {
+      await runSavingsPostWriteSideEffects(
+        db,
+        prepared,
+        {
+          emitCanonicalFeed: false,
+          emitProjectionChangeFeed: false,
+          updateCatalogs: true,
+          markSeriesSeen: true,
+          upsertLatestSeries: true,
+          writeProjection: true,
+        },
+        true,
+      )
+    }
+  }
+}
+
 export async function upsertSavingsRateRows(
   db: D1Database,
   rows: NormalizedSavingsRow[],
@@ -424,6 +453,9 @@ export async function upsertSavingsRateRows(
     const filtered = await filterChangedSavingsRows(db, rows)
     inputRows = filtered.changed
     unchanged = filtered.unchanged
+    if (filtered.unchangedRows.length > 0) {
+      await touchUnchangedSavingsRowsCurrentState(db, filtered.unchangedRows)
+    }
     if (inputRows.length === 0) return { written: 0, unchanged, skippedSideEffects: 0 }
   }
   const result = await upsertSavingsRateRowsBatched(db, inputRows, options)
