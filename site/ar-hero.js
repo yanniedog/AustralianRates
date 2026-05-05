@@ -256,6 +256,10 @@
         intro.setLiveMetric(id, value, note);
     }
 
+    function clearIntroLeaderMetric(note) {
+        setIntroMetric('leader', '—', note || 'No leader is available for the current slice.');
+    }
+
     function renderStat(el, icon, label, value, help) {
         if (!el) return;
         el.innerHTML = '<span class="metric-code">' + iconText(icon, label) + '</span><strong>' + esc(value) + '</strong>';
@@ -771,7 +775,8 @@
     async function loadQuickCompare() {
         var root = quickCompareRoot();
         if (!apiBase) {
-            if (root && !apiBase) root.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
+            if (root) root.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
+            clearIntroLeaderMetric('Leaders unavailable right now.');
             return;
         }
         var requestSeq = ++quickCompareRequestSeq;
@@ -789,6 +794,7 @@
             if (snapshotRows) {
                 ladderRows = snapshotRows;
             } else if (!root) {
+                clearIntroLeaderMetric('No leader is available from the current snapshot.');
                 return;
             } else if (section === 'home-loans' && context.activeCount === 0) {
                 ladderRows = await loadHomeLoanScenarioRibbon(params);
@@ -812,12 +818,15 @@
                         : (leadBank || 'Current leader') + ' in the active slice.';
                     setIntroMetric('leader', pct(lead.interest_rate), leadNote);
                 }
+            } else {
+                clearIntroLeaderMetric('No leaders match the current slice.');
             }
         } catch (err) {
             clientLog('error', 'Quick compare load failed', {
                 message: describeError(err, 'Leaders rail is temporarily unavailable.'),
             });
             if (root) root.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
+            clearIntroLeaderMetric('Leaders unavailable right now.');
         }
     }
 

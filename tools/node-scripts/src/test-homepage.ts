@@ -476,11 +476,16 @@ async function verifyHeroStats(page, results, label) {
 }
 
 async function verifyHeroLeaderMetric(page, results, label) {
-    await page.waitForFunction(() => {
-        const el = document.querySelector('#market-intro-live-leader');
-        const text = String(el?.textContent || '').replace(/\s+/g, ' ').trim();
-        return /\d/.test(text) && text.includes('%') && text !== '—';
-    }, null, { timeout: 15000 }).catch(() => null);
+    let waitError = '';
+    try {
+        await page.waitForFunction(() => {
+            const el = document.querySelector('#market-intro-live-leader');
+            const text = String(el?.textContent || '').replace(/\s+/g, ' ').trim();
+            return /\d/.test(text) && text.includes('%') && text !== '—';
+        }, null, { timeout: 15000 });
+    } catch (error) {
+        waitError = error instanceof Error ? error.message : String(error || 'unknown wait failure');
+    }
 
     const text = await page.evaluate(() => {
         const el = document.querySelector('#market-intro-live-leader');
@@ -490,7 +495,7 @@ async function verifyHeroLeaderMetric(page, results, label) {
     if (/\d/.test(text) && text.includes('%') && text !== '—') {
         pass(results, `${label}: hero leader metric loaded`);
     } else {
-        fail(results, `${label}: hero leader metric missing (${text || 'empty'})`);
+        fail(results, `${label}: hero leader metric missing (${text || 'empty'}${waitError ? `; ${waitError}` : ''})`);
     }
 }
 
