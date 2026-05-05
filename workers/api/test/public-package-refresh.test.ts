@@ -59,6 +59,7 @@ describe('public package refresh side-effect policy', () => {
       ancillarySuppressed: false,
       reason: null,
       runReplayMaintenance: true,
+      replayMaintenanceLimit: 25,
       assuranceOptions: {
         persist: true,
         emitHardFailureLog: true,
@@ -75,7 +76,8 @@ describe('public package refresh side-effect policy', () => {
     ).toEqual({
       ancillarySuppressed: true,
       reason: 'd1_emergency_minimum_writes',
-      runReplayMaintenance: false,
+      runReplayMaintenance: true,
+      replayMaintenanceLimit: 5,
       assuranceOptions: {
         persist: false,
         emitHardFailureLog: false,
@@ -90,6 +92,7 @@ describe('public package refresh side-effect policy', () => {
     })
 
     expect(policy.runReplayMaintenance).toBe(false)
+    expect(policy.replayMaintenanceLimit).toBe(0)
     expect(policy.assuranceOptions).toEqual({ persist: false, emitHardFailureLog: false })
     expect(policy.reason).toBe('d1_nonessential_disabled')
   })

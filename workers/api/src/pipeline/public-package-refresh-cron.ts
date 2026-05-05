@@ -19,14 +19,20 @@ type PublicPackageSideEffectPolicyInput = {
 
 export function publicPackageRefreshSideEffectPolicy(input: PublicPackageSideEffectPolicyInput) {
   const ancillarySuppressed = input.emergencyMinimumWrites || input.nonEssentialDisabled
+  const runReplayMaintenance = !input.nonEssentialDisabled
   return {
     ancillarySuppressed,
-    reason: input.emergencyMinimumWrites
-      ? 'd1_emergency_minimum_writes'
-      : input.nonEssentialDisabled
-        ? 'd1_nonessential_disabled'
+    reason: input.nonEssentialDisabled
+      ? 'd1_nonessential_disabled'
+      : input.emergencyMinimumWrites
+        ? 'd1_emergency_minimum_writes'
         : null,
-    runReplayMaintenance: !ancillarySuppressed,
+    runReplayMaintenance,
+    replayMaintenanceLimit: runReplayMaintenance
+      ? input.emergencyMinimumWrites
+        ? 5
+        : 25
+      : 0,
     assuranceOptions: {
       persist: !ancillarySuppressed,
       emitHardFailureLog: !ancillarySuppressed,
@@ -92,13 +98,15 @@ export async function runPublicPackageRefreshCron(
   if (policy.ancillarySuppressed) {
     log.warn('scheduler', 'Running public cache refresh with ancillary D1 side effects suppressed', {
       code: 'd1_public_package_refresh_ancillary_side_effects_suppressed',
-      context: `scheduled_time=${input.scheduledIso} cron=${input.cron} reason=${policy.reason}`,
+      context:
+        `scheduled_time=${input.scheduledIso} cron=${input.cron} reason=${policy.reason}` +
+        ` replay_maintenance=${policy.runReplayMaintenance ? 'bounded' : 'suppressed'}`,
     })
   }
 
   const replayMaintenance = policy.runReplayMaintenance
     ? await runReplayQueueMaintenance(env, {
-        limit: 25,
+        limit: policy.replayMaintenanceLimit,
         source: 'public_package_refresh_cron',
       })
     : null

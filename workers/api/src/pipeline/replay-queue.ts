@@ -17,6 +17,21 @@ const DEFAULT_MAX_REPLAY_ATTEMPTS = 2
 const DEFAULT_REPLAY_BASE_DELAY_SECONDS = 900
 const DEFAULT_REPLAY_MAINTENANCE_LIMIT = 10
 
+type ReplayDispatchInput = {
+  limit?: number
+  lenderCode?: string
+  collectionDate?: string
+  dataset?: DatasetKind
+  forceDue?: boolean
+}
+
+type ReplayDispatchResult = {
+  claimed: number
+  dispatched: number
+  failed: number
+  rows: Array<{ replay_id: string; message_kind: string; scope: string }>
+}
+
 function replayConfig(env: EnvBindings): { maxReplayAttempts: number; baseDelaySeconds: number } {
   return {
     maxReplayAttempts: Math.max(1, parseIntegerEnv(env.MAX_REPLAY_ATTEMPTS, DEFAULT_MAX_REPLAY_ATTEMPTS)),
@@ -67,19 +82,8 @@ export async function handleReplayAttemptSuccess(
 
 export async function dispatchReplayQueue(
   env: EnvBindings,
-  input: {
-    limit?: number
-    lenderCode?: string
-    collectionDate?: string
-    dataset?: DatasetKind
-    forceDue?: boolean
-  } = {},
-): Promise<{
-    claimed: number
-    dispatched: number
-    failed: number
-    rows: Array<{ replay_id: string; message_kind: string; scope: string }>
-  }> {
+  input: ReplayDispatchInput = {},
+): Promise<ReplayDispatchResult> {
   const claimedRows = await claimReplayQueueRows(env.DB, {
     limit: input.limit ?? 50,
     lenderCode: input.lenderCode,
@@ -150,22 +154,40 @@ export async function dispatchReplayQueue(
   }
 }
 
+export async function recoverAndDispatchReplayQueue(
+  env: EnvBindings,
+  input: ReplayDispatchInput & { staleMinutes?: number } = {},
+): Promise<ReplayDispatchResult & { stale_requeued: number }> {
+  const limit = Math.max(1, Math.min(200, Math.floor(Number(input.limit) || 50)))
+  const staleRequeued = await requeueStaleDispatchingReplayRows(env.DB, {
+    staleMinutes: input.staleMinutes ?? 45,
+    limit,
+    lenderCode: input.lenderCode,
+    collectionDate: input.collectionDate,
+    dataset: input.dataset,
+  })
+  const result = await dispatchReplayQueue(env, {
+    ...input,
+    limit,
+  })
+  return {
+    ...result,
+    stale_requeued: staleRequeued,
+  }
+}
+
 export async function runReplayQueueMaintenance(
   env: EnvBindings,
   input: { limit?: number; source?: string } = {},
-): Promise<Awaited<ReturnType<typeof dispatchReplayQueue>>> {
+): Promise<Awaited<ReturnType<typeof recoverAndDispatchReplayQueue>>> {
   const limit = Math.max(1, Math.min(25, Math.floor(Number(input.limit) || DEFAULT_REPLAY_MAINTENANCE_LIMIT)))
-  const requeuedStale = await requeueStaleDispatchingReplayRows(env.DB, {
-    staleMinutes: 45,
-    limit,
-  })
-  const result = await dispatchReplayQueue(env, { limit })
-  if (requeuedStale > 0 || result.claimed > 0 || result.failed > 0) {
+  const result = await recoverAndDispatchReplayQueue(env, { limit, staleMinutes: 45 })
+  if (result.stale_requeued > 0 || result.claimed > 0 || result.failed > 0) {
     log.info('consumer', 'replay_queue_maintenance_completed', {
       code: 'replay_queue_maintenance_completed',
       context:
         `source=${input.source || 'scheduled'} limit=${limit}` +
-        ` stale_requeued=${requeuedStale}` +
+        ` stale_requeued=${result.stale_requeued}` +
         ` claimed=${result.claimed} dispatched=${result.dispatched} failed=${result.failed}`,
     })
   }

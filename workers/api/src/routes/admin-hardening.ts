@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { listReplayQueueRows } from '../db/ingest-replay-queue'
 import { listCoverageGapRows } from '../db/lender-dataset-status'
-import { dispatchReplayQueue } from '../pipeline/replay-queue'
+import { dispatchReplayQueue, recoverAndDispatchReplayQueue } from '../pipeline/replay-queue'
 import {
   getCachedCoverageGapAuditReport,
   loadCoverageGapAuditReport,
@@ -197,7 +197,11 @@ adminHardeningRoutes.post('/runs/replay-dispatch', async (c) => {
     : typeof body.collectionDate === 'string'
       ? body.collectionDate.trim() || undefined
       : undefined
-  const result = await dispatchReplayQueue(c.env, {
+  const recoverStale = body.recover_stale == null && body.recoverStale == null
+    ? true
+    : Boolean(body.recover_stale || body.recoverStale)
+  const dispatch = recoverStale ? recoverAndDispatchReplayQueue : dispatchReplayQueue
+  const result = await dispatch(c.env, {
     dataset,
     lenderCode,
     collectionDate,
@@ -244,7 +248,7 @@ adminHardeningRoutes.post('/runs/reconcile-lender-day', async (c) => {
   const selectedDatasets: DatasetKind[] =
     datasets.length > 0 ? datasets : ['home_loans', 'savings', 'term_deposits']
 
-  const replayDispatch = await dispatchReplayQueue(c.env, {
+  const replayDispatch = await recoverAndDispatchReplayQueue(c.env, {
     lenderCode: lenderCodes[0],
     collectionDate,
     dataset: datasets.length === 1 ? datasets[0] : undefined,
