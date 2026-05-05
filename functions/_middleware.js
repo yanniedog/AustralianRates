@@ -36,10 +36,12 @@ function snapshotPayloadFresh(payload) {
     if (!Number.isFinite(builtAt) || Date.now() - builtAt > SNAPSHOT_FRESH_MS) return false;
     var filtersResolved = payload.data && payload.data.filtersResolved;
     var endDate = filtersResolved && typeof filtersResolved.endDate === 'string' ? filtersResolved.endDate : '';
-    if (endDate === melbourneDateYmdOffset(0) || endDate === melbourneDateYmdOffset(-1)) return true;
+    var today = melbourneDateYmd();
+    var yesterday = melbourneDateYmdOffset(-1);
+    if (endDate === today || endDate === yesterday) return true;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return false;
     var endMs = Date.parse(endDate + 'T00:00:00.000Z');
-    var todayMs = Date.parse(melbourneDateYmd() + 'T00:00:00.000Z');
+    var todayMs = Date.parse(today + 'T00:00:00.000Z');
     if (!Number.isFinite(endMs) || !Number.isFinite(todayMs)) return false;
     var ageDays = Math.floor((todayMs - endMs) / 86400000);
     return ageDays >= 0 && ageDays <= SNAPSHOT_MAX_STALENESS_DAYS;
