@@ -292,22 +292,42 @@ export async function claimReplayQueueRows(
 
 export async function requeueStaleDispatchingReplayRows(
   db: D1Database,
-  input: { staleMinutes?: number; limit?: number } = {},
+  input: {
+    staleMinutes?: number
+    limit?: number
+    lenderCode?: string
+    collectionDate?: string
+    dataset?: DatasetKind
+  } = {},
 ): Promise<number> {
   const staleMinutes = Math.max(15, Math.min(240, Math.floor(Number(input.staleMinutes) || 45)))
   const limit = Math.max(1, Math.min(100, Math.floor(Number(input.limit) || 25)))
   const now = new Date().toISOString()
   const cutoff = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString()
+  const where = [`status = 'dispatching'`, `updated_at <= ?1`]
+  const binds: Array<string | number> = [cutoff]
+  if (input.lenderCode) {
+    where.push(`lender_code = ?${binds.length + 1}`)
+    binds.push(input.lenderCode)
+  }
+  if (input.collectionDate) {
+    where.push(`collection_date = ?${binds.length + 1}`)
+    binds.push(input.collectionDate)
+  }
+  if (input.dataset) {
+    where.push(`dataset_kind = ?${binds.length + 1}`)
+    binds.push(input.dataset)
+  }
+  binds.push(limit)
   const staleRows = await db
     .prepare(
       `SELECT replay_id
        FROM ingest_replay_queue
-       WHERE status = 'dispatching'
-         AND updated_at <= ?1
+       WHERE ${where.join(' AND ')}
        ORDER BY updated_at ASC
-       LIMIT ?2`,
+       LIMIT ?${binds.length}`,
     )
-    .bind(cutoff, limit)
+    .bind(...binds)
     .all<{ replay_id: string }>()
 
   let requeued = 0
