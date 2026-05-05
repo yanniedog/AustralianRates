@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { getEconomicObservationsForSeries, getEconomicStatusMap, expandEconomicObservationsDaily } from '../db/economic-series'
 import { buildDerivedEconomicSeries } from '../economic/derived-series'
-import { economicSeriesQuarantineStatus, shouldExcludeEconomicSeriesFromPublic } from '../economic/public-visibility'
+import { createEconomicVisibilityContext, economicSeriesQuarantineStatus, shouldExcludeEconomicSeriesFromPublic, todayIso } from '../economic/public-visibility'
 import { buildRbaSignals } from '../economic/rba-signals'
 import { ECONOMIC_PRESETS, ECONOMIC_SERIES_DEFINITIONS, getEconomicPreset, getEconomicSeriesDefinition, groupEconomicSeriesByCategory, isDerivedEconomicSeries } from '../economic/registry'
 import { getReadDb } from '../db/read-db'
@@ -13,9 +13,6 @@ import { registerSiteUiPublicRoute } from './site-ui-public'
 
 const DEFAULT_LOOKBACK_YEARS = 5
 const MAX_SERIES_PER_REQUEST = 12
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function clampDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } {
   const today = todayIso()
@@ -96,7 +93,7 @@ economicPublicRoutes.get('/health', async (c) => {
 economicPublicRoutes.get('/catalog', async (c) => {
   withPublicCache(c, 3600)
   const statusMap = await getEconomicStatusMap(getReadDb(c))
-  const endDate = todayIso()
+  const visibility = createEconomicVisibilityContext()
   const categories = groupEconomicSeriesByCategory().map((category) => ({
     id: category.id,
     label: category.label,
@@ -113,7 +110,7 @@ economicPublicRoutes.get('/catalog', async (c) => {
       description: definition.description,
       presets: definition.presets,
       freshness: statusPayload(statusMap.get(definition.id)),
-      quarantine: economicSeriesQuarantineStatus(statusMap.get(definition.id), definition.frequency, endDate),
+      quarantine: economicSeriesQuarantineStatus(statusMap.get(definition.id), definition.frequency, visibility),
     })),
   }))
 
@@ -146,12 +143,13 @@ economicPublicRoutes.get('/series', async (c) => {
   const { startDate, endDate } = clampDateRange(requestedStartDate, requestedEndDate)
 
   const statusMap = await getEconomicStatusMap(getReadDb(c), ids)
+  const visibility = createEconomicVisibilityContext(endDate)
   const series = await Promise.all(
     ids.map(async (id) => {
       const definition = getEconomicSeriesDefinition(id)
       if (!definition) return null
-      const quarantine = economicSeriesQuarantineStatus(statusMap.get(id), definition.frequency, endDate)
-      if (shouldExcludeEconomicSeriesFromPublic(statusMap.get(id), definition.frequency, endDate)) return null
+      const quarantine = economicSeriesQuarantineStatus(statusMap.get(id), definition.frequency, visibility)
+      if (shouldExcludeEconomicSeriesFromPublic(statusMap.get(id), definition.frequency, visibility)) return null
       const expanded = isDerivedEconomicSeries(definition)
         ? await buildDerivedEconomicSeries(getReadDb(c), definition, startDate, endDate)
         : expandEconomicObservationsDaily(

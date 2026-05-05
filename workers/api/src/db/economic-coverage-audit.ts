@@ -160,7 +160,8 @@ function isTransientUpstreamTransportError(row: EconomicSeriesCoverageRow): bool
 }
 
 function isOptionalAbsUnavailable(definition: EconomicSeriesDefinition, statusRow: EconomicStatusDbRow | null): boolean {
-  return isAbsIndicatorSeries(definition) && String(statusRow?.message || '').includes('abs_indicator_api_key_missing')
+  const message = String(statusRow?.message || '').trim()
+  return isAbsIndicatorSeries(definition) && (message === 'abs_indicator_api_key_missing' || message.startsWith('abs_indicator_api_key_missing:'))
 }
 
 function storedProxyFlagMatches(definition: EconomicSeriesDefinition, row: EconomicStatusDbRow | null): boolean {
