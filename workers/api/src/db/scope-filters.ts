@@ -58,20 +58,28 @@ function boundedLookbackStartDate(endDate: string): string {
   return start.toISOString().slice(0, 10)
 }
 
-/** Default date range: last 365 days clipped to the dataset's earliest row and today. */
+export function defaultDateRangeFromCollectionBounds(
+  minDate: string | null | undefined,
+  maxDate: string | null | undefined,
+): { startDate: string; endDate: string } {
+  const normalizedMax = maxDate && /^\d{4}-\d{2}-\d{2}$/.test(maxDate) ? maxDate : null
+  const normalizedMin = minDate && /^\d{4}-\d{2}-\d{2}$/.test(minDate) ? minDate : null
+  const endDate = normalizedMax ?? todayYmd()
+  const boundedStartDate = boundedLookbackStartDate(endDate)
+  const startDate = normalizedMin && normalizedMin > boundedStartDate ? normalizedMin : boundedStartDate
+  return { startDate, endDate }
+}
+
+/** Default date range: last 365 days clipped to the dataset's earliest row and latest real collection date. */
 async function getDefaultDateRangeForSection(
   db: D1Database,
   section: ChartCacheSection,
 ): Promise<{ startDate: string; endDate: string }> {
   const table = SECTION_TABLES[section]
   const row = await db
-    .prepare(`SELECT MIN(collection_date) AS min_date FROM ${table}`)
-    .first<{ min_date: string | null }>()
-  const endDate = todayYmd()
-  const boundedStartDate = boundedLookbackStartDate(endDate)
-  const minDate = row?.min_date && /^\d{4}-\d{2}-\d{2}$/.test(row.min_date) ? row.min_date : null
-  const startDate = minDate && minDate > boundedStartDate ? minDate : boundedStartDate
-  return { startDate, endDate }
+    .prepare(`SELECT MIN(collection_date) AS min_date, MAX(collection_date) AS max_date FROM ${table}`)
+    .first<{ min_date: string | null; max_date: string | null }>()
+  return defaultDateRangeFromCollectionBounds(row?.min_date, row?.max_date)
 }
 
 /** Split a scope string into its window / preset components. */

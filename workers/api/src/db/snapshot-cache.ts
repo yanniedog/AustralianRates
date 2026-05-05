@@ -30,8 +30,8 @@ import {
 } from './public-cache-freshness'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
-/** Bump when snapshot payload shape changes so stale rows are ignored. v11 aligns chart window end with latest_* max collection_date; v10 adds slicePairStats; v9 raised the inline snapshot budget for raw home-loan report bundles. */
-const SNAPSHOT_PAYLOAD_VERSION = 11
+/** Bump when snapshot payload shape changes so stale rows are ignored. v12 aligns default scope end with latest collection_date; v11 aligns chart window end with latest_* max collection_date. */
+const SNAPSHOT_PAYLOAD_VERSION = 12
 
 /** Snapshot scope matches chart-cache scope so the same scope strings cover both caches. */
 export type SnapshotScope = ChartCacheScope
