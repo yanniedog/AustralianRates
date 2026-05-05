@@ -122,7 +122,7 @@
     }
 
     function reloadHeroSurfacesFromSnapshot(event) {
-        if (!event || !event.detail) return;
+        if (!event || !event.detail || !event.detail.data) return;
         reloadHeroSurfaces();
     }
 

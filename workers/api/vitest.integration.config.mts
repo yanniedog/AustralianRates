@@ -11,6 +11,8 @@ export default defineWorkersConfig({
     maxWorkers: 1,
     poolOptions: {
       workers: {
+        isolatedStorage: false,
+        singleWorker: true,
         wrangler: {
           configPath: './wrangler.toml',
           environment: 'test',

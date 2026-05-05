@@ -6,6 +6,10 @@ declare module 'cloudflare:test' {
   interface ProvidedEnv extends EnvBindings {}
 }
 
+declare global {
+  var __arIntegrationMigrationsApplied: Promise<void> | undefined
+}
+
 const migrationModules = import.meta.glob('../../migrations/*.sql', {
   eager: true,
   query: '?raw',
@@ -57,9 +61,14 @@ function splitMigrationStatements(sql: string): string[] {
 }
 
 beforeAll(async () => {
-  for (const sql of orderedMigrationSql()) {
-    for (const statement of splitMigrationStatements(sql)) {
-      await env.DB.prepare(statement).run()
-    }
+  if (!globalThis.__arIntegrationMigrationsApplied) {
+    globalThis.__arIntegrationMigrationsApplied = (async () => {
+      for (const sql of orderedMigrationSql()) {
+        for (const statement of splitMigrationStatements(sql)) {
+          await env.DB.prepare(statement).run()
+        }
+      }
+    })()
   }
+  await globalThis.__arIntegrationMigrationsApplied
 })

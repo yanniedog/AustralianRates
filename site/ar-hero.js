@@ -788,6 +788,7 @@
                 var snapshot = window.AR && window.AR.snapshot;
                 if (snapshot && typeof snapshot.awaitReady === 'function') {
                     await snapshot.awaitReady(1400);
+                    if (requestSeq !== quickCompareRequestSeq) return;
                     snapshotRows = loadQuickCompareFromSnapshot(context);
                 }
             }

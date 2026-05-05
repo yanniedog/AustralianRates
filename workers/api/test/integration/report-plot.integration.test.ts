@@ -87,7 +87,7 @@ describe('report-plot routes', () => {
         .run()
 
       const response = await SELF.fetch(
-        'https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D',
+        'https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D&bank=ANZ',
       )
 
       expect(response.status).toBe(200)
@@ -286,7 +286,7 @@ describe('report-plot cache refresh', () => {
       .run()
 
     const response = await SELF.fetch(
-      'https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D',
+      'https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D&cache_bust=integration-live-fallback',
     )
     expect(response.status).toBe(200)
     expect(response.headers.get('X-AR-Cache')).toBe('live')
