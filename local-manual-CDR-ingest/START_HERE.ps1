@@ -53,22 +53,59 @@ function Invoke-RebuildExports {
   Invoke-LocalPython -Arguments @(".\cdr_outputs.py", ".\runs\$date")
 }
 
+function Join-LocalUrl {
+  param(
+    [Parameter(Mandatory = $true)][string]$BaseUrl,
+    [Parameter(Mandatory = $true)][string]$Path
+  )
+  return $BaseUrl.TrimEnd("/") + "/" + $Path.TrimStart("/")
+}
+
 function Open-Dashboard {
   $date = Get-RunDateOrThrow
   $exports = ".\runs\$date\_exports"
   if (-not (Test-Path $exports)) {
     Invoke-RebuildExports
   }
-  $port = 8800
-  while (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
-    $port++
-  }
+  $portFile = Join-Path ([System.IO.Path]::GetTempPath()) ("ar-cdr-dashboard-{0}.json" -f [System.Guid]::NewGuid())
   $python = Get-PythonCommand
-  $arguments = @($python.Prefix + @(".\cdr_dashboard_server.py", "--exports", $exports, "--port", "$port"))
+  $arguments = @($python.Prefix + @(".\cdr_dashboard_server.py", "--exports", $exports, "--port", "auto", "--port-file", $portFile))
   $proc = Start-Process -FilePath $python.Exe -ArgumentList $arguments -WorkingDirectory $ScriptDir -WindowStyle Hidden -PassThru
-  Start-Sleep -Seconds 2
-  $url = "http://127.0.0.1:$port/"
-  Start-Process $url
+  $url = $null
+  $opened = $false
+  $deadline = (Get-Date).AddSeconds(30)
+  while ((Get-Date) -lt $deadline) {
+    if ($proc.HasExited) {
+      throw "Dashboard server exited with code $($proc.ExitCode)."
+    }
+    if (Test-Path $portFile) {
+      try {
+        $url = [string]((Get-Content -Path $portFile -Raw | ConvertFrom-Json).url)
+      } catch {
+        $url = $null
+      }
+      if ($url) {
+        try {
+          $health = Join-LocalUrl -BaseUrl $url -Path "api/latest"
+          $response = Invoke-WebRequest -Uri $health -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+          if ($response.StatusCode -eq 200) {
+            Start-Process $url
+            $opened = $true
+            break
+          }
+        } catch {
+          Start-Sleep -Milliseconds 500
+          continue
+        }
+      }
+    }
+    Start-Sleep -Milliseconds 500
+  }
+  Remove-Item -Path $portFile -ErrorAction SilentlyContinue
+  if (-not $opened) {
+    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    throw "Dashboard server did not become ready within 30 seconds."
+  }
   Write-Host ""
   Write-Host "Dashboard opened: $url"
   Write-Host "Server process: $($proc.Id)"
