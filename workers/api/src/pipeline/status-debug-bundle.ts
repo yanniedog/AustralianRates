@@ -62,7 +62,7 @@ import {
 } from './status-debug-remediation'
 import type { CoverageGapAuditReport } from './coverage-gap-audit'
 import { shouldIgnoreStatusActionableLog } from '../utils/status-actionable-filter'
-import { readLocalD1BudgetState } from '../utils/d1-budget'
+import { buildD1BudgetVisibilitySnapshot } from '../utils/d1-budget'
 import { listHistoricalQuarantineCounts } from '../db/historical-quarantine'
 
 const DEFAULT_SECTIONS = [
@@ -93,12 +93,12 @@ export function parseStatusDebugSections(raw: string | undefined): Set<string> {
 }
 
 async function buildCachedIntegrityPulse(env: EnvBindings): Promise<Record<string, unknown>> {
-  const [integrityRow, postIngest, coverageReport, remediationReport, budgetState, quarantineCounts] = await Promise.all([
+  const [integrityRow, postIngest, coverageReport, remediationReport, budgetVisibility, quarantineCounts] = await Promise.all([
     getLatestIntegrityAuditRun(env.DB),
     loadPostIngestAssuranceReport(env.DB).catch(() => null),
     loadCoverageGapAuditReport(env.DB).catch(() => null),
     loadCoverageGapRemediationReport(env.DB).catch(() => null),
-    readLocalD1BudgetState(env, 7).catch(() => null),
+    buildD1BudgetVisibilitySnapshot(env).catch(() => null),
     listHistoricalQuarantineCounts(env.DB).catch(() => []),
   ])
   const integrity = parseIntegrityAuditRunRow(integrityRow)
@@ -136,13 +136,7 @@ async function buildCachedIntegrityPulse(env: EnvBindings): Promise<Record<strin
           totals: remediationReport.totals,
         }
       : null,
-    d1_budget: budgetState
-      ? {
-          generated_at: budgetState.generated_at,
-          month: budgetState.month,
-          guardrails: budgetState.guardrails,
-        }
-      : null,
+    d1_budget: budgetVisibility,
     quarantine: {
       total_rows: quarantineTotal,
       by_dataset: quarantineCounts,

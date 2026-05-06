@@ -36,6 +36,7 @@ import {
   logPublicCacheWedgedSection,
   serializeJsonForKv,
 } from './public-cache-support'
+import { log } from '../utils/logger'
 
 export type ChartCacheSection = 'home_loans' | 'savings' | 'term_deposits'
 type ChartCachePreset = 'consumer-default'
@@ -640,6 +641,41 @@ export async function writeD1ChartCache(
   const builtAt = new Date().toISOString()
   const filtersResolved = options?.filtersResolved || inferFiltersResolvedFromRows(result.rows)
   const sourceRunFinishedAt = options?.sourceRunFinishedAt ?? null
+
+  try {
+    const existing = await db
+      .prepare(
+        `SELECT row_count, payload_json FROM ${CACHE_TABLE} WHERE section = ? AND representation = ? AND request_scope = ?`,
+      )
+      .bind(section, representation, scope)
+      .first<{ row_count: number; payload_json: string }>()
+
+    if (existing && existing.row_count === result.rows.length) {
+      try {
+        const rawJsonPrev = existing.payload_json.startsWith(GZIP_PREFIX)
+          ? await gunzipFromBase64(existing.payload_json.slice(GZIP_PREFIX.length))
+          : existing.payload_json
+        const prev = JSON.parse(rawJsonPrev) as {
+          meta?: { filtersResolved?: { endDate?: string }; sourceRunFinishedAt?: string | null }
+        }
+        if (
+          prev.meta?.filtersResolved?.endDate === filtersResolved?.endDate &&
+          (prev.meta?.sourceRunFinishedAt ?? null) === (sourceRunFinishedAt ?? null)
+        ) {
+          log.info('public_cache', 'chart_cache_write_skipped_unchanged', {
+            code: 'chart_cache_write_skipped_unchanged',
+            context: { section, representation, scope },
+          })
+          return
+        }
+      } catch {
+        /* fall through to write */
+      }
+    }
+  } catch {
+    /* missing table or read failure — attempt insert */
+  }
+
   const rawJson = JSON.stringify({
     v: CHART_PIVOT_PAYLOAD_VERSION,
     payloadVersion: CHART_PIVOT_PAYLOAD_VERSION,
