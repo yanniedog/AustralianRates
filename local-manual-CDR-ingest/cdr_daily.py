@@ -39,7 +39,8 @@ def run_ingest(script_dir: Path, out_dir: Path, date: str, extra: List[str]) -> 
         "--resume",
         *extra,
     ]
-    subprocess.run(cmd, cwd=script_dir, check=True)
+    # Intentionally pass a list with shell=False; extra args are local CLI passthrough.
+    subprocess.run(cmd, cwd=script_dir, check=True, shell=False)
 
 
 def run_once(args: argparse.Namespace) -> bool:
@@ -65,6 +66,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--runs", type=Path, default=Path(__file__).resolve().parent / "runs")
     parser.add_argument("--exports", type=Path, default=None, help="Export folder; default <run>/_exports")
     parser.add_argument("--db", type=Path, default=None, help="SQLite path; default <exports>/local-cdr.sqlite")
+    parser.add_argument("--state", type=Path, default=None, help="Daily completion marker folder")
     parser.add_argument("--date", default=None, help="Override run date YYYY-MM-DD")
     parser.add_argument("--force", action="store_true", help="Ignore daily completion marker")
     parser.add_argument("--daemon", action="store_true", help="Keep running and execute after each local midnight")

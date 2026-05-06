@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Mapping, Optional
 from cdr_clean_export import parse_banks_run, parse_energy_run, summary_counts, utc_now
 from cdr_xlsx import write_workbook
 
+SCHEMA_VERSION = "2"
+
 TABLE_COLUMNS: Dict[str, List[str]] = {
     "runs": ["run_date", "generated_at", "banks_counts_json", "energy_counts_json"],
     "bank_products": [
@@ -79,6 +81,16 @@ TABLE_COLUMNS: Dict[str, List[str]] = {
     ],
 }
 
+RESET_TABLES = (
+    "bank_products",
+    "bank_rates",
+    "bank_items",
+    "energy_plans",
+    "energy_items",
+    "runs",
+    "schema_meta",
+)
+
 
 def write_json(path: Path, data: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -95,6 +107,10 @@ def ensure_db(con: sqlite3.Connection) -> None:
     con.executescript(
         """
         PRAGMA journal_mode=WAL;
+        CREATE TABLE IF NOT EXISTS schema_meta (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS runs (
           run_date TEXT PRIMARY KEY,
           generated_at TEXT NOT NULL,
@@ -175,26 +191,50 @@ def ensure_db(con: sqlite3.Connection) -> None:
           ON energy_items (run_date, provider, item_group);
         """
     )
+    con.execute(
+        "INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('version', ?)",
+        (SCHEMA_VERSION,),
+    )
 
 
 def needs_schema_reset(con: sqlite3.Connection) -> bool:
-    rows = con.execute("PRAGMA table_info(bank_products)").fetchall()
-    if rows and any(row[5] for row in rows):
+    has_core_table = table_exists(con, "bank_products")
+    if not has_core_table:
+        return False
+    if not table_exists(con, "schema_meta"):
         return True
-    columns = {row[1] for row in rows}
-    return bool(rows) and "source_file" not in columns
+    current = con.execute(
+        "SELECT value FROM schema_meta WHERE key = 'version'",
+    ).fetchone()
+    return current is None or current[0] != SCHEMA_VERSION
 
 
 def reset_schema(con: sqlite3.Connection) -> None:
-    for table in (
-        "bank_products",
-        "bank_rates",
-        "bank_items",
-        "energy_plans",
-        "energy_items",
-        "runs",
-    ):
-        con.execute(f"DROP TABLE IF EXISTS {table}")
+    for table in RESET_TABLES:
+        con.execute(f"DROP TABLE IF EXISTS {quote_table(table)}")
+
+
+def table_exists(con: sqlite3.Connection, table: str) -> bool:
+    return (
+        con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone()
+        is not None
+    )
+
+
+def quote_table(table: str) -> str:
+    if table not in RESET_TABLES and table not in TABLE_COLUMNS:
+        raise ValueError(f"unknown table: {table}")
+    return '"' + table.replace('"', '""') + '"'
+
+
+def quote_column(column: str) -> str:
+    known = {name for columns in TABLE_COLUMNS.values() for name in columns}
+    if column not in known:
+        raise ValueError(f"unknown column: {column}")
+    return '"' + column.replace('"', '""') + '"'
 
 
 def insert_rows(con: sqlite3.Connection, table: str, rows: List[Mapping[str, Any]]) -> None:
@@ -202,7 +242,8 @@ def insert_rows(con: sqlite3.Connection, table: str, rows: List[Mapping[str, Any
         return
     columns = TABLE_COLUMNS[table]
     placeholders = ",".join("?" for _ in columns)
-    sql = f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})"
+    quoted_columns = ",".join(quote_column(col) for col in columns)
+    sql = f"INSERT INTO {quote_table(table)} ({quoted_columns}) VALUES ({placeholders})"
     con.executemany(sql, [row_for_columns(row, columns) for row in rows])
 
 
@@ -212,7 +253,7 @@ def rebuild_run_db(db_path: Path, run_date: str, banks: Mapping[str, Any], energ
         ensure_db(con)
         for table in TABLE_COLUMNS:
             if table != "runs":
-                con.execute(f"DELETE FROM {table} WHERE run_date = ?", (run_date,))
+                con.execute(f"DELETE FROM {quote_table(table)} WHERE run_date = ?", (run_date,))
         con.execute("DELETE FROM runs WHERE run_date = ?", (run_date,))
         con.execute(
             "INSERT INTO runs VALUES (?, ?, ?, ?)",
@@ -223,17 +264,21 @@ def rebuild_run_db(db_path: Path, run_date: str, banks: Mapping[str, Any], energ
                 json.dumps(summary_counts(energy), sort_keys=True),
             ),
         )
-        insert_rows(con, "bank_products", banks["products"])
-        insert_rows(con, "bank_rates", banks["rates"])
+        insert_rows(con, "bank_products", with_run_date(banks["products"], run_date))
+        insert_rows(con, "bank_rates", with_run_date(banks["rates"], run_date))
         for group in ("fees", "features", "eligibility", "constraints"):
-            insert_rows(con, "bank_items", add_group(banks[group], group))
-        insert_rows(con, "energy_plans", energy["plans"])
+            insert_rows(con, "bank_items", with_run_date(add_group(banks[group], group), run_date))
+        insert_rows(con, "energy_plans", with_run_date(energy["plans"], run_date))
         for group in ("contracts", "charges", "fees"):
-            insert_rows(con, "energy_items", add_group(energy[group], group))
+            insert_rows(con, "energy_items", with_run_date(add_group(energy[group], group), run_date))
 
 
 def add_group(rows: List[Mapping[str, Any]], group: str) -> List[Dict[str, Any]]:
     return [{**row, "item_group": group} for row in rows]
+
+
+def with_run_date(rows: List[Mapping[str, Any]], run_date: str) -> List[Dict[str, Any]]:
+    return [{"run_date": run_date, **row} for row in rows]
 
 
 def write_sector_workbooks(out_dir: Path, run_date: str, banks: Mapping[str, Any], energy: Mapping[str, Any]) -> None:

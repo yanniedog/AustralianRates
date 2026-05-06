@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
 INVALID_SHEET_CHARS = re.compile(r"[\[\]:*?/\\]")
+LEADING_ZERO_ID = re.compile(r"^[+-]?0\d")
+DECIMAL_NUMBER = re.compile(r"^[+-]?0\.")
 
 
 def cell_ref(row: int, col: int) -> str:
@@ -52,7 +54,10 @@ def is_number(value: Any) -> bool:
         return False
     try:
         float(value)
-        return value.strip()[0] not in ("0", "+") or value.strip() in ("0", "0.0")
+        stripped = value.strip()
+        if LEADING_ZERO_ID.match(stripped) and not DECIMAL_NUMBER.match(stripped):
+            return False
+        return True
     except ValueError:
         return False
 
