@@ -4,14 +4,26 @@
   const state = { section: 'Mortgage', sector: 'banks', manifest: null, banks: null, energy: null, descending: false };
   const $ = (id) => document.getElementById(id);
 
+  function clear(element) {
+    while (element.firstChild) element.removeChild(element.firstChild);
+  }
+
+  function child(parent, tagName, className, text) {
+    const element = document.createElement(tagName);
+    if (className) element.className = className;
+    if (text != null) element.textContent = String(text);
+    parent.appendChild(element);
+    return element;
+  }
+
+  function preferredDescending(section) {
+    return section !== 'Mortgage';
+  }
+
   async function getJson(url) {
     const response = await fetch(url, { cache: 'force-cache' });
     if (!response.ok) throw new Error(url + ' returned ' + response.status);
     return response.json();
-  }
-
-  function esc(value) {
-    return String(value == null ? '' : value).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   }
 
   function pct(raw) {
@@ -81,13 +93,15 @@
 
   function setupFilters() {
     const dataset = $('dataset');
+    clear(dataset);
     if (state.sector === 'banks') {
       const values = [...new Set(state.banks.products.map((row) => row.dataset).filter(Boolean))].sort();
-      dataset.innerHTML = '<option value="">All banking datasets</option>' + values.map((value) => `<option>${esc(value)}</option>`).join('');
+      child(dataset, 'option', '', 'All banking datasets').value = '';
+      values.forEach((value) => child(dataset, 'option', '', value));
       dataset.value = values.includes(state.section) ? state.section : '';
       dataset.disabled = false;
     } else {
-      dataset.innerHTML = '<option value="">Energy plans</option>';
+      child(dataset, 'option', '', 'Energy plans').value = '';
       dataset.disabled = true;
     }
   }
@@ -131,16 +145,26 @@
   function renderStats(rows) {
     const counts = state.sector === 'banks' ? state.manifest.banks_counts : state.manifest.energy_counts;
     const entries = Object.entries(counts).slice(0, 6).concat([['visible rows', rows.length]]);
-    $('stats').innerHTML = entries.map(([key, value]) =>
-      `<div class="terminal-stat"><span class="metric-code">${esc(key)}</span><strong>${num(value)}</strong></div>`
-    ).join('');
+    const stats = $('stats');
+    clear(stats);
+    entries.forEach(([key, value]) => {
+      const card = child(stats, 'div', 'terminal-stat');
+      child(card, 'span', 'metric-code', key);
+      child(card, 'strong', '', num(value));
+    });
   }
 
   function renderRail(items) {
     $('chart-series-note').textContent = state.sector === 'banks' ? 'Top visible rates' : 'Visible plan sample';
-    $('chart-series-list').innerHTML = items.slice(0, 24).map((item) =>
-      `<article class="local-series-card" role="listitem"><strong>${esc(item.label)}</strong><span>${esc(item.meta || '')}</span><span>${state.sector === 'banks' ? pct(item.value) : 'Plan'}</span></article>`
-    ).join('');
+    const list = $('chart-series-list');
+    clear(list);
+    items.slice(0, 24).forEach((item) => {
+      const card = child(list, 'article', 'local-series-card');
+      card.setAttribute('role', 'listitem');
+      child(card, 'strong', '', item.label);
+      child(card, 'span', '', item.meta || '');
+      child(card, 'span', '', state.sector === 'banks' ? pct(item.value) : 'Plan');
+    });
   }
 
   function renderTable(rows) {
@@ -149,11 +173,19 @@
       : ['provider', 'plan_name', 'fuel_type', 'last_updated', 'description'];
     const visible = rows.slice(0, 1500);
     $('table-count').textContent = num(visible.length) + ' visible';
-    $('table').innerHTML = '<thead><tr>' + keys.map((key) => `<th>${esc(key)}</th>`).join('') + '</tr></thead><tbody>' +
-      visible.map((row) => '<tr>' + keys.map((key) => {
+    const table = $('table');
+    clear(table);
+    const thead = child(table, 'thead');
+    const header = child(thead, 'tr');
+    keys.forEach((key) => child(header, 'th', '', key));
+    const tbody = child(table, 'tbody');
+    visible.forEach((row) => {
+      const tr = child(tbody, 'tr');
+      keys.forEach((key) => {
         const value = key.includes('rate') ? pct(row[key]) || row[key] || '' : row[key] || '';
-        return `<td class="${key.includes('rate') ? 'num' : ''}">${esc(value)}</td>`;
-      }).join('') + '</tr>').join('') + '</tbody>';
+        child(tr, 'td', key.includes('rate') ? 'num' : '', value);
+      });
+    });
   }
 
   function render() {
@@ -175,8 +207,8 @@
     setSectionUi();
     $('chart-status').textContent = 'Loading local CDR data';
     $('table-count').textContent = '';
-    $('table').innerHTML = '';
-    $('chart-series-list').innerHTML = '';
+    clear($('table'));
+    clear($('chart-series-list'));
     if (!state[state.sector]) state[state.sector] = await getJson(`/api/${state.sector}?date=${state.manifest.run_date}`);
     setupFilters();
     render();
@@ -201,9 +233,8 @@
   }
 
   init().catch((error) => {
-    document.body.innerHTML = '<pre class="panel" style="margin:20px">' + esc(error.stack || error.message || error) + '</pre>';
+    clear(document.body);
+    const pre = child(document.body, 'pre', 'panel', error.stack || error.message || error);
+    pre.style.margin = '20px';
   });
 })();
-  function preferredDescending(section) {
-    return section !== 'Mortgage';
-  }

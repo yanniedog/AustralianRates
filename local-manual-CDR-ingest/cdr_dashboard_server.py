@@ -54,7 +54,7 @@ def make_handler(exports_root: Path):
         def do_GET(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
             try:
-                body, ctype = self.route(parsed.path, parse_qs(parsed.query), artifact_cache)
+                body, ctype = self.route(parsed.path, parse_qs(parsed.query))
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", ctype)
                 self.send_header("Cache-Control", "public, max-age=300")
@@ -67,7 +67,7 @@ def make_handler(exports_root: Path):
         def log_message(self, fmt: str, *args: object) -> None:
             print(fmt % args)
 
-        def route(self, path: str, query: Dict[str, list[str]], files: CachedFiles) -> Tuple[bytes, str]:
+        def route(self, path: str, query: Dict[str, list[str]]) -> Tuple[bytes, str]:
             if path == "/":
                 return dashboard_cache.read(DASHBOARD_ROOT / "index.html"), "text/html; charset=utf-8"
             if path == "/assets/app.css":
@@ -77,17 +77,19 @@ def make_handler(exports_root: Path):
             if path == "/assets/branding/ar-mark.svg":
                 return site_cache.read(SITE_ROOT / "assets" / "branding" / "ar-mark.svg"), "image/svg+xml"
             if path.startswith("/site/"):
-                target = SITE_ROOT / path.removeprefix("/site/")
+                target = (SITE_ROOT / path.removeprefix("/site/")).resolve()
+                if SITE_ROOT.resolve() not in target.parents and target != SITE_ROOT.resolve():
+                    raise FileNotFoundError(path)
                 return site_cache.read(target), mimetypes.guess_type(str(target))[0] or "application/octet-stream"
             if path == "/api/latest":
-                return files.read(exports_root / "dashboard-cache" / "latest.json"), "application/json"
+                return artifact_cache.read(exports_root / "dashboard-cache" / "latest.json"), "application/json"
             if path in ("/api/banks", "/api/energy"):
                 date = query.get("date", [""])[0]
                 name = path.rsplit("/", 1)[1] + ".json"
-                return files.read(exports_root / "dashboard-cache" / date / name), "application/json"
+                return artifact_cache.read(exports_root / "dashboard-cache" / date / name), "application/json"
             if path.startswith("/exports/"):
                 target = exports_root / path.removeprefix("/exports/")
-                return files.read(target), mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+                return artifact_cache.read(target), mimetypes.guess_type(str(target))[0] or "application/octet-stream"
             raise FileNotFoundError(path)
 
     return Handler
