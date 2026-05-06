@@ -1,2 +1,2 @@
-# Standalone ingest uses Python 3.10+ stdlib only (urllib).
-# Optional: pip install requests if you prefer to refactor HTTP to requests.
+# Standalone ingest/export/dashboard uses Python 3.10+ stdlib only.
+# XLSX files are written directly as Office Open XML ZIP packages.

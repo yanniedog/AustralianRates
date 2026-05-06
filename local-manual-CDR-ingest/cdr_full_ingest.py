@@ -15,6 +15,9 @@ Usage:
   python cdr_full_ingest.py --no-energy
   python cdr_full_ingest.py --no-banks --holders origin
   python cdr_full_ingest.py --workers 16
+  python cdr_outputs.py runs/2026-05-06
+  python cdr_dashboard_server.py --exports runs/2026-05-06/_exports
+  python cdr_daily.py --workers 8
 
 By default both **banks** and **energy** runs execute (separate directories under the date).
 Use ``--no-banks`` or ``--no-energy`` to skip one sector.
