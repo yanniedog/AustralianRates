@@ -1,7 +1,16 @@
 (function () {
   'use strict';
 
-  const state = { section: 'Mortgage', sector: 'banks', manifest: null, banks: null, energy: null, descending: false };
+  const state = {
+    section: 'Mortgage',
+    sector: 'banks',
+    manifest: null,
+    banks: null,
+    energy: null,
+    descending: false,
+    closedProviders: new Set(),
+    openProducts: new Set(),
+  };
   const $ = (id) => document.getElementById(id);
 
   function clear(element) {
@@ -14,6 +23,11 @@
     if (text != null) element.textContent = String(text);
     parent.appendChild(element);
     return element;
+  }
+
+  function cssVar(name, fallback) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
   }
 
   function preferredDescending(section) {
@@ -73,10 +87,12 @@
   }
 
   function setSectionUi() {
+    const slug = state.section === 'Savings' ? 'savings' : state.section === 'TD' ? 'term-deposits' : state.section === 'Energy' ? 'economic-data' : 'home-loans';
     document.body.classList.toggle('ar-section-home-loans', state.section === 'Mortgage');
     document.body.classList.toggle('ar-section-savings', state.section === 'Savings');
     document.body.classList.toggle('ar-section-term-deposits', state.section === 'TD');
     document.body.classList.toggle('ar-section-economic-data', state.section === 'Energy');
+    document.body.dataset.arSection = slug;
     document.querySelectorAll('[data-section]').forEach((button) => {
       const active = button.dataset.section === state.section;
       button.classList.toggle('is-active', active);
@@ -106,6 +122,26 @@
     }
   }
 
+  function renderSectionCards() {
+    const wrap = $('sectionCards');
+    clear(wrap);
+    if (!state.banks || !window.LocalCdrBrand) return;
+    ['Mortgage', 'Savings', 'TD'].forEach((section) => {
+      const rows = state.banks.rates.filter((row) => row.dataset === section);
+      const products = new Set(rows.map((row) => row.product_key || row.product_id || row.product_name));
+      const providers = [...new Set(rows.map((row) => row.provider).filter(Boolean))].sort();
+      const card = child(wrap, 'button', 'local-section-card' + (state.section === section ? ' is-active' : ''));
+      card.type = 'button';
+      card.dataset.sectionCard = section;
+      const head = child(card, 'span', 'local-section-card-head');
+      child(head, 'span', 'local-section-kicker', section === 'TD' ? 'Term Deposits' : section);
+      child(head, 'strong', '', section === 'Mortgage' ? 'Home loans' : section === 'Savings' ? 'Savings accounts' : 'Term deposits');
+      const logos = child(card, 'span', 'local-section-logo-rail');
+      providers.slice(0, 6).forEach((provider) => window.LocalCdrBrand.appendProviderBadge(logos, provider, false));
+      child(card, 'span', 'local-section-card-meta', `${num(rows.length)} rates / ${num(products.size)} products / ${num(providers.length)} providers`);
+    });
+  }
+
   function draw(items) {
     const canvas = $('chart');
     const rect = canvas.getBoundingClientRect();
@@ -125,11 +161,11 @@
     items.forEach((item, index) => {
       const y = top + index * rowHeight;
       const bar = Math.max(3, (width - left - 92) * item.value / max);
-      ctx.fillStyle = 'rgba(37,99,235,0.16)';
+      ctx.fillStyle = cssVar('--ar-section-soft', 'rgba(37,99,235,0.16)');
       ctx.fillRect(left, y, width - left - 92, Math.max(5, rowHeight - 5));
-      ctx.fillStyle = '#2563eb';
+      ctx.fillStyle = cssVar('--ar-section-accent', cssVar('--ar-accent', '#2563eb'));
       ctx.fillRect(left, y, bar, Math.max(5, rowHeight - 5));
-      ctx.fillStyle = '#24364a';
+      ctx.fillStyle = cssVar('--ar-text-soft', '#c5ced8');
       ctx.fillText(item.label.slice(0, 24), 14, y + rowHeight - 6);
       ctx.fillText(state.sector === 'banks' ? pct(item.value) : String(Math.round(item.value)), left + bar + 8, y + rowHeight - 6);
     });
@@ -170,10 +206,8 @@
     });
   }
 
-  function renderTable(rows) {
-    const keys = state.sector === 'banks'
-      ? ['dataset', 'provider', 'product_name', 'rate', 'comparison_rate', 'rate_type', 'application_type', 'repayment_type', 'loan_purpose', 'term', 'last_updated']
-      : ['provider', 'plan_name', 'fuel_type', 'last_updated', 'description'];
+  function renderFlatTable(rows) {
+    const keys = ['provider', 'plan_name', 'fuel_type', 'last_updated', 'description'];
     const visible = rows.slice(0, 1500);
     $('table-count').textContent = num(visible.length) + ' visible';
     const table = $('table');
@@ -184,11 +218,13 @@
     const tbody = child(table, 'tbody');
     visible.forEach((row) => {
       const tr = child(tbody, 'tr');
-      keys.forEach((key) => {
-        const value = key.includes('rate') ? pct(row[key]) || row[key] || '' : row[key] || '';
-        child(tr, 'td', key.includes('rate') ? 'num' : '', value);
-      });
+      keys.forEach((key) => child(tr, 'td', '', row[key] || ''));
     });
+  }
+
+  function renderTable(rows) {
+    if (state.sector === 'banks') window.LocalCdrHierarchy.render($('table'), $('table-count'), rows, state);
+    else renderFlatTable(rows);
   }
 
   function render() {
@@ -196,6 +232,7 @@
     const items = chartRows(rows);
     setLinks();
     updateHero(rows, items);
+    renderSectionCards();
     renderStats(rows);
     renderRail(items);
     renderTable(rows);
@@ -204,6 +241,10 @@
   }
 
   async function loadSection(section) {
+    if (state.section !== section) {
+      state.closedProviders.clear();
+      state.openProducts.clear();
+    }
     state.section = section;
     state.sector = section === 'Energy' ? 'energy' : 'banks';
     state.descending = preferredDescending(section);
@@ -221,6 +262,24 @@
   function bind() {
     let resizeTimer = 0;
     document.querySelectorAll('[data-section]').forEach((button) => button.addEventListener('click', () => loadSection(button.dataset.section)));
+    $('sectionCards').addEventListener('click', (event) => {
+      const card = event.target.closest('[data-section-card]');
+      if (card) loadSection(card.dataset.sectionCard);
+    });
+    $('table').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-tree-key]');
+      if (!button) return;
+      const key = button.dataset.treeKey;
+      if (button.dataset.treeLevel === 'provider') {
+        if (state.closedProviders.has(key)) state.closedProviders.delete(key);
+        else state.closedProviders.add(key);
+      } else if (state.openProducts.has(key)) {
+        state.openProducts.delete(key);
+      } else {
+        state.openProducts.add(key);
+      }
+      renderTable(rateRows());
+    });
     ['dataset', 'provider', 'query'].forEach((id) => $(id).addEventListener('input', render));
     $('dataset').addEventListener('change', render);
     $('refresh-page-btn').addEventListener('click', () => window.location.reload());
@@ -233,6 +292,8 @@
       window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => draw(chartRows(rateRows())), 120);
     });
+    window.addEventListener('ar:theme-changed', () => draw(chartRows(rateRows())));
+    if (window.ARTheme && window.ARTheme.initToggles) window.ARTheme.initToggles(document);
   }
 
   async function init() {

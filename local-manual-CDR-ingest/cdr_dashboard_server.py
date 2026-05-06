@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlparse
 BASE_DIR = Path(__file__).resolve().parent
 DASHBOARD_ROOT = BASE_DIR / "dashboard"
 SITE_ROOT = BASE_DIR.parent / "site"
+BANK_ASSETS_ROOT = SITE_ROOT / "assets" / "banks"
 
 
 class CachedFiles:
@@ -72,10 +73,16 @@ def make_handler(exports_root: Path):
                 return dashboard_cache.read(DASHBOARD_ROOT / "index.html"), "text/html; charset=utf-8"
             if path == "/assets/app.css":
                 return dashboard_cache.read(DASHBOARD_ROOT / "app.css"), "text/css; charset=utf-8"
-            if path == "/assets/app.js":
-                return dashboard_cache.read(DASHBOARD_ROOT / "app.js"), "application/javascript; charset=utf-8"
+            if path in ("/assets/app.js", "/assets/local-brand.js", "/assets/hierarchy.js"):
+                return dashboard_cache.read(DASHBOARD_ROOT / path.removeprefix("/assets/")), "application/javascript; charset=utf-8"
             if path == "/assets/branding/ar-mark.svg":
                 return site_cache.read(SITE_ROOT / "assets" / "branding" / "ar-mark.svg"), "image/svg+xml"
+            if path.startswith("/assets/banks/"):
+                target = (SITE_ROOT / path.removeprefix("/")).resolve()
+                bank_root = BANK_ASSETS_ROOT.resolve()
+                if bank_root not in target.parents and target != bank_root:
+                    raise FileNotFoundError(path)
+                return site_cache.read(target), mimetypes.guess_type(str(target))[0] or "application/octet-stream"
             if path.startswith("/site/"):
                 target = (SITE_ROOT / path.removeprefix("/site/")).resolve()
                 if SITE_ROOT.resolve() not in target.parents and target != SITE_ROOT.resolve():

@@ -36,9 +36,11 @@ rebuild_exports.cmd rebuild exports from the latest run without fetching
 ```
 
 The dashboard opens in your browser with the same public AustralianRates shell:
-Mortgage, Savings, Term Deposits, and Energy tabs; the familiar hero metrics;
-the chart workspace; export links; and a dense data table. If the usual port is
-busy, the launcher automatically uses the next free localhost port.
+dark/light mode, Mortgage, Savings, Term Deposits, and Energy tabs; clear
+banking section cards with lender logos; the familiar hero metrics; the chart
+workspace; export links; and a provider/product/rate hierarchy table. If the
+usual port is busy, the launcher automatically uses the next free localhost
+port.
 
 ## Outputs
 
