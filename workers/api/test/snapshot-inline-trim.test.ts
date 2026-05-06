@@ -88,6 +88,38 @@ describe('snapshot-inline-trim', () => {
     )
   })
 
+  it('marks latestAll as truncated when inline trimming caps rows', () => {
+    const data: Record<string, unknown> = {
+      latestAll: {
+        ok: true,
+        count: 'not-a-number',
+        total: 1200,
+        rows: Array.from({ length: 1200 }, (_, index) => ({
+          bank_name: `Bank ${index}`,
+          product_name: `Product ${index}`,
+          detail: 'x'.repeat(2000),
+        })),
+      },
+    }
+
+    const out = trimSnapshotDataForHtmlInline(section, scope, builtAt, data)
+    const latestAll = out.latestAll as {
+      count?: number
+      total?: number
+      rows?: unknown[]
+      meta?: { coverage?: { total_rows?: number; returned_rows?: number; limited?: boolean }; snapshot_rows_truncated?: boolean }
+    }
+
+    expect(Array.isArray(latestAll.rows)).toBe(true)
+    expect(latestAll.rows!.length).toBeLessThan(1200)
+    expect(latestAll.count).toBe(latestAll.rows!.length)
+    expect(latestAll.total).toBe(1200)
+    expect(latestAll.meta?.coverage?.total_rows).toBe(1200)
+    expect(latestAll.meta?.coverage?.returned_rows).toBe(latestAll.rows!.length)
+    expect(latestAll.meta?.coverage?.limited).toBe(true)
+    expect(latestAll.meta?.snapshot_rows_truncated).toBe(true)
+  })
+
   it('keeps compact reportProductHistory for large term-deposit report views under the inline cap', () => {
     const tdData: Record<string, unknown> = {
       siteUi: { ok: true },
