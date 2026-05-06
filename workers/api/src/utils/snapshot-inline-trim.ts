@@ -50,7 +50,27 @@ function capTableRows(source: Record<string, unknown>, key: string, max: number)
   }
   const b = block as { rows: unknown[]; [k: string]: unknown }
   if (b.rows.length <= max) return out
-  out[key] = { ...b, rows: b.rows.slice(0, max) }
+  const meta = b.meta && typeof b.meta === 'object' ? b.meta as Record<string, unknown> : {}
+  const coverage = meta.coverage && typeof meta.coverage === 'object' ? meta.coverage as Record<string, unknown> : {}
+  const totalRaw = b.total ?? b.count ?? b.rows.length
+  const total = Number(totalRaw)
+  const totalRows = Number.isFinite(total) ? total : b.rows.length
+  out[key] = {
+    ...b,
+    rows: b.rows.slice(0, max),
+    count: Math.min(Number(b.count ?? b.rows.length), max),
+    total: totalRows,
+    meta: {
+      ...meta,
+      coverage: {
+        ...coverage,
+        total_rows: totalRows,
+        returned_rows: Math.min(b.rows.length, max),
+        limited: true,
+      },
+      snapshot_rows_truncated: true,
+    },
+  }
   return out
 }
 
@@ -86,10 +106,8 @@ export function emergencyLiteSnapshotData(
 
   const la = data.latestAll
   if (la && typeof la === 'object' && Array.isArray((la as { rows?: unknown[] }).rows)) {
-    const block = la as { rows: unknown[]; [k: string]: unknown }
-    const rows = block.rows
     for (const cap of [100, 50, 25, 10, 5, 1]) {
-      const trial = { ...best, latestAll: { ...block, rows: rows.slice(0, cap) } }
+      const trial = { ...best, latestAll: capTableRows({ latestAll: la as Record<string, unknown> }, 'latestAll', cap).latestAll }
       if (fits(trial)) {
         best = trial
         break

@@ -58,6 +58,7 @@ export type LatestSavingsFilters = {
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   limit?: number
+  limitMax?: number
   orderBy?: 'default' | 'rate_asc' | 'rate_desc'
 }
 

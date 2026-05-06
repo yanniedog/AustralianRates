@@ -32,8 +32,8 @@ import {
 } from './public-cache-freshness'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
-/** Bump when snapshot payload shape changes so stale rows are ignored. v12 aligns default scope end with latest collection_date; v11 aligns chart window end with latest_* max collection_date. */
-const SNAPSHOT_PAYLOAD_VERSION = 12
+/** Bump when snapshot payload shape changes so stale rows are ignored. v13 preserves full latest-all coverage for public charts. */
+const SNAPSHOT_PAYLOAD_VERSION = 13
 
 /** Snapshot scope matches chart-cache scope so the same scope strings cover both caches. */
 export type SnapshotScope = ChartCacheScope

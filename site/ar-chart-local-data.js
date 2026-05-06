@@ -130,6 +130,29 @@
         return !!(block && typeof block === 'object' && Array.isArray(block.rows) && block.rows.length > 0);
     }
 
+    function latestAllBlockIsCompleteForLimit(block, requestedLimit) {
+        if (!block || typeof block !== 'object' || !Array.isArray(block.rows) || !block.rows.length) return false;
+        var rows = block.rows;
+        var limit = Math.max(0, Number(requestedLimit || 0));
+        var count = Number(block.count);
+        var total = Number(block.total);
+        var meta = block.meta && typeof block.meta === 'object' ? block.meta : null;
+        var coverage = meta && meta.coverage && typeof meta.coverage === 'object' ? meta.coverage : null;
+        var coverageTotal = coverage ? Number(coverage.total_rows) : NaN;
+        var coverageLimited = !!(coverage && coverage.limited);
+        var snapshotTruncated = !!(meta && meta.snapshot_rows_truncated);
+        var knownTotal = Number.isFinite(total)
+            ? total
+            : Number.isFinite(coverageTotal)
+                ? coverageTotal
+                : Number.isFinite(count)
+                    ? count
+                    : rows.length;
+        if (limit > 0 && rows.length < Math.min(limit, knownTotal)) return false;
+        if ((coverageLimited || snapshotTruncated) && limit > 0 && rows.length < limit) return false;
+        return true;
+    }
+
     function exactBundle(chartWindow, preset, key) {
         var snap = snapshotApi();
         var bundle = snap && typeof snap.getBundle === 'function'
@@ -436,10 +459,12 @@
         var exact = latestBundle(preset);
         var readRows = function (bundle) {
             if (!bundle) return null;
+            var latestAll = bundle.data && bundle.data.latestAll;
+            if (latestAll && !latestAllBlockIsCompleteForLimit(latestAll, params && params.limit)) return null;
             var key = cacheKey('latest', bundle.scope, baseParams, String(params && params.limit || ''));
             if (!cache.latest[key]) {
-                var rows = bundle.data && bundle.data.latestAll && Array.isArray(bundle.data.latestAll.rows)
-                    ? bundle.data.latestAll.rows
+                var rows = latestAll && Array.isArray(latestAll.rows)
+                    ? latestAll.rows
                     : filterRows(expandAnalyticsRows(bundle), baseParams, { ignoreDate: true }).reduce(function (map, row) {
                         var productKey = normalizeText(row && (row.product_key || row.series_key || row.product_id || row.product_name));
                         var current = productKey ? map[productKey] : null;

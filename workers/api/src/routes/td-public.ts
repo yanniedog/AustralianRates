@@ -322,7 +322,8 @@ tdPublicRoutes.get('/latest-all', async (c) => {
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
   const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
-  const rows = await queryLatestAllTdRates(getReadDb(c), {
+  let dbCountMs = 0
+  const filters = {
     bank: q.bank,
     banks,
     termMonths: q.term_months,
@@ -337,22 +338,33 @@ tdPublicRoutes.get('/latest-all', async (c) => {
     mode,
     sourceMode,
     limit,
+    limitMax: 5000,
     orderBy,
-  }, latestTiming)
+  }
+  const [rows, total] = await Promise.all([
+    queryLatestAllTdRates(getReadDb(c), filters, latestTiming),
+    (async () => {
+      const countStartedAt = Date.now()
+      const value = await queryLatestTdRatesCount(getReadDb(c), filters)
+      dbCountMs = Date.now() - countStartedAt
+      return value
+    })(),
+  ])
   const meta = buildListMeta({
     sourceMode,
-    totalRows: rows.length,
+    totalRows: total,
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
-    limited: rows.length >= Math.max(1, Math.floor(limit)),
+    limited: total > rows.length,
     excludeCompareEdgeCases,
   })
   const jsonStartedAt = Date.now()
-  const response = c.json({ ok: true, count: rows.length, rows, meta })
+  const response = c.json({ ok: true, count: rows.length, total, rows, meta })
   const jsonMs = Date.now() - jsonStartedAt
   if (debugTiming) {
     setServerTimingHeader(response, {
       dbMainMs: latestTiming.dbMainMs,
+      dbCountMs,
       detailHydrateMs: latestTiming.detailHydrateMs,
       jsonMs,
       totalMs: Date.now() - totalStartedAt,

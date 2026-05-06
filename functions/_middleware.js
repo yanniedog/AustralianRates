@@ -15,7 +15,7 @@ const MAX_INLINE_BYTES = 500000;
 // free and do not need a timeout).
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
-const SNAPSHOT_KV_VERSION = 12;
+const SNAPSHOT_KV_VERSION = 13;
 // Keep in sync with PUBLIC_DAILY_CACHE_TTL_SECONDS in workers/api/src/db/public-cache-freshness.ts.
 const SNAPSHOT_FRESH_MS = 36 * 60 * 60 * 1000;
 const MELBOURNE_FORMATTER = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' });
@@ -135,7 +135,31 @@ function capTableRows(source, key, max) {
     if (!block || typeof block !== 'object' || !Array.isArray(block.rows) || block.rows.length <= max) {
         return out;
     }
-    out[key] = { ...block, rows: block.rows.slice(0, max) };
+    const totalRows = Number(
+        block.total != null
+            ? block.total
+            : block.count != null
+                ? block.count
+                : block.rows.length
+    );
+    const meta = block.meta && typeof block.meta === 'object' ? block.meta : {};
+    const coverage = meta.coverage && typeof meta.coverage === 'object' ? meta.coverage : {};
+    out[key] = {
+        ...block,
+        rows: block.rows.slice(0, max),
+        count: Math.min(Number(block.count || block.rows.length), max),
+        total: Number.isFinite(totalRows) ? totalRows : block.rows.length,
+        meta: {
+            ...meta,
+            coverage: {
+                ...coverage,
+                total_rows: Number.isFinite(totalRows) ? totalRows : block.rows.length,
+                returned_rows: Math.min(block.rows.length, max),
+                limited: true,
+            },
+            snapshot_rows_truncated: true,
+        },
+    };
     return out;
 }
 
@@ -169,7 +193,7 @@ function emergencyTrimSnapshot(payload) {
         for (let i = 0; i < caps.length; i++) {
             const cap = caps[i];
             const trial = Object.assign({}, best, {
-                latestAll: Object.assign({}, la, { rows: la.rows.slice(0, cap) }),
+                latestAll: capTableRows({ latestAll: la }, 'latestAll', cap).latestAll,
             });
             if (fits(trial)) {
                 best = trial;
