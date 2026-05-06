@@ -46,6 +46,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -366,8 +367,10 @@ class FetchResult:
     url: str
     text: str
 
-    @property
+    @cached_property
     def data(self) -> Any:
+        if not self.text:
+            return None
         try:
             return json.loads(self.text)
         except json.JSONDecodeError:
@@ -476,7 +479,7 @@ def fetch_cdr_json(
             retry_on=retryable_status,
         )
         last = res
-        data = json.loads(res.text) if res.text else None
+        data = res.data
         if res.ok and data is not None and not has_cdr_errors(data):
             return FetchResult(ok=True, status=res.status, url=url, text=res.text)
 
@@ -498,7 +501,7 @@ def fetch_cdr_json(
             retry_on=retryable_status,
         )
         last = res
-        data = json.loads(res.text) if res.text else None
+        data = res.data
         if res.ok and data is not None and not has_cdr_errors(data):
             return FetchResult(ok=True, status=res.status, url=url, text=res.text)
 
@@ -589,7 +592,7 @@ def collect_register_brands(
             if mode == "cdr"
             else fetch_json_plain(url, timeout=timeout, max_retries=max_retries, sleep_ms=sleep_ms)
         )
-        data = json.loads(res.text) if res.text else None
+        data = res.data
         if not res.ok or data is None or has_cdr_errors(data):
             continue
         for b in extract_brands(data):
@@ -641,7 +644,7 @@ def classify_product_for_ingest(
         max_retries=max_retries,
         sleep_ms=sleep_ms,
     )
-    parsed = json.loads(detail_res.text) if detail_res.text else None
+    parsed = detail_res.data
     inner = detail_inner_record(parsed)
     if inner is None:
         return None, detail_res
@@ -697,7 +700,7 @@ def ingest_brand(
         page_file = index_dir / f"page-{pages:04d}.json"
         page_file.write_text(res.text, encoding="utf-8")
 
-        parsed = json.loads(res.text) if res.text else None
+        parsed = res.data
         if not res.ok or parsed is None or has_cdr_errors(parsed):
             append_failure(
                 date_root,
@@ -760,7 +763,7 @@ def ingest_brand(
                     sleep_ms=sleep_ms,
                 )
 
-            parsed_detail = json.loads(detail_res.text) if detail_res.text else None
+            parsed_detail = detail_res.data
             ok = (
                 detail_res.ok
                 and parsed_detail is not None
