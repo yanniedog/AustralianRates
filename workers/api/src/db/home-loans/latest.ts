@@ -90,7 +90,7 @@ function orderByClause(filters: LatestFilters): string {
 
 export async function queryLatestRates(db: D1Database, filters: LatestFilters, timing?: LatestQueryTiming) {
   const { clause, binds } = buildLatestWhere(filters)
-  const limit = safeLimit(filters.limit, 200, 1000)
+  const limit = safeLimit(filters.limit, 200, filters.limitMax ?? 1000)
   const sql = `
     SELECT
       l.series_key,

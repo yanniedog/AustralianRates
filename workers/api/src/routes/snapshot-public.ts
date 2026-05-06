@@ -126,12 +126,13 @@ async function buildRateChangesEntry(db: D1Database, section: DatasetKind): Prom
   }
 }
 
-function buildLatestAllFilters(filters: ScopedFilters): ScopedFilters & { limit: number } {
+function buildLatestAllFilters(filters: ScopedFilters): ScopedFilters & { limit: number; limitMax: number } {
   // `/latest-all` is latest-as-of snapshot, so date-range fields don't apply.
   // Carry preset fields (security_purpose etc.) through so consumer-default snapshots stay scoped.
   return {
     ...filters,
     limit: 5000,
+    limitMax: 5000,
   }
 }
 
