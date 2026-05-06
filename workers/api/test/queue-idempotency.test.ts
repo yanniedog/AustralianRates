@@ -207,4 +207,45 @@ describe('queue idempotency claim', () => {
     expect(parsed.lease_until).toBe(r.new_lease_until)
     spy.mockRestore()
   })
+
+  it('shorten aborts when the claim changes between validation and put', async () => {
+    const frozen = Date.parse('2026-06-01T12:00:00.000Z')
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(frozen)
+    const kind = 'product_detail_fetch'
+    const keyPart = 'demo-key-race'
+    const leaseUntil = new Date(frozen + 30_000).toISOString()
+    const row = {
+      state: 'in_progress' as const,
+      kind,
+      idempotency_key: keyPart,
+      run_id: null,
+      lender_code: 'cba',
+      claimed_at: new Date(frozen - 1000).toISOString(),
+      lease_until: leaseUntil,
+    }
+    let getCount = 0
+    const kv = {
+      async get() {
+        getCount += 1
+        if (getCount === 1) return JSON.stringify(row)
+        return JSON.stringify({
+          ...row,
+          state: 'completed' as const,
+          completed_at: new Date(frozen).toISOString(),
+        })
+      },
+      async put() {
+        throw new Error('unexpected_put')
+      },
+    }
+    const env = makeEnv({
+      FEATURE_QUEUE_IDEMPOTENCY_ENABLED: 'true',
+      IDEMPOTENCY_TTL_SECONDS: '604800',
+      IDEMPOTENCY_KV: kv as unknown as KVNamespace,
+    })
+    const r = await shortenActiveIdempotencyLeaseToNow(env, { kind, idempotencyKey: keyPart })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.reason).toBe('claim_changed_retry')
+    spy.mockRestore()
+  })
 })

@@ -85,7 +85,10 @@ export function activeClaimRetryDelaySeconds(
   return Math.max(15, Math.min(300, remainingSeconds + 5))
 }
 
-/** Schedule replay slightly after an idempotency lease expires (or immediately if already past). */
+/**
+ * Replay time aligned to `max(now, leaseEnd)` plus `epsilonMs`, so callers avoid hammering renewal at the exact
+ * expiry second; missing/unparseable `leaseUntil` is treated like `now`.
+ */
 export function nextIsoAfterLeaseExpires(
   leaseUntil: string | null | undefined,
   nowMs = Date.now(),
@@ -146,10 +149,23 @@ export async function shortenActiveIdempotencyLeaseToNow(
   const now = new Date(nowMs).toISOString()
   const ttlSeconds = idempotencyTtlSeconds(env)
   try {
+    const verified = parseStoredClaim(await env.IDEMPOTENCY_KV.get(key))
+    if (
+      !verified ||
+      verified.state !== 'in_progress' ||
+      verified.claimed_at !== existing.claimed_at ||
+      verified.lease_until !== existing.lease_until
+    ) {
+      return {
+        ok: false,
+        reason: 'claim_changed_retry',
+        detail: verified?.state ?? 'missing_or_concurrent_update',
+      }
+    }
     await env.IDEMPOTENCY_KV.put(
       key,
       JSON.stringify({
-        ...existing,
+        ...verified,
         lease_until: now,
       }),
       { expirationTtl: ttlSeconds },

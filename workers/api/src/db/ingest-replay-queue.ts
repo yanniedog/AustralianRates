@@ -234,6 +234,8 @@ export async function upsertReplayQueueDeferredAfterLease(
   const replayKey = buildReplayKey(input.message)
   const now = new Date().toISOString()
   const replayId = crypto.randomUUID()
+  const parsedMax = Math.floor(Number(input.maxReplayAttempts))
+  const maxReplayAttemptsBound = Number.isFinite(parsedMax) && parsedMax >= 1 ? parsedMax : 1
 
   await db
     .prepare(
@@ -277,7 +279,7 @@ export async function upsertReplayQueueDeferredAfterLease(
       scope.datasetKind,
       scope.productId,
       scope.collectionDate,
-      Math.max(1, Math.floor(input.maxReplayAttempts)),
+      maxReplayAttemptsBound,
       input.errorMessage.slice(0, 2000),
       input.nextAttemptAtIso,
       now,
