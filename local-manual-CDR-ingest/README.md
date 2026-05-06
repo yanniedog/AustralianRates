@@ -2,49 +2,76 @@
 
 Real public CDR product-reference ingest for local analysis.
 
-## Daily run
+## Easiest Start
 
-```powershell
-python .\cdr_daily.py --workers 8
+Double-click:
+
+```text
+START_HERE.cmd
 ```
 
-`cdr_daily.py` writes one completion marker per local date under `.daily-state/`.
-It skips the date after a successful ingest/export unless `--force` is set.
-Unknown arguments are passed through to `cdr_full_ingest.py`, so filters such as
-`--holders anz`, `--no-energy`, or `--max-pages 2` still work.
+That opens a menu:
 
-Install a Windows daily scheduled task:
-
-```powershell
-.\install_daily_task.ps1 -At 03:15 -ExtraArgs "--workers 8"
+```text
+1. Run/update today's CDR data
+2. Force rerun today's CDR data
+3. Rebuild Excel/JSON/SQLite for latest run
+4. Open dashboard
+5. Install daily scheduled task
+0. Exit
 ```
 
-## Build exports for an existing run
+The first full run can take a while because it fetches public CDR detail JSON
+from every discovered provider. Later runs resume and skip completed detail
+files.
 
-```powershell
-python .\cdr_outputs.py .\runs\2026-05-06
+## One-Click Shortcuts
+
+Double-click these when you know what you want:
+
+```text
+run_daily.cmd       fetch CDR data, then build exports
+open_dashboard.cmd  open the latest local dashboard
+rebuild_exports.cmd rebuild exports from the latest run without fetching
 ```
 
-Outputs are written to `runs/<date>/_exports/`:
+The dashboard opens in your browser. If the usual port is busy, the launcher
+automatically uses the next free localhost port.
+
+## Outputs
+
+Outputs are written to:
+
+```text
+runs\<date>\_exports\
+```
+
+Files:
 
 - `banks-<date>.json`
 - `energy-<date>.json`
 - `banks-<date>.xlsx`
 - `energy-<date>.xlsx`
 - `local-cdr.sqlite`
-- `dashboard-cache/`
+- `dashboard-cache\`
 
 Generated JSON strips CDR links, URI/URL fields, and URLs embedded in text while
 retaining rates, fees, constraints, eligibility, features, contract sections, and
-the cleaned full detail JSON for each product or plan.
+cleaned full detail JSON.
 
-## Local dashboard
+## Command Line
+
+From this folder:
 
 ```powershell
+python .\cdr_daily.py --workers 8
+python .\cdr_daily.py --force --workers 8
+python .\cdr_outputs.py .\runs\2026-05-06
 python .\cdr_dashboard_server.py --exports .\runs\2026-05-06\_exports
 ```
 
-Open `http://127.0.0.1:8799/`.
+Install the daily scheduled task:
 
-The dashboard serves precomputed cache files with `Cache-Control: public,
-max-age=300` and keeps file contents in memory until the file timestamp changes.
+```powershell
+.\install_daily_task.ps1 -At 03:15 -ExtraArgs "--workers 8"
+```

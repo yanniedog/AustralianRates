@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import mimetypes
+import socket
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 from urllib.parse import parse_qs, urlparse
 
 HTML = """<!doctype html>
@@ -86,6 +88,15 @@ class CachedFiles:
         return data
 
 
+class LocalDashboardServer(ThreadingHTTPServer):
+    allow_reuse_address = False
+
+    def server_bind(self) -> None:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def make_handler(exports_root: Path):
     cache = CachedFiles(exports_root)
 
@@ -131,14 +142,37 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Serve local CDR dashboard from generated cache.")
     parser.add_argument("--exports", type=Path, required=True, help="Export folder containing dashboard-cache/")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8799)
+    parser.add_argument("--port", default="auto", help="Port number or 'auto' (default: auto from 8800)")
+    parser.add_argument("--port-file", type=Path, help="Optional JSON file to write the selected dashboard URL to.")
     return parser.parse_args()
+
+
+def dashboard_url(host: str, port: int) -> str:
+    display_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    return f"http://{display_host}:{port}/"
+
+
+def create_server(host: str, value: str, handler):
+    if value != "auto":
+        port = int(value)
+        return LocalDashboardServer((host, port), handler), port
+    port = 8800
+    while True:
+        try:
+            return LocalDashboardServer((host, port), handler), port
+        except OSError as exc:
+            if exc.errno not in (errno.EADDRINUSE, errno.EACCES, 10048):
+                raise
+            port += 1
 
 
 def main() -> int:
     args = parse_args()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(args.exports))
-    print(f"Local CDR dashboard: http://{args.host}:{args.port}/")
+    server, port = create_server(args.host, str(args.port), make_handler(args.exports))
+    url = dashboard_url(args.host, port)
+    if args.port_file:
+        args.port_file.write_text(json.dumps({"host": args.host, "port": port, "url": url}), encoding="utf-8")
+    print(f"Local CDR dashboard: {url}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
