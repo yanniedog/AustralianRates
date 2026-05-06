@@ -8,9 +8,9 @@ Mortgage / Savings / TD using CDS-style categories (aligned with Australian Rate
 ingest logic), and saves each product detail response to disk.
 
 Usage:
-  python cdr_full_ingest.py [--out DIR] [--date YYYY-MM-DD] [--resume]
+  python cdr_full_ingest.py [--out DIR] [--date YYYY-MM-DD] [--segment banks|energy] [--resume]
   python cdr_full_ingest.py --holders commbank --max-pages 2 --max-products 50
-  python cdr_full_ingest.py --workers 16
+  python cdr_full_ingest.py --segment energy --workers 16
 
 Holders (banks) are ingested in parallel via a thread pool (default --workers 8).
 Per-holder work (index pagination and detail GETs) stays sequential to preserve ordering.
@@ -19,19 +19,20 @@ Use --workers 1 for the previous strictly serial behaviour across holders.
 Exit codes: 0 success; 1 no holders matched ``--holders`` (register OK); 2 register failure or zero brands without filter.
 Use ``--allow-empty-holders`` to force 0 when there is nothing to ingest.
 
-Default run date folder uses UTC (YYYY-MM-DD). Output layout:
+Default run date folder uses UTC (YYYY-MM-DD). Output layout (``--segment banks`` or
+``--segment energy``; default ``banks``):
 
-  <out>/<YYYY-MM-DD>/Mortgage/<Bank>/<ProductName>/<safe-product-dir>/product-detail.json
+  <out>/<YYYY-MM-DD>/<segment>/Mortgage/<Bank>/<ProductName>/<safe-product-dir>/product-detail.json
 
 Each leaf includes ``product-id.txt`` with the canonical CDR ``productId``; the directory
 name is a sanitized segment plus a short hash (Windows-safe, collision-resistant).
-  <out>/<YYYY-MM-DD>/Savings/...
-  <out>/<YYYY-MM-DD>/TD/...
+  <out>/<YYYY-MM-DD>/<segment>/Savings/...
+  <out>/<YYYY-MM-DD>/<segment>/TD/...
 
 Holder-level register snapshot and paginated index payloads:
 
-  <out>/<YYYY-MM-DD>/_holders/<Bank>/_register-brand.json
-  <out>/<YYYY-MM-DD>/_holders/<Bank>/_products-index/page-0001.json
+  <out>/<YYYY-MM-DD>/<segment>/_holders/<Bank>/_register-brand.json
+  <out>/<YYYY-MM-DD>/<segment>/_holders/<Bank>/_products-index/page-0001.json
 
 Failed detail GET bodies are written as product-detail.error.txt next to the leaf folder;
 resume skips only successful product-detail.json files.
@@ -876,6 +877,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=None,
         help="Run folder YYYY-MM-DD (default: UTC today)",
     )
+    p.add_argument(
+        "--segment",
+        type=str,
+        choices=["banks", "energy"],
+        default="banks",
+        help="Subdirectory after the date: banks or energy (default: banks)",
+    )
     p.add_argument("--resume", action="store_true", help="Skip existing non-empty product-detail.json")
     p.add_argument(
         "--sleep-ms",
@@ -921,12 +929,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     out_root: Path = args.out.expanduser().resolve()
-    date_root = out_root / run_date
+    date_root = out_root / run_date / args.segment
 
     def log(msg: str) -> None:
         print(msg, file=sys.stderr)
 
-    log(f"Output root: {date_root} (UTC date folder unless --date set)")
+    log(
+        f"Output root: {date_root} "
+        f"(UTC date unless --date set; segment={args.segment!r} from --segment)",
+    )
     date_root.mkdir(parents=True, exist_ok=True)
 
     if args.workers < 1:
