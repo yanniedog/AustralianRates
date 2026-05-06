@@ -8,8 +8,7 @@
     banks: null,
     energy: null,
     descending: false,
-    closedProviders: new Set(),
-    openProducts: new Set(),
+    hierarchyPath: '',
   };
   const $ = (id) => document.getElementById(id);
 
@@ -23,11 +22,6 @@
     if (text != null) element.textContent = String(text);
     parent.appendChild(element);
     return element;
-  }
-
-  function cssVar(name, fallback) {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return value || fallback;
   }
 
   function preferredDescending(section) {
@@ -142,38 +136,6 @@
     });
   }
 
-  function draw(items) {
-    const canvas = $('chart');
-    const rect = canvas.getBoundingClientRect();
-    const scale = window.devicePixelRatio || 1;
-    canvas.width = Math.max(800, Math.floor(rect.width * scale));
-    canvas.height = Math.max(360, Math.floor(rect.height * scale));
-    const ctx = canvas.getContext('2d');
-    ctx.scale(scale, scale);
-    const width = canvas.width / scale;
-    const height = canvas.height / scale;
-    ctx.clearRect(0, 0, width, height);
-    const left = 190;
-    const top = 24;
-    const rowHeight = Math.max(10, Math.min(18, (height - 48) / Math.max(items.length, 1)));
-    const max = Math.max(...items.map((item) => item.value), 1);
-    const sectionSoft = cssVar('--ar-section-soft', 'rgba(37,99,235,0.16)');
-    const sectionAccent = cssVar('--ar-section-accent', cssVar('--ar-accent', '#2563eb'));
-    const textSoft = cssVar('--ar-text-soft', '#c5ced8');
-    ctx.font = '12px "Space Grotesk", Segoe UI, sans-serif';
-    items.forEach((item, index) => {
-      const y = top + index * rowHeight;
-      const bar = Math.max(3, (width - left - 92) * item.value / max);
-      ctx.fillStyle = sectionSoft;
-      ctx.fillRect(left, y, width - left - 92, Math.max(5, rowHeight - 5));
-      ctx.fillStyle = sectionAccent;
-      ctx.fillRect(left, y, bar, Math.max(5, rowHeight - 5));
-      ctx.fillStyle = textSoft;
-      ctx.fillText(item.label.slice(0, 24), 14, y + rowHeight - 6);
-      ctx.fillText(state.sector === 'banks' ? pct(item.value) : String(Math.round(item.value)), left + bar + 8, y + rowHeight - 6);
-    });
-  }
-
   function updateHero(rows, items) {
     $('hero-run').textContent = state.manifest.run_date;
     $('hero-rows').textContent = num(rows.length);
@@ -214,6 +176,8 @@
     const visible = rows.slice(0, 1500);
     $('table-count').textContent = num(visible.length) + ' visible';
     const table = $('table');
+    $('hierarchy').hidden = true;
+    table.hidden = false;
     clear(table);
     const thead = child(table, 'thead');
     const header = child(thead, 'tr');
@@ -226,8 +190,11 @@
   }
 
   function renderTable(rows) {
-    if (state.sector === 'banks') window.LocalCdrHierarchy.render($('table'), $('table-count'), rows, state);
-    else renderFlatTable(rows);
+    if (state.sector === 'banks') {
+      $('table').hidden = true;
+      $('hierarchy').hidden = false;
+      window.LocalCdrHierarchy.render($('hierarchy'), $('table-count'), rows, state);
+    } else renderFlatTable(rows);
   }
 
   function render() {
@@ -238,14 +205,13 @@
     renderStats(rows);
     renderRail(items);
     renderTable(rows);
-    draw(items);
+    window.LocalCdrChart.draw($('chart'), items, state.sector);
     $('chart-status').textContent = `${num(rows.length)} local ${state.sector === 'banks' ? 'rate rows' : 'plans'} loaded`;
   }
 
   async function loadSection(section) {
     if (state.section !== section) {
-      state.closedProviders.clear();
-      state.openProducts.clear();
+      state.hierarchyPath = '';
     }
     state.section = section;
     state.sector = section === 'Energy' ? 'energy' : 'banks';
@@ -269,18 +235,19 @@
       const card = event.target.closest('[data-section-card]');
       if (card) loadSection(card.dataset.sectionCard);
     });
-    $('table').addEventListener('click', (event) => {
-      const button = event.target.closest('[data-tree-key]');
-      if (!button) return;
-      const key = button.dataset.treeKey;
-      if (button.dataset.treeLevel === 'provider') {
-        if (state.closedProviders.has(key)) state.closedProviders.delete(key);
-        else state.closedProviders.add(key);
-      } else if (state.openProducts.has(key)) {
-        state.openProducts.delete(key);
-      } else {
-        state.openProducts.add(key);
-      }
+    $('hierarchy').addEventListener('click', (event) => {
+      const action = event.target.closest('[data-local-hierarchy-action]');
+      if (!action) return;
+      state.hierarchyPath = action.dataset.localHierarchyPath || '';
+      renderTable(rateRows());
+    });
+    $('hierarchy').addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (event.target.closest('button')) return;
+      const action = event.target.closest('[data-local-hierarchy-action]');
+      if (!action) return;
+      event.preventDefault();
+      state.hierarchyPath = action.dataset.localHierarchyPath || '';
       renderTable(rateRows());
     });
     ['dataset', 'provider', 'query'].forEach((id) => $(id).addEventListener('input', render));
@@ -293,9 +260,9 @@
     });
     window.addEventListener('resize', () => {
       window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => draw(chartRows(rateRows())), 120);
+      resizeTimer = window.setTimeout(() => window.LocalCdrChart.draw($('chart'), chartRows(rateRows()), state.sector), 120);
     });
-    window.addEventListener('ar:theme-changed', () => draw(chartRows(rateRows())));
+    window.addEventListener('ar:theme-changed', () => window.LocalCdrChart.draw($('chart'), chartRows(rateRows()), state.sector));
     if (window.ARTheme && window.ARTheme.initToggles) window.ARTheme.initToggles(document);
   }
 

@@ -166,6 +166,54 @@
   border-radius: 8px;
 }
 
+.ar-local-cdr #hierarchy[hidden],
+.ar-local-cdr #table[hidden] {
+  display: none;
+}
+
+.ar-local-cdr #hierarchy {
+  min-height: 420px;
+}
+
+.ar-local-cdr #hierarchy .ar-report-underchart-tree {
+  display: flex;
+  height: min(620px, 72vh);
+  padding: 10px 12px 12px;
+  border: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--ar-surface-2) 76%, var(--ar-surface));
+}
+
+.ar-local-cdr #hierarchy .ar-report-underchart-tree-scroll {
+  padding: 6px 6px 10px 8px;
+}
+
+.ar-local-cdr #hierarchy .ar-report-infobox-trow {
+  min-height: 30px;
+}
+
+.ar-local-cdr #hierarchy .ar-report-infobox-tlabel .bank-badge {
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.ar-local-cdr #hierarchy .ar-report-infobox-tlabel .bank-badge-logo-wrap {
+  width: 24px;
+  height: 24px;
+}
+
+.ar-local-cdr #hierarchy .ar-report-infobox-tlabel .bank-badge-copy {
+  min-width: 0;
+}
+
+.ar-local-cdr #hierarchy .ar-report-infobox-tlabel .bank-badge-label,
+.ar-local-cdr #hierarchy .ar-report-infobox-tlabel .bank-badge-sub {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ar-local-cdr table {
   width: 100%;
   border-collapse: collapse;

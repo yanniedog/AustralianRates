@@ -1,6 +1,8 @@
 (function () {
   'use strict';
 
+  const PALETTE = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#0891b2', '#ca8a04', '#db2777', '#64748b'];
+
   function clear(element) {
     while (element.firstChild) element.removeChild(element.firstChild);
   }
@@ -13,6 +15,12 @@
     return element;
   }
 
+  function escHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[ch]);
+  }
+
   function num(value) {
     return Number(value || 0).toLocaleString('en-AU');
   }
@@ -23,113 +31,267 @@
     return (value * 100).toFixed(2) + '%';
   }
 
+  function minMax(rows) {
+    let min = null;
+    let max = null;
+    for (let index = 0; index < rows.length; index += 1) {
+      const value = Number(rows[index].rate);
+      if (!Number.isFinite(value) || value <= 0) continue;
+      if (min == null || value < min) min = value;
+      if (max == null || value > max) max = value;
+    }
+    return { min, max };
+  }
+
   function bestRate(rows, descending) {
-    const values = rows.map((row) => Number(row.rate)).filter(Number.isFinite);
-    if (!values.length) return null;
-    return descending ? Math.max(...values) : Math.min(...values);
+    const mm = minMax(rows);
+    if (mm.min == null) return null;
+    return descending ? mm.max : mm.min;
   }
 
-  function clip(value, length) {
-    const text = String(value || '').replace(/\s+/g, ' ').trim();
-    return text.length > length ? text.slice(0, length - 1) + '...' : text;
-  }
-
-  function groupKey(prefix, value) {
+  function hashText(value) {
     const raw = String(value || '');
-    const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 72);
     let hash = 2166136261;
     for (let index = 0; index < raw.length; index += 1) {
       hash ^= raw.charCodeAt(index);
       hash = Math.imul(hash, 16777619);
     }
-    return prefix + ':' + (slug || 'item') + ':' + (hash >>> 0).toString(36);
+    return hash >>> 0;
   }
 
-  function groupedRows(rows) {
-    const providers = new Map();
+  function swatch(row) {
+    return PALETTE[hashText(row && row.provider) % PALETTE.length];
+  }
+
+  function fieldLabel(field) {
+    return {
+      provider: 'Provider',
+      loan_purpose: 'Purpose',
+      category: 'Category',
+      term: 'Term',
+      rate_type: 'Rate type',
+      repayment_type: 'Repayment',
+      product_name: 'Product',
+    }[field] || field;
+  }
+
+  function tierFields(section) {
+    if (section === 'Mortgage') return ['provider', 'loan_purpose', 'rate_type', 'repayment_type', 'product_name'];
+    if (section === 'TD') return ['provider', 'term', 'product_name', 'rate_type'];
+    return ['provider', 'category', 'product_name', 'rate_type'];
+  }
+
+  function tierValue(row, field) {
+    const value = field === 'provider' ? row.provider
+      : field === 'term' ? (row.term || row.application_frequency)
+        : row[field];
+    return String(value || 'Other').replace(/\s+/g, ' ').trim() || 'Other';
+  }
+
+  function buildTree(rows, fields, index, descending) {
+    if (!rows.length) return { kind: 'empty', rows: [] };
+    if (index >= fields.length) return { kind: 'leaves', rows };
+    const field = fields[index];
+    const grouped = new Map();
     rows.forEach((row) => {
-      const providerName = row.provider || 'Unknown provider';
-      if (!providers.has(providerName)) providers.set(providerName, { name: providerName, products: new Map(), rows: [] });
-      const provider = providers.get(providerName);
-      const productId = row.product_key || row.product_id || row.product_name || 'Unknown product';
-      if (!provider.products.has(productId)) {
-        provider.products.set(productId, { id: productId, name: row.product_name || 'Unknown product', rows: [], category: row.category || '', updated: row.last_updated || '' });
+      const value = tierValue(row, field);
+      if (!grouped.has(value)) grouped.set(value, []);
+      grouped.get(value).push(row);
+    });
+    const groups = [...grouped.entries()].map(([label, groupRows]) => ({
+      label,
+      rows: groupRows,
+      best: bestRate(groupRows, descending),
+      child: buildTree(groupRows, fields, index + 1, descending),
+    })).sort((a, b) => {
+      if (a.best == null && b.best == null) return a.label.localeCompare(b.label);
+      if (a.best == null) return 1;
+      if (b.best == null) return -1;
+      return descending ? b.best - a.best : a.best - b.best;
+    });
+    return { kind: 'branch', field, groups, rows };
+  }
+
+  function prunePath(tree, activePath) {
+    const parts = String(activePath || '').split('>').filter(Boolean);
+    const kept = [];
+    let node = tree;
+    for (let index = 0; index < parts.length; index += 1) {
+      const groupIndex = Number(parts[index]);
+      if (!node || node.kind !== 'branch' || !Number.isInteger(groupIndex) || !node.groups[groupIndex]) break;
+      kept.push(String(groupIndex));
+      node = node.groups[groupIndex].child;
+    }
+    return kept.join('>');
+  }
+
+  function parentPath(path) {
+    const text = String(path || '');
+    const index = text.lastIndexOf('>');
+    return index < 0 ? '' : text.slice(0, index);
+  }
+
+  function isExpanded(path, activePath) {
+    return activePath === path || String(activePath || '').startsWith(path + '>');
+  }
+
+  function focusedChildIndex(path, activePath) {
+    const active = String(activePath || '');
+    if (!active) return -1;
+    if (!path) return Number(active.split('>')[0]);
+    if (!active.startsWith(path + '>')) return -1;
+    return Number(active.slice(path.length + 1).split('>')[0]);
+  }
+
+  function formatLabel(field, label) {
+    if (field === 'provider') return label;
+    return fieldLabel(field) + ': ' + label;
+  }
+
+  function renderRateRange(parent, rows, best, descending) {
+    const mm = minMax(rows);
+    if (mm.min == null) return;
+    const showRange = mm.min !== mm.max;
+    const bestValue = descending ? mm.max : mm.min;
+    const first = child(parent, 'span', best === bestValue ? 'ar-ribbon-best' : '', pct(mm.min));
+    if (!showRange) return;
+    child(parent, 'span', 'ar-ribbon-rate-sep', '-');
+    const last = child(parent, 'span', best === bestValue ? 'ar-ribbon-best' : '', pct(mm.max));
+    if (descending) {
+      first.className = '';
+      last.className = best === bestValue ? 'ar-ribbon-best' : '';
+    }
+  }
+
+  function renderBreadcrumbs(container, tree, activePath) {
+    const bar = child(container, 'div', 'ar-report-underchart-tree-breadcrumbs');
+    const root = child(bar, 'button', 'ar-report-underchart-tree-crumb secondary' + (!activePath ? ' is-current' : ''), 'All');
+    root.type = 'button';
+    root.dataset.localHierarchyAction = 'root';
+    root.dataset.localHierarchyPath = '';
+    let node = tree;
+    let path = '';
+    String(activePath || '').split('>').filter(Boolean).forEach((part, index) => {
+      const groupIndex = Number(part);
+      if (!node || node.kind !== 'branch' || !node.groups[groupIndex]) return;
+      const group = node.groups[groupIndex];
+      path = path ? path + '>' + groupIndex : String(groupIndex);
+      child(bar, 'span', 'ar-report-underchart-tree-crumb-sep', '>');
+      const crumb = child(bar, 'button', 'ar-report-underchart-tree-crumb secondary' + (index === String(activePath).split('>').length - 1 ? ' is-current' : ''), formatLabel(node.field, group.label));
+      crumb.type = 'button';
+      crumb.title = formatLabel(node.field, group.label);
+      crumb.dataset.localHierarchyAction = 'crumb';
+      crumb.dataset.localHierarchyPath = path;
+      node = group.child;
+    });
+  }
+
+  function renderLeaf(container, row, depth, best, descending) {
+    const rateRow = child(container, 'div', 'ar-report-infobox-trow ar-report-infobox-trow--leaf ar-report-infobox-row');
+    rateRow.style.setProperty('--ar-ribbon-depth', String(depth));
+    const dot = child(rateRow, 'span', 'ar-report-infobox-tsw');
+    dot.style.setProperty('--ar-swatch-color', swatch(row));
+    const label = child(rateRow, 'span', 'ar-report-infobox-tlabel');
+    const bits = [row.rate_type, row.application_type, row.repayment_type || row.loan_purpose].filter(Boolean);
+    child(label, 'span', 'ar-ribbon-tleaf-product', bits.join(' · ') || 'Rate');
+    const rate = child(rateRow, 'span', 'ar-report-infobox-trate');
+    renderRateRange(rate, [row], best, descending);
+  }
+
+  function renderBranch(container, node, group, path, depth, activePath, state) {
+    const expanded = isExpanded(path, activePath);
+    const targetPath = expanded ? parentPath(path) : path;
+    const row = child(container, 'div', 'ar-report-infobox-trow ar-report-infobox-trow--branch');
+    row.style.setProperty('--ar-ribbon-depth', String(depth));
+    row.dataset.localHierarchyAction = 'toggle';
+    row.dataset.localHierarchyPath = targetPath;
+    row.setAttribute('data-ribbon-tree-path', path);
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    row.setAttribute('aria-label', (expanded ? 'Collapse tier, ' : 'Expand tier, ') + formatLabel(node.field, group.label));
+    row.tabIndex = 0;
+    child(row, 'span', 'ar-report-infobox-twist', expanded ? '▼' : '▶');
+    const label = child(row, 'span', 'ar-report-infobox-tlabel');
+    if (node.field === 'provider' && window.LocalCdrBrand) {
+      window.LocalCdrBrand.appendProviderBadge(label, group.label, true);
+    } else {
+      label.textContent = formatLabel(node.field, group.label);
+      label.title = formatLabel(node.field, group.label);
+    }
+    const rate = child(row, 'span', 'ar-report-infobox-trate');
+    renderRateRange(rate, group.rows, state.globalBest, state.descending);
+  }
+
+  function renderTree(container, node, path, depth, activePath, state) {
+    if (!node || node.kind === 'empty') return;
+    if (node.kind === 'leaves') {
+      node.rows.slice().sort((a, b) => state.descending ? Number(b.rate) - Number(a.rate) : Number(a.rate) - Number(b.rate))
+        .forEach((row) => renderLeaf(container, row, depth, state.globalBest, state.descending));
+      return;
+    }
+    const focusIndex = focusedChildIndex(path, activePath);
+    node.groups.forEach((group, index) => {
+      if (focusIndex >= 0 && index !== focusIndex) return;
+      const subPath = path ? path + '>' + index : String(index);
+      renderBranch(container, node, group, subPath, depth, activePath, state);
+      if (isExpanded(subPath, activePath)) {
+        const nest = child(container, 'div', 'ar-report-infobox-tnest');
+        renderTree(nest, group.child, subPath, depth + 1, activePath, state);
       }
-      provider.rows.push(row);
-      provider.products.get(productId).rows.push(row);
-    });
-    return [...providers.values()];
-  }
-
-  function renderToggleCell(row, key, level, expanded) {
-    const cell = child(row, 'td', 'local-tree-primary local-tree-level-' + level);
-    const button = child(cell, 'button', 'local-tree-toggle', expanded ? '-' : '+');
-    button.type = 'button';
-    button.dataset.treeKey = key;
-    button.dataset.treeLevel = level;
-    button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    return cell;
-  }
-
-  function sortByBest(items, descending) {
-    return items.sort((a, b) => {
-      const av = bestRate(a.rows, descending);
-      const bv = bestRate(b.rows, descending);
-      return descending ? (bv || 0) - (av || 0) : (av || 0) - (bv || 0);
     });
   }
 
-  function render(table, countEl, rows, state) {
-    const groups = sortByBest(groupedRows(rows), state.descending);
-    const productCount = new Set(rows.map((row) => row.product_key || row.product_id || row.product_name)).size;
-    countEl.textContent = `${num(rows.length)} rates / ${num(productCount)} products / ${num(groups.length)} providers`;
-    clear(table);
-    const thead = child(table, 'thead');
-    const header = child(thead, 'tr');
-    ['Provider / product / rate', 'Best', 'Count', 'Type', 'Details', 'Updated'].forEach((key) => child(header, 'th', '', key));
-    const tbody = child(table, 'tbody');
-    groups.forEach((provider) => renderProvider(tbody, provider, state));
+  function panelTheme() {
+    const cssVar = window.LocalCdrUtils.cssVar;
+    return {
+      ttText: cssVar('--ar-text', '#e5e7eb'),
+      ttBg: cssVar('--ar-surface-2', '#111827'),
+      ttBorder: cssVar('--ar-line', '#334155'),
+      muted: cssVar('--ar-text-muted', '#94a3b8'),
+    };
   }
 
-  function renderProvider(tbody, provider, state) {
-    const pKey = groupKey('provider', provider.name);
-    const products = sortByBest([...provider.products.values()], state.descending);
-    const providerOpen = !state.closedProviders.has(pKey);
-    const pRow = child(tbody, 'tr', 'local-tree-row local-provider-row');
-    const pCell = renderToggleCell(pRow, pKey, 'provider', providerOpen);
-    window.LocalCdrBrand.appendProviderBadge(pCell, provider.name, true);
-    child(pRow, 'td', 'num', pct(bestRate(provider.rows, state.descending)));
-    child(pRow, 'td', 'num', `${num(provider.rows.length)} rates / ${num(products.length)} products`);
-    child(pRow, 'td', '', state.section === 'TD' ? 'Term deposits' : state.section);
-    child(pRow, 'td', '', provider.name);
-    child(pRow, 'td', '', '');
-    if (!providerOpen) return;
-    products.forEach((product) => renderProduct(tbody, product, pKey, state));
+  function ensurePanel(container) {
+    if (container.__localPanel) return container.__localPanel;
+    clear(container);
+    const creator = window.AR && window.AR.chartReportPlotHierarchyPanel;
+    const panel = creator && creator.createRibbonHierarchyPanel
+      ? creator.createRibbonHierarchyPanel(panelTheme(), escHtml)
+      : null;
+    if (!panel) return null;
+    container.appendChild(panel.el);
+    container.__localPanel = panel;
+    return panel;
   }
 
-  function renderProduct(tbody, product, pKey, state) {
-    const productKey = pKey + '|' + groupKey('product', product.id);
-    const productOpen = state.openProducts.has(productKey);
-    const productRow = child(tbody, 'tr', 'local-tree-row local-product-row');
-    const productCell = renderToggleCell(productRow, productKey, 'product', productOpen);
-    child(productCell, 'span', 'local-product-name', product.name);
-    child(productRow, 'td', 'num', pct(bestRate(product.rows, state.descending)));
-    child(productRow, 'td', 'num', num(product.rows.length));
-    child(productRow, 'td', '', product.category);
-    child(productRow, 'td', '', clip(product.rows[0] && product.rows[0].description, 140));
-    child(productRow, 'td', '', product.updated ? product.updated.slice(0, 10) : '');
-    if (!productOpen) return;
-    product.rows.forEach((rate) => renderRate(tbody, rate));
-  }
-
-  function renderRate(tbody, rate) {
-    const rateRow = child(tbody, 'tr', 'local-tree-row local-rate-row');
-    child(rateRow, 'td', 'local-tree-primary local-tree-level-rate', [rate.rate_type, rate.application_type].filter(Boolean).join(' / ') || 'Rate');
-    child(rateRow, 'td', 'num', pct(rate.rate));
-    child(rateRow, 'td', 'num', rate.comparison_rate ? pct(rate.comparison_rate) : '');
-    child(rateRow, 'td', '', rate.repayment_type || rate.application_frequency || '');
-    child(rateRow, 'td', '', clip([rate.loan_purpose, rate.term, rate.tiers && rate.tiers !== '[]' ? rate.tiers : ''].filter(Boolean).join(' | '), 160));
-    child(rateRow, 'td', '', rate.last_updated ? rate.last_updated.slice(0, 10) : '');
+  function render(container, countEl, rows, state) {
+    const visible = rows.slice(0, 2000);
+    const productCount = new Set(visible.map((row) => row.product_key || row.product_id || row.product_name)).size;
+    const providerCount = new Set(visible.map((row) => row.provider).filter(Boolean)).size;
+    countEl.textContent = `${num(visible.length)} rates / ${num(productCount)} products / ${num(providerCount)} providers`;
+    const panel = ensurePanel(container);
+    if (!panel) return;
+    state.rows = visible;
+    state.globalBest = bestRate(visible, state.descending);
+    const tree = buildTree(visible, tierFields(state.section), 0, state.descending);
+    state.hierarchyPath = prunePath(tree, state.hierarchyPath || '');
+    if (!visible.length || tree.kind === 'empty') {
+      panel.show({
+        heading: state.section + ' hierarchy',
+        meta: 'No rows',
+        renderBody: (wrap) => child(wrap, 'div', 'chart-series-empty', 'No hierarchy data available.'),
+      });
+      return;
+    }
+    panel.show({
+      heading: state.section === 'TD' ? 'Term deposit hierarchy' : state.section + ' hierarchy',
+      meta: `${num(providerCount)} providers · ${num(productCount)} products · ${pct(state.globalBest)} ${state.descending ? 'best yield' : 'best rate'}`,
+      compact: true,
+      renderBody: (wrap) => {
+        renderBreadcrumbs(wrap, tree, state.hierarchyPath || '');
+        renderTree(wrap, tree, '', 0, state.hierarchyPath || '', state);
+      },
+    });
   }
 
   window.LocalCdrHierarchy = { render };
