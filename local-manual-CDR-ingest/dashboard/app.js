@@ -139,6 +139,9 @@
     $('hero-run').textContent = state.manifest.run_date;
     $('hero-rows').textContent = num(rows.length);
     $('hero-leader').textContent = state.sector === 'banks' && items[0] ? pct(items[0].value) : num(rows.length);
+  }
+
+  function setLastRefreshed() {
     $('last-refreshed').textContent = new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
   }
 
@@ -212,9 +215,11 @@
     if (!state[state.sector]) state[state.sector] = await getJson(`/api/${state.sector}?date=${state.manifest.run_date}`);
     setupFilters();
     render();
+    setLastRefreshed();
   }
 
   function bind() {
+    let resizeTimer = 0;
     document.querySelectorAll('[data-section]').forEach((button) => button.addEventListener('click', () => loadSection(button.dataset.section)));
     ['dataset', 'provider', 'query'].forEach((id) => $(id).addEventListener('input', render));
     $('refresh-page-btn').addEventListener('click', () => window.location.reload());
@@ -223,7 +228,10 @@
       $('chart-toggle-sort').textContent = state.descending ? 'Lowest first' : 'Highest first';
       render();
     });
-    window.addEventListener('resize', () => render());
+    window.addEventListener('resize', () => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => draw(chartRows(rateRows())), 120);
+    });
   }
 
   async function init() {
