@@ -35,8 +35,10 @@ open_dashboard.cmd  open the latest local dashboard
 rebuild_exports.cmd rebuild exports from the latest run without fetching
 ```
 
-The dashboard opens in your browser. If the usual port is busy, the launcher
-automatically uses the next free localhost port.
+The dashboard opens in your browser with the same public AustralianRates shell:
+Mortgage, Savings, Term Deposits, and Energy tabs; the familiar hero metrics;
+the chart workspace; export links; and a dense data table. If the usual port is
+busy, the launcher automatically uses the next free localhost port.
 
 ## Outputs
 
