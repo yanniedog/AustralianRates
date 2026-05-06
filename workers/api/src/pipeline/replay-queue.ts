@@ -6,10 +6,12 @@ import {
   requeueStaleDispatchingReplayRows,
   rescheduleReplayQueueRow,
   replayScopeSummary,
+  upsertReplayQueueDeferredAfterLease,
   type ReplayQueueRow,
 } from '../db/ingest-replay-queue'
 import type { DatasetKind } from '../../../../packages/shared/src'
 import type { EnvBindings, IngestMessage } from '../types'
+import { nextIsoAfterLeaseExpires } from '../queue/consumer/idempotency'
 import { log } from '../utils/logger'
 import { parseIntegerEnv } from '../utils/time'
 
@@ -58,6 +60,21 @@ export async function scheduleReplayForExhaustedMessage(
     errorMessage: input.errorMessage,
     maxReplayAttempts: config.maxReplayAttempts,
     baseDelaySeconds: config.baseDelaySeconds,
+  })
+}
+
+/** Max queue retries hit while another worker holds the idempotency lease — replay after lease expiry without bumping exhaustion. */
+export async function scheduleReplayForActiveClaimLeaseWait(
+  env: EnvBindings,
+  input: { message: IngestMessage; leaseUntilIso: string | null | undefined },
+): Promise<ReplayQueueRow> {
+  const config = replayConfig(env)
+  const nextAttemptAtIso = nextIsoAfterLeaseExpires(input.leaseUntilIso)
+  return upsertReplayQueueDeferredAfterLease(env.DB, {
+    message: input.message,
+    errorMessage: 'queue_message_duplicate_active_claim_max_attempts',
+    maxReplayAttempts: config.maxReplayAttempts,
+    nextAttemptAtIso,
   })
 }
 

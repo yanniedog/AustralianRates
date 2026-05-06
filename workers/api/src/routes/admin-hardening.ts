@@ -23,9 +23,11 @@ import {
 } from '../pipeline/product-classification-audit'
 import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { buildStatusDebugBundle } from '../pipeline/status-debug-bundle'
+import { shortenActiveIdempotencyLeaseToNow } from '../queue/consumer/idempotency'
 import { listHistoricalQuarantineCounts } from '../db/historical-quarantine'
-import type { AppContext } from '../types'
+import type { AppContext, IngestMessage } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
+import { log } from '../utils/logger'
 import type { DatasetKind } from '../../../../packages/shared/src'
 
 export const adminHardeningRoutes = new Hono<AppContext>()
@@ -277,6 +279,65 @@ adminHardeningRoutes.post('/runs/reconcile-lender-day', async (c) => {
     replay_dispatch: replayDispatch,
     result,
     post_reconcile_gap_rows: gapRows,
+  })
+})
+
+const IDEMPOTENCY_LEASE_SHORTEN_KINDS = new Set<IngestMessage['kind']>([
+  'daily_lender_fetch',
+  'product_detail_fetch',
+  'lender_finalize',
+  'daily_savings_lender_fetch',
+  'backfill_snapshot_fetch',
+  'backfill_day_fetch',
+  'historical_task_execute',
+])
+
+adminHardeningRoutes.post('/diagnostics/idempotency/shorten-lease', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>
+  const kindRaw = String(body.kind || '').trim()
+  const idempotencyKey = String(body.idempotency_key || body.idempotencyKey || '').trim()
+  if (!kindRaw || !IDEMPOTENCY_LEASE_SHORTEN_KINDS.has(kindRaw as IngestMessage['kind'])) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'kind must be a supported ingest message kind')
+  }
+  if (!idempotencyKey) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'idempotency_key is required')
+  }
+  const kind = kindRaw as IngestMessage['kind']
+  const result = await shortenActiveIdempotencyLeaseToNow(c.env, {
+    kind,
+    idempotencyKey,
+  })
+  if (!result.ok) {
+    const status = result.reason === 'no_active_claim' || result.reason === 'lease_already_expired' ? 404 : 400
+    log.warn('admin', 'idempotency_lease_shorten_rejected', {
+      code: 'admin_idempotency_lease_shorten',
+      context: JSON.stringify({ kind, idempotency_key: idempotencyKey, reason: result.reason, detail: result.detail }),
+    })
+    return jsonError(
+      c,
+      status,
+      'IDEMPOTENCY_LEASE_SHORTEN_FAILED',
+      `${result.reason}${result.detail ? `: ${result.detail}` : ''}`,
+    )
+  }
+  log.info('admin', 'idempotency_lease_shortened', {
+    code: 'admin_idempotency_lease_shorten',
+    context: JSON.stringify({
+      kind,
+      idempotency_key: idempotencyKey,
+      key: result.key,
+      previous_lease_until: result.previous_lease_until,
+      new_lease_until: result.new_lease_until,
+    }),
+  })
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode ?? null,
+    kind,
+    idempotency_key: idempotencyKey,
+    key: result.key,
+    previous_lease_until: result.previous_lease_until,
+    new_lease_until: result.new_lease_until,
   })
 })
 
