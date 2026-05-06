@@ -35,7 +35,14 @@
   }
 
   function groupKey(prefix, value) {
-    return prefix + ':' + String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 80);
+    const raw = String(value || '');
+    const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 72);
+    let hash = 2166136261;
+    for (let index = 0; index < raw.length; index += 1) {
+      hash ^= raw.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return prefix + ':' + (slug || 'item') + ':' + (hash >>> 0).toString(36);
   }
 
   function groupedRows(rows) {
