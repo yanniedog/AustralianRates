@@ -929,7 +929,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     log(f"Output root: {date_root} (UTC date folder unless --date set)")
     date_root.mkdir(parents=True, exist_ok=True)
 
-    workers = max(1, int(args.workers))
+    if args.workers < 1:
+        log("ERROR: --workers must be >= 1")
+        return 2
+    workers = args.workers
 
     brands, register_ok, brands_before_filter = collect_register_brands(
         timeout=args.timeout,
@@ -983,9 +986,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     def log_threadsafe(msg: str) -> None:
         if log_lock is not None:
             with log_lock:
-                print(msg, file=sys.stderr)
+                log(msg)
         else:
-            print(msg, file=sys.stderr)
+            log(msg)
 
     log(
         f"Starting ingest for {len(work_items)} holders "
@@ -1015,9 +1018,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             run_holder(item)
     else:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(run_holder, item) for item in work_items]
-            for fut in as_completed(futures):
-                fut.result()
+            future_to_bank = {pool.submit(run_holder, item): item[1] for item in work_items}
+            for fut in as_completed(future_to_bank):
+                bank_name = future_to_bank[fut]
+                try:
+                    fut.result()
+                except Exception as e:
+                    log_threadsafe(
+                        f"ERROR: Ingest for {bank_name} failed with an unhandled exception: {e}"
+                    )
 
     log("Done.")
     return 0
