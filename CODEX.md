@@ -45,7 +45,7 @@ g. Note all bots that commented after your last push: Gemini Code Assist, Codex,
 
 After `wait-for-bots` exits 0, and before replying to any thread:
 
-1. Fetch ALL threads (step 5c–f above).
+1. Complete steps **5c–g** above (fetch comments, reviews, and inline threads; scan GitHub; note bots) before synthesis.
 2. **Read every thread before replying to any of them.**
 3. Post ONE `## Feedback plan` comment on the PR: list every thread → implement / defer / decline + reason; note dependencies.
 4. Only after posting the plan: make code changes (single push), then reply in-thread to each bot/reviewer.
