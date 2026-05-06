@@ -10,6 +10,11 @@ ingest logic), and saves each product detail response to disk.
 Usage:
   python cdr_full_ingest.py [--out DIR] [--date YYYY-MM-DD] [--resume]
   python cdr_full_ingest.py --holders commbank --max-pages 2 --max-products 50
+  python cdr_full_ingest.py --workers 16
+
+Holders (banks) are ingested in parallel via a thread pool (default --workers 8).
+Per-holder work (index pagination and detail GETs) stays sequential to preserve ordering.
+Use --workers 1 for the previous strictly serial behaviour across holders.
 
 Exit codes: 0 success; 1 no holders matched ``--holders`` (register OK); 2 register failure or zero brands without filter.
 Use ``--allow-empty-holders`` to force 0 when there is nothing to ingest.
@@ -47,7 +52,9 @@ import random
 import re
 import ssl
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -586,11 +593,23 @@ def allocate_bank_dir(
     return candidate
 
 
-def append_failure(date_root: Path, row: Dict[str, Any]) -> None:
-    path = date_root / "failures.jsonl"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+def append_failure(
+    date_root: Path,
+    row: Dict[str, Any],
+    *,
+    lock: Optional[threading.Lock] = None,
+) -> None:
+    def _write() -> None:
+        path = date_root / "failures.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    if lock is not None:
+        with lock:
+            _write()
+    else:
+        _write()
 
 
 # -----------------------------------------------------------------------------
@@ -710,6 +729,7 @@ def ingest_brand(
     fetch_unknown_detail: bool,
     bank_dir_name: str,
     log: Callable[[str], None],
+    failure_lock: Optional[threading.Lock] = None,
 ) -> None:
     endpoint_url = brand["endpoint_url"]
     # Holder-level artifacts live beside Mortgage/Savings/TD so the product tree matches the plan.
@@ -753,6 +773,7 @@ def ingest_brand(
                     "status": res.status,
                     "snippet": (res.text or "")[:500],
                 },
+                lock=failure_lock,
             )
             break
 
@@ -829,6 +850,7 @@ def ingest_brand(
                         "status": detail_res.status,
                         "snippet": (detail_res.text or "")[:500],
                     },
+                    lock=failure_lock,
                 )
                 err_path = leaf / "product-detail.error.txt"
                 err_path.write_text(detail_res.text or "", encoding="utf-8")
@@ -881,6 +903,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Exit 0 even when register discovery fails or no holders match (for scripting)",
     )
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=8,
+        metavar="N",
+        help="Parallel holder ingests (default: 8). Use 1 for strictly serial per-holder runs.",
+    )
     return p.parse_args(argv)
 
 
@@ -899,6 +928,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     log(f"Output root: {date_root} (UTC date folder unless --date set)")
     date_root.mkdir(parents=True, exist_ok=True)
+
+    if args.workers < 1:
+        log("ERROR: --workers must be >= 1")
+        return 2
+    workers = args.workers
 
     brands, register_ok, brands_before_filter = collect_register_brands(
         timeout=args.timeout,
@@ -936,7 +970,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     seen_bank_dirs: Set[str] = set()
-
+    work_items: List[Tuple[Dict[str, str], str]] = []
     for brand in brands:
         bank_dir = allocate_bank_dir(
             brand["brand_name"],
@@ -944,7 +978,26 @@ def main(argv: Optional[List[str]] = None) -> int:
             brand["endpoint_url"],
             seen_bank_dirs,
         )
-        log(f"Ingesting {bank_dir} ({brand['endpoint_url']})")
+        work_items.append((brand, bank_dir))
+
+    failure_lock = threading.Lock() if workers > 1 else None
+    log_lock = threading.Lock() if workers > 1 else None
+
+    def log_threadsafe(msg: str) -> None:
+        if log_lock is not None:
+            with log_lock:
+                log(msg)
+        else:
+            log(msg)
+
+    log(
+        f"Starting ingest for {len(work_items)} holders "
+        f"with --workers {workers} (I/O-bound; tune if you hit 429s).",
+    )
+
+    def run_holder(item: Tuple[Dict[str, str], str]) -> None:
+        brand, bank_dir = item
+        log_threadsafe(f"Ingesting {bank_dir} ({brand['endpoint_url']})")
         ingest_brand(
             brand,
             date_root=date_root,
@@ -956,8 +1009,24 @@ def main(argv: Optional[List[str]] = None) -> int:
             max_products=args.max_products,
             fetch_unknown_detail=args.fetch_unknown_detail,
             bank_dir_name=bank_dir,
-            log=log,
+            log=log_threadsafe,
+            failure_lock=failure_lock,
         )
+
+    if workers == 1:
+        for item in work_items:
+            run_holder(item)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            future_to_bank = {pool.submit(run_holder, item): item[1] for item in work_items}
+            for fut in as_completed(future_to_bank):
+                bank_name = future_to_bank[fut]
+                try:
+                    fut.result()
+                except Exception as e:
+                    log_threadsafe(
+                        f"ERROR: Ingest for {bank_name} failed with an unhandled exception: {e}"
+                    )
 
     log("Done.")
     return 0
