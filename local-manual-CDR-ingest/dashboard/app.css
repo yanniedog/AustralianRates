@@ -25,6 +25,76 @@
   padding-inline: 12px;
 }
 
+.ar-local-cdr .site-action-theme {
+  border: 1px solid var(--ar-line);
+  background: var(--ar-surface-2);
+  color: var(--ar-text);
+}
+
+.ar-local-cdr .local-section-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ar-local-cdr .local-section-card {
+  display: grid;
+  min-height: 118px;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--ar-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ar-surface) 88%, transparent);
+  color: var(--ar-text);
+  text-align: left;
+  box-shadow: none;
+}
+
+.ar-local-cdr .local-section-card:hover,
+.ar-local-cdr .local-section-card.is-active {
+  border-color: color-mix(in srgb, var(--ar-section-accent) 48%, var(--ar-line-strong));
+  background: var(--ar-section-soft);
+}
+
+.ar-local-cdr .local-section-card-head {
+  display: grid;
+  gap: 3px;
+}
+
+.ar-local-cdr .local-section-kicker,
+.ar-local-cdr .local-section-card-meta {
+  color: var(--ar-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ar-local-cdr .local-section-card strong {
+  color: var(--ar-text);
+  font-size: 0.98rem;
+}
+
+.ar-local-cdr .local-section-logo-rail {
+  display: flex;
+  min-width: 0;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.ar-local-cdr .local-section-logo-rail .bank-badge {
+  width: 24px;
+  min-width: 24px;
+}
+
+.ar-local-cdr .local-section-logo-rail .bank-badge-copy {
+  display: none;
+}
+
+.ar-local-cdr .local-section-logo-rail .bank-badge-logo-wrap {
+  width: 24px;
+  height: 24px;
+}
+
 .ar-local-cdr .local-filter-strip {
   display: grid;
   grid-template-columns: minmax(150px, 0.75fr) minmax(180px, 1fr) minmax(220px, 1.3fr);
@@ -93,7 +163,7 @@
   max-height: 420px;
   overflow: auto;
   border: 1px solid var(--ar-line);
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
 .ar-local-cdr table {
@@ -107,7 +177,10 @@
   padding: 8px 10px;
   border-bottom: 1px solid var(--ar-line);
   text-align: left;
+  max-width: 460px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ar-local-cdr th {
@@ -123,6 +196,67 @@
   font-variant-numeric: tabular-nums;
 }
 
+.ar-local-cdr .local-tree-row {
+  background: var(--ar-surface);
+}
+
+.ar-local-cdr .local-provider-row {
+  background: color-mix(in srgb, var(--ar-section-soft) 72%, var(--ar-surface));
+}
+
+.ar-local-cdr .local-product-row {
+  background: color-mix(in srgb, var(--ar-surface-2) 88%, transparent);
+}
+
+.ar-local-cdr .local-rate-row {
+  color: var(--ar-text-soft);
+}
+
+.ar-local-cdr .local-tree-primary {
+  min-width: 260px;
+}
+
+.ar-local-cdr .local-tree-level-product {
+  padding-left: 34px;
+}
+
+.ar-local-cdr .local-tree-level-rate {
+  padding-left: 62px;
+}
+
+.ar-local-cdr .local-tree-toggle {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  margin-right: 8px;
+  place-items: center;
+  border: 1px solid var(--ar-line);
+  border-radius: 8px;
+  background: var(--ar-surface-2);
+  color: var(--ar-text-soft);
+  font-size: 0.72rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.ar-local-cdr .local-bank-badge {
+  vertical-align: middle;
+}
+
+.ar-local-cdr .local-product-name {
+  color: var(--ar-text);
+  font-weight: 700;
+}
+
+:root[data-theme="dark"] .ar-local-cdr .local-table-wrap {
+  background: color-mix(in srgb, var(--ar-surface) 82%, #020617);
+}
+
+:root[data-theme="dark"] .ar-local-cdr th {
+  background: color-mix(in srgb, var(--ar-surface-3) 88%, #020617);
+}
+
 @media (max-width: 900px) {
   .ar-local-cdr .site-header-inner {
     grid-template-columns: 1fr;
@@ -133,6 +267,10 @@
   }
 
   .ar-local-cdr .local-filter-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .ar-local-cdr .local-section-cards {
     grid-template-columns: 1fr;
   }
 

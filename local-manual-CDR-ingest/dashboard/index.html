@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Local CDR Dashboard | AustralianRates</title>
   <link rel="icon" type="image/svg+xml" href="/assets/branding/ar-mark.svg">
+  <script src="/site/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
@@ -32,6 +33,7 @@
         <button class="site-header-segment-link" type="button" data-section="Energy">Energy</button>
       </nav>
       <div class="site-header-actions">
+        <button class="site-action-btn site-action-theme" type="button" data-theme-toggle data-theme-label="Theme" aria-label="Theme">◐</button>
         <a id="jsonLink" class="buttonish secondary site-action-help" href="#">JSON</a>
         <a id="xlsxLink" class="buttonish secondary site-action-help" href="#">XLSX</a>
       </div>
@@ -52,6 +54,7 @@
           <span class="market-intro-live-card"><span class="market-intro-live-label" id="hero-leader-label">Lowest rate</span><strong id="hero-leader">...</strong></span>
           <span class="market-intro-live-card"><span class="market-intro-live-label">Rows</span><strong id="hero-rows">...</strong></span>
         </div>
+        <div id="sectionCards" class="local-section-cards" aria-label="Banking sections"></div>
       </div>
     </section>
     <section class="market-terminal" aria-label="Local CDR workspace">
@@ -102,7 +105,7 @@
             </div>
           </section>
           <section class="panel terminal-subpanel local-table-panel" aria-label="Visible data">
-            <div class="terminal-panel-head"><h2 class="terminal-panel-title">Visible data</h2><span id="table-count" class="hint"></span></div>
+            <div class="terminal-panel-head"><h2 class="terminal-panel-title">Provider hierarchy</h2><span id="table-count" class="hint"></span></div>
             <div class="local-table-wrap"><table id="table"></table></div>
           </section>
         </section>
@@ -115,6 +118,9 @@
       <nav class="site-footer-nav" aria-label="Exports"><a id="footerJsonLink" href="#">JSON</a><a id="footerXlsxLink" href="#">XLSX</a></nav>
     </div>
   </footer>
+  <script src="/site/ar-bank-brand.js"></script>
+  <script src="/assets/local-brand.js"></script>
+  <script src="/assets/hierarchy.js"></script>
   <script src="/assets/app.js"></script>
 </body>
 </html>
