@@ -39,7 +39,7 @@
   function rateRows() {
     const q = $('query').value.trim().toLowerCase();
     const provider = $('provider').value.trim().toLowerCase();
-    const dataset = state.section === 'Energy' ? '' : ($('dataset').value || state.section);
+    const dataset = state.section === 'Energy' ? '' : $('dataset').value;
     if (state.sector === 'banks') {
       if (!state.banks) return [];
       return state.banks.rates.filter((row) =>
@@ -222,6 +222,7 @@
     let resizeTimer = 0;
     document.querySelectorAll('[data-section]').forEach((button) => button.addEventListener('click', () => loadSection(button.dataset.section)));
     ['dataset', 'provider', 'query'].forEach((id) => $(id).addEventListener('input', render));
+    $('dataset').addEventListener('change', render);
     $('refresh-page-btn').addEventListener('click', () => window.location.reload());
     $('chart-toggle-sort').addEventListener('click', () => {
       state.descending = !state.descending;
