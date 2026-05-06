@@ -1,6 +1,19 @@
 import type { EnvBindings } from '../types'
+import { isD1EmergencyMinimumWrites } from './d1-emergency'
 
 export type D1WorkloadClass = 'critical_coverage' | 'essential_serving' | 'deferable' | 'nonessential'
+
+/** KV + env advisory snapshot for ops gates (distinct from multi-day `D1BudgetState`). */
+export type D1BudgetVisibilitySnapshot = {
+  emergency_minimum_writes: boolean
+  nonessential_disabled: boolean
+  writes_today: number
+  reads_today: number
+  daily_write_limit: number
+  daily_read_limit: number
+  nonessential_disable_fraction: number
+  checked_at: string
+}
 
 type D1Usage = {
   date: string
@@ -250,6 +263,25 @@ export async function isD1NonEssentialWorkDisabled(env: EnvBindings): Promise<bo
   const writeLimit = parseLimit(env.D1_DAILY_WRITE_LIMIT, DEFAULT_DAILY_WRITE_LIMIT)
   const disableFraction = parseFraction(env.D1_NONESSENTIAL_DISABLE_FRACTION)
   return usage.reads >= readLimit * disableFraction || usage.writes >= writeLimit * disableFraction
+}
+
+/**
+ * Single-object budget visibility for admin diagnostics (no D1 reads).
+ * Today’s read/write totals use the same UTC date keying as KV usage rows (`readLocalD1BudgetState(env, 1)`).
+ */
+export async function buildD1BudgetVisibilitySnapshot(env: EnvBindings): Promise<D1BudgetVisibilitySnapshot> {
+  const todaySlice = await readLocalD1BudgetState(env, 1)
+  const todayRow = todaySlice.days[0]
+  return {
+    emergency_minimum_writes: isD1EmergencyMinimumWrites(env),
+    nonessential_disabled: await isD1NonEssentialWorkDisabled(env),
+    writes_today: todayRow?.writes ?? 0,
+    reads_today: todayRow?.reads ?? 0,
+    daily_write_limit: Number.parseInt(env.D1_DAILY_WRITE_LIMIT ?? '', 10) || 0,
+    daily_read_limit: Number.parseInt(env.D1_DAILY_READ_LIMIT ?? '', 10) || 0,
+    nonessential_disable_fraction: parseFraction(env.D1_NONESSENTIAL_DISABLE_FRACTION),
+    checked_at: new Date().toISOString(),
+  }
 }
 
 export type D1BudgetDay = D1Usage & {

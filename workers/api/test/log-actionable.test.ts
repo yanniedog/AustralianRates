@@ -36,4 +36,20 @@ describe('toActionableIssueSummaries', () => {
 
     expect(issues).toEqual([])
   })
+
+  it('maps d1_public_package_refresh_ancillary_side_effects_suppressed from scheduler warn shape', () => {
+    const issues = toActionableIssueSummaries([
+      {
+        ts: '2026-05-06T12:00:01.000Z',
+        level: 'warn',
+        source: 'scheduler',
+        message: 'Running public cache refresh with ancillary D1 side effects suppressed',
+        code: 'd1_public_package_refresh_ancillary_side_effects_suppressed',
+      },
+    ])
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.code).toBe('d1_public_package_refresh_ancillary_side_effects_suppressed')
+    expect(issues[0]?.title).toContain('budget guardrail')
+    expect(issues[0]?.links).toContain('/admin/status.html')
+  })
 })

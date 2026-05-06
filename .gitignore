@@ -93,6 +93,7 @@ site/version.json
 # Temp / scratch files (agent sessions leave these behind)
 # ──────────────────────────────────────────────────────────────
 tmp/
+tmp_assess/
 .tmp/
 # Root-only so tools/node-scripts/tmp-local-preview-proxy.cjs and similar
 # legitimately-named files deeper in the tree stay tracked.

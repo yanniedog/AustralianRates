@@ -4,6 +4,8 @@ import {
   type ChartCacheSection,
 } from './chart-cache'
 import type { SlicePairStatsPayload } from './slice-pair-stats'
+import { log } from '../utils/logger'
+import { serializeJsonForKv } from './public-cache-support'
 
 /** Bump when response JSON shape changes. */
 
@@ -54,9 +56,17 @@ export async function getCachedOrComputeSlicePairStats(
 
   const stats = await compute()
   try {
-    const wrapped = JSON.stringify({ v: SLICE_PAIR_STATS_PAYLOAD_VERSION, stats })
+    const payload = { v: SLICE_PAIR_STATS_PAYLOAD_VERSION, stats }
+    const serialized = JSON.stringify(payload)
+    log.info('public_cache', 'slice_pair_kv_put_size', {
+      code: 'slice_pair_kv_put_size',
+      context: { key, bytes: serialized.length },
+    })
     if (env.CHART_CACHE_KV) {
-      await env.CHART_CACHE_KV.put(key, wrapped, { expirationTtl: CHART_CACHE_KV_TTL })
+      const safe = serializeJsonForKv(key, payload, { source: 'slice_pair_stats' })
+      if (safe) {
+        await env.CHART_CACHE_KV.put(key, safe, { expirationTtl: CHART_CACHE_KV_TTL })
+      }
     }
   } catch {
     /* ignore KV write failure */

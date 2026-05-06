@@ -72,6 +72,7 @@ describe('api route integration smoke', () => {
       '/api/home-loan-rates/admin/downloads/test-job/restore/analysis',
       '/api/home-loan-rates/admin/analytics/projections/diagnostics',
       '/api/home-loan-rates/admin/diagnostics/status-debug-bundle',
+      '/api/home-loan-rates/admin/diagnostics/d1-budget-state',
     ]) {
       const { status, json } = await fetchJson(endpoint)
       expect(status).toBe(401)

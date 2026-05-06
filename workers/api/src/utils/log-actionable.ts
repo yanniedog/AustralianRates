@@ -177,6 +177,13 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
       'Review the product classification audit (status bundle `product_classification` section). For home loans: lvr_unspecified rows are CDR products that do not publish LVR bands; decide whether to widen the parser, request richer data from the lender, or accept the gap. For invalid_enum / null_required rows: a parser started emitting a value the schema does not accept - fix the parser or add the enum value before the next ingest.',
     links: ['/admin/status.html', '/admin/database.html', '/admin/logs.html'],
   },
+  d1_public_package_refresh_ancillary_side_effects_suppressed: {
+    code: 'd1_public_package_refresh_ancillary_side_effects_suppressed',
+    title: 'D1 public package refresh suppressed by budget guardrail',
+    action:
+      'Open admin Status; review d1_budget_state in integrity pulse; confirm cron suppression is expected or escalate.',
+    links: ['/admin/status.html', '/admin/logs.html'],
+  },
 }
 
 function inferCodeFromMessage(message: string): string {
@@ -208,6 +215,9 @@ function inferCodeFromMessage(message: string): string {
     normalized.includes('product_classification_gaps') ||
     normalized.includes('product_classification_gaps_detected')
   ) return 'product_classification_gaps'
+  if (normalized.includes('d1_public_package_refresh_ancillary_side_effects_suppressed')) {
+    return 'd1_public_package_refresh_ancillary_side_effects_suppressed'
+  }
   return DEFAULT_ISSUE.code
 }
 
