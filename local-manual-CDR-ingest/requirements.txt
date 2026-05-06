@@ -1,0 +1,2 @@
+# Standalone ingest uses Python 3.10+ stdlib only (urllib).
+# Optional: pip install requests if you prefer to refactor HTTP to requests.
