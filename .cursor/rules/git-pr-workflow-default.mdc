@@ -42,7 +42,7 @@ d. `gh pr view <n> --comments`
 e. `gh api repos/<owner>/<repo>/pulls/<n>/reviews`
 f. `gh api repos/<owner>/<repo>/pulls/<n>/comments`
 g. On github.com: scan Conversation + Files tabs until in-flight bot activity (reactions, pending review) settles.
-h. Note ALL bots that commented after your last push: Gemini Code Assist, Codex, Copilot, CodeRabbit, Greptile, Sourcery, security scanners, etc.
+h. Note ALL bots that commented after your last push; **never omit** file-level threads from **Sourcery** (`sourcery-ai`), **Gemini Code Assist** (`gemini-code-assist`), **Codex** (`chatgpt-codex-connector`), plus Copilot, CodeRabbit, Greptile, security scanners, etc.
 
 **The wait trigger is limited to new PR creation and bot-tag response cycles. Code pushes alone do not create a fresh wait requirement.**
 
@@ -127,6 +127,8 @@ Exception: user provides an explicit written waiver for that specific PR → may
 ## Bot/reviewer reply standard (steps 5–6 detail)
 
 Treat automated reviewers like humans for **substantive** feedback (behaviour, correctness, security, architecture, enforced-policy hygiene — not trivial spelling unless meaning changes). Covered bots: `gemini-code-assist`, `chatgpt-codex-connector`, `copilot`, `coderabbit`, `sourcery-ai`, `greptile`, security scanners.
+
+**Priority trio (`sourcery-ai`, `gemini-code-assist`, `chatgpt-codex-connector`):** sweep **`reviews`** + **`comments`** APIs after each bot-capable CI cycle before merging; assume substantive findings **should be implemented** unless deferring or declining with a written rationale.
 
 - **Accepted:** commit fix on same branch + in-thread reply with SHA.
 - **Deferred:** in-thread reply with reason + optional `docs/REFACTOR_BACKLOG.md` link.
