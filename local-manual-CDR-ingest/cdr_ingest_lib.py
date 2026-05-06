@@ -405,7 +405,10 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument(
         "--allow-empty-holders",
         action="store_true",
-        help="Exit 0 even when register discovery fails or no holders match (for scripting)",
+        help=(
+            "Exit 0 when register discovery fails, no holders match filters, or a requested sector "
+            "has nothing to ingest (for automation during outages / empty register)"
+        ),
     )
     p.add_argument(
         "--workers",
@@ -465,6 +468,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
 
     if not snap.register_ok:
+        if args.allow_empty_holders:
+            log(
+                "WARNING: CDR register discovery failed — no successful JSON payload from "
+                "any register URL (--allow-empty-holders); exiting 0.",
+            )
+            return 0
         log(
             "ERROR: CDR register discovery failed — no successful JSON payload from "
             "any register URL (network outage, HTTP errors, or non-JSON body).",
@@ -512,10 +521,21 @@ def main(argv: Optional[List[str]] = None) -> int:
             log("ERROR: no energy PRD brands to ingest.")
             return 2
         else:
-            log(
-                "WARNING: no energy retailers in register after filter "
-                "(skipping energy/; banking still runs if scheduled).",
-            )
+            if snap.energy_count_before_filter == 0:
+                log(
+                    "ERROR: energy ingest is enabled but register contained zero energy PRD brands "
+                    "before --holders (use --no-energy for banking-only, or --allow-empty-holders "
+                    "to skip energy).",
+                )
+                return 2
+            if args.holders:
+                log(
+                    f"ERROR: no energy retailers matched --holders {args.holders!r} "
+                    "(register returned energy rows but none matched the filter).",
+                )
+                return 1
+            log("ERROR: no energy PRD brands to ingest.")
+            return 2
 
     if not run_banks and not run_energy:
         if args.allow_empty_holders:
