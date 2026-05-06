@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import socket
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -131,14 +132,27 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Serve local CDR dashboard from generated cache.")
     parser.add_argument("--exports", type=Path, required=True, help="Export folder containing dashboard-cache/")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8799)
+    parser.add_argument("--port", default="auto", help="Port number or 'auto' (default: auto from 8800)")
     return parser.parse_args()
+
+
+def resolve_port(host: str, value: str) -> int:
+    if value != "auto":
+        return int(value)
+    port = 8800
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.2)
+            if sock.connect_ex((host, port)) != 0:
+                return port
+        port += 1
 
 
 def main() -> int:
     args = parse_args()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(args.exports))
-    print(f"Local CDR dashboard: http://{args.host}:{args.port}/")
+    port = resolve_port(args.host, str(args.port))
+    server = ThreadingHTTPServer((args.host, port), make_handler(args.exports))
+    print(f"Local CDR dashboard: http://{args.host}:{port}/")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
