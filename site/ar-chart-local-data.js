@@ -131,7 +131,7 @@
     }
 
     function latestAllBlockIsCompleteForLimit(block, requestedLimit) {
-        if (!block || typeof block !== 'object' || !Array.isArray(block.rows) || !block.rows.length) return false;
+        if (!block || typeof block !== 'object' || !Array.isArray(block.rows)) return false;
         var rows = block.rows;
         var limit = Math.max(0, Number(requestedLimit || 0));
         var count = Number(block.count);
@@ -148,6 +148,7 @@
                 : Number.isFinite(count)
                     ? count
                     : rows.length;
+        if (!rows.length) return knownTotal === 0;
         if (limit > 0 && rows.length < Math.min(limit, knownTotal)) return false;
         if ((coverageLimited || snapshotTruncated) && limit > 0 && rows.length < limit) return false;
         return true;

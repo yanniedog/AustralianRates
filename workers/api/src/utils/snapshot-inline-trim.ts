@@ -55,17 +55,19 @@ function capTableRows(source: Record<string, unknown>, key: string, max: number)
   const totalRaw = b.total ?? b.count ?? b.rows.length
   const total = Number(totalRaw)
   const totalRows = Number.isFinite(total) ? total : b.rows.length
+  const returnedRows = Math.min(b.rows.length, max)
+  // Keep this metadata contract in sync with the Pages middleware copies.
   out[key] = {
     ...b,
     rows: b.rows.slice(0, max),
-    count: Math.min(Number(b.count ?? b.rows.length), max),
+    count: returnedRows,
     total: totalRows,
     meta: {
       ...meta,
       coverage: {
         ...coverage,
         total_rows: totalRows,
-        returned_rows: Math.min(b.rows.length, max),
+        returned_rows: returnedRows,
         limited: true,
       },
       snapshot_rows_truncated: true,

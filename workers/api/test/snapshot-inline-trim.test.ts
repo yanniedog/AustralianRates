@@ -92,7 +92,8 @@ describe('snapshot-inline-trim', () => {
     const data: Record<string, unknown> = {
       latestAll: {
         ok: true,
-        count: 1200,
+        count: 'not-a-number',
+        total: 1200,
         rows: Array.from({ length: 1200 }, (_, index) => ({
           bank_name: `Bank ${index}`,
           product_name: `Product ${index}`,

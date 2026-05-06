@@ -144,17 +144,19 @@ function capTableRows(source, key, max) {
     );
     const meta = block.meta && typeof block.meta === 'object' ? block.meta : {};
     const coverage = meta.coverage && typeof meta.coverage === 'object' ? meta.coverage : {};
+    const returnedRows = Math.min(block.rows.length, max);
+    // Keep this metadata contract in sync with the API and site middleware copies.
     out[key] = {
         ...block,
         rows: block.rows.slice(0, max),
-        count: Math.min(Number(block.count || block.rows.length), max),
+        count: returnedRows,
         total: Number.isFinite(totalRows) ? totalRows : block.rows.length,
         meta: {
             ...meta,
             coverage: {
                 ...coverage,
                 total_rows: Number.isFinite(totalRows) ? totalRows : block.rows.length,
-                returned_rows: Math.min(block.rows.length, max),
+                returned_rows: returnedRows,
                 limited: true,
             },
             snapshot_rows_truncated: true,
