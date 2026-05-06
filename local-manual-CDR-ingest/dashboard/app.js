@@ -157,15 +157,18 @@
     const top = 24;
     const rowHeight = Math.max(10, Math.min(18, (height - 48) / Math.max(items.length, 1)));
     const max = Math.max(...items.map((item) => item.value), 1);
+    const sectionSoft = cssVar('--ar-section-soft', 'rgba(37,99,235,0.16)');
+    const sectionAccent = cssVar('--ar-section-accent', cssVar('--ar-accent', '#2563eb'));
+    const textSoft = cssVar('--ar-text-soft', '#c5ced8');
     ctx.font = '12px "Space Grotesk", Segoe UI, sans-serif';
     items.forEach((item, index) => {
       const y = top + index * rowHeight;
       const bar = Math.max(3, (width - left - 92) * item.value / max);
-      ctx.fillStyle = cssVar('--ar-section-soft', 'rgba(37,99,235,0.16)');
+      ctx.fillStyle = sectionSoft;
       ctx.fillRect(left, y, width - left - 92, Math.max(5, rowHeight - 5));
-      ctx.fillStyle = cssVar('--ar-section-accent', cssVar('--ar-accent', '#2563eb'));
+      ctx.fillStyle = sectionAccent;
       ctx.fillRect(left, y, bar, Math.max(5, rowHeight - 5));
-      ctx.fillStyle = cssVar('--ar-text-soft', '#c5ced8');
+      ctx.fillStyle = textSoft;
       ctx.fillText(item.label.slice(0, 24), 14, y + rowHeight - 6);
       ctx.fillText(state.sector === 'banks' ? pct(item.value) : String(Math.round(item.value)), left + bar + 8, y + rowHeight - 6);
     });
@@ -232,7 +235,6 @@
     const items = chartRows(rows);
     setLinks();
     updateHero(rows, items);
-    renderSectionCards();
     renderStats(rows);
     renderRail(items);
     renderTable(rows);
@@ -255,6 +257,7 @@
     clear($('chart-series-list'));
     if (!state[state.sector]) state[state.sector] = await getJson(`/api/${state.sector}?date=${state.manifest.run_date}`);
     setupFilters();
+    renderSectionCards();
     render();
     setLastRefreshed();
   }

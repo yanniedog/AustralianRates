@@ -88,7 +88,7 @@
     const header = child(thead, 'tr');
     ['Provider / product / rate', 'Best', 'Count', 'Type', 'Details', 'Updated'].forEach((key) => child(header, 'th', '', key));
     const tbody = child(table, 'tbody');
-    groups.slice(0, 90).forEach((provider) => renderProvider(tbody, provider, state));
+    groups.forEach((provider) => renderProvider(tbody, provider, state));
   }
 
   function renderProvider(tbody, provider, state) {
@@ -104,7 +104,7 @@
     child(pRow, 'td', '', provider.name);
     child(pRow, 'td', '', '');
     if (!providerOpen) return;
-    products.slice(0, 140).forEach((product) => renderProduct(tbody, product, pKey, state));
+    products.forEach((product) => renderProduct(tbody, product, pKey, state));
   }
 
   function renderProduct(tbody, product, pKey, state) {
@@ -119,7 +119,7 @@
     child(productRow, 'td', '', clip(product.rows[0] && product.rows[0].description, 140));
     child(productRow, 'td', '', product.updated ? product.updated.slice(0, 10) : '');
     if (!productOpen) return;
-    product.rows.slice(0, 30).forEach((rate) => renderRate(tbody, rate));
+    product.rows.forEach((rate) => renderRate(tbody, rate));
   }
 
   function renderRate(tbody, rate) {
