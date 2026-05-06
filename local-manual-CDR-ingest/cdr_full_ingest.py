@@ -11,9 +11,15 @@ Usage:
   python cdr_full_ingest.py [--out DIR] [--date YYYY-MM-DD] [--resume]
   python cdr_full_ingest.py --holders commbank --max-pages 2 --max-products 50
 
+Exit codes: 0 success; 1 no holders matched ``--holders`` (register OK); 2 register failure or zero brands without filter.
+Use ``--allow-empty-holders`` to force 0 when there is nothing to ingest.
+
 Default run date folder uses UTC (YYYY-MM-DD). Output layout:
 
-  <out>/<YYYY-MM-DD>/Mortgage/<Bank>/<ProductName>/<productId>/product-detail.json
+  <out>/<YYYY-MM-DD>/Mortgage/<Bank>/<ProductName>/<safe-product-dir>/product-detail.json
+
+Each leaf includes ``product-id.txt`` with the canonical CDR ``productId``; the directory
+name is a sanitized segment plus a short hash (Windows-safe, collision-resistant).
   <out>/<YYYY-MM-DD>/Savings/...
   <out>/<YYYY-MM-DD>/TD/...
 
@@ -35,6 +41,7 @@ References (external standards):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 import re
@@ -523,6 +530,32 @@ def sanitize_path_component(name: str, fallback: str = "_") -> str:
     return text if text else fallback
 
 
+# Device filenames reserved on Windows (stem match).
+_WIN_RESERVED_STEMS = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
+
+
+def filesystem_product_id_directory(product_id: str) -> str:
+    """Directory name under the product leaf: sanitized id + hash suffix (paths/col/reserved-safe)."""
+    raw = str(product_id or "").strip()
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    base = sanitize_path_component(raw, fallback="_")
+    if base in (".", ".."):
+        base = "_"
+    stem = base.upper().split(".", 1)[0]
+    if stem in _WIN_RESERVED_STEMS:
+        base = f"id_{base}"
+    # Keep segment short for nested Windows paths; hash preserves uniqueness.
+    if len(base) > 80:
+        base = base[:80].rstrip(" .")
+        if not base:
+            base = "_"
+    return f"{base}__{digest}"
+
+
 def host_token(endpoint_url: str) -> str:
     try:
         host = urllib.parse.urlparse(endpoint_url).hostname or ""
@@ -571,8 +604,10 @@ def collect_register_brands(
     max_retries: int,
     sleep_ms: int,
     holders_filter: Optional[str],
-) -> List[Dict[str, str]]:
+) -> Tuple[List[Dict[str, str]], bool, int]:
+    """Returns (brands_after_optional_filter, register_payload_ok, count_before_holders_filter)."""
     merged: Dict[Tuple[str, str, str], Dict[str, str]] = {}
+    register_payload_ok = False
 
     attempts: List[Tuple[str, str]] = [
         (REGISTER_URL_SUMMARY, "cdr"),
@@ -595,6 +630,7 @@ def collect_register_brands(
         data = res.data
         if not res.ok or data is None or has_cdr_errors(data):
             continue
+        register_payload_ok = True
         for b in extract_brands(data):
             key = (
                 b["endpoint_url"].lower(),
@@ -603,18 +639,23 @@ def collect_register_brands(
             )
             merged[key] = b
 
-    brands = list(merged.values())
+    brands_all = list(merged.values())
+    count_before_filter = len(brands_all)
+
     if holders_filter:
         hf = holders_filter.lower()
         brands = [
             b
-            for b in brands
+            for b in brands_all
             if hf in (b["brand_name"] or "").lower()
             or hf in (b["legal_entity_name"] or "").lower()
             or hf in (b["endpoint_url"] or "").lower()
         ]
+    else:
+        brands = brands_all
+
     brands.sort(key=lambda x: (x["brand_name"] or x["legal_entity_name"] or "").lower())
-    return brands
+    return brands, register_payload_ok, count_before_filter
 
 
 def classify_product_for_ingest(
@@ -638,6 +679,7 @@ def classify_product_for_ingest(
         return None, None
 
     detail_url = f"{safe_url(endpoint_url)}/{urllib.parse.quote(pid, safe='')}"
+    time.sleep(sleep_ms / 1000.0)
     detail_res = fetch_cdr_json(
         detail_url,
         timeout=timeout,
@@ -744,8 +786,13 @@ def ingest_brand(
                 pick_text(product, ["name", "productName"]) or "_unnamed"
             )
 
-            leaf = date_root / folder / bank_dir_name / pname / pid
+            id_dir = filesystem_product_id_directory(pid)
+            leaf = date_root / folder / bank_dir_name / pname / id_dir
             leaf.mkdir(parents=True, exist_ok=True)
+            id_file = leaf / "product-id.txt"
+            if not id_file.exists():
+                id_file.write_text(pid + "\n", encoding="utf-8")
+
             detail_path = leaf / "product-detail.json"
 
             if resume and detail_path.exists() and detail_path.stat().st_size > 0:
@@ -829,6 +876,11 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="GET detail once when list classification is ambiguous; classify from detail body",
     )
+    p.add_argument(
+        "--allow-empty-holders",
+        action="store_true",
+        help="Exit 0 even when register discovery fails or no holders match (for scripting)",
+    )
     return p.parse_args(argv)
 
 
@@ -848,13 +900,40 @@ def main(argv: Optional[List[str]] = None) -> int:
     log(f"Output root: {date_root} (UTC date folder unless --date set)")
     date_root.mkdir(parents=True, exist_ok=True)
 
-    brands = collect_register_brands(
+    brands, register_ok, brands_before_filter = collect_register_brands(
         timeout=args.timeout,
         max_retries=args.max_retries,
         sleep_ms=args.sleep_ms,
         holders_filter=args.holders,
     )
     log(f"Discovered {len(brands)} register brand rows with PRD endpoints")
+
+    if not brands:
+        if args.allow_empty_holders:
+            log("WARNING: no holders to ingest (--allow-empty-holders); exiting 0.")
+            return 0
+        if not register_ok:
+            log(
+                "ERROR: CDR register discovery failed — no successful JSON payload from "
+                "any register URL (network outage, HTTP errors, or non-JSON body).",
+            )
+            return 2
+        if args.holders:
+            if brands_before_filter == 0:
+                log(
+                    "ERROR: register responded but extracted zero PRD brands before "
+                    "applying --holders filter (not a filter miss).",
+                )
+                return 2
+            log(
+                f"ERROR: no holders matched --holders {args.holders!r} "
+                "(register returned holders but none matched the filter).",
+            )
+            return 1
+        log(
+            "ERROR: register responded but extracted zero brands with PRD endpoints.",
+        )
+        return 2
 
     seen_bank_dirs: Set[str] = set()
 
