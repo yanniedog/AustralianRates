@@ -243,6 +243,7 @@
     });
     $('hierarchy').addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (event.target.closest('button')) return;
       const action = event.target.closest('[data-local-hierarchy-action]');
       if (!action) return;
       event.preventDefault();

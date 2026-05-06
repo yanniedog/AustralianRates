@@ -1,11 +1,6 @@
 (function () {
   'use strict';
 
-  function cssVar(name, fallback) {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return value || fallback;
-  }
-
   function pct(raw) {
     const value = Number(raw);
     if (!Number.isFinite(value)) return '';
@@ -26,6 +21,7 @@
     const top = 24;
     const rowHeight = Math.max(10, Math.min(18, (height - 48) / Math.max(items.length, 1)));
     const max = Math.max(...items.map((item) => item.value), 1);
+    const cssVar = window.LocalCdrUtils.cssVar;
     const sectionSoft = cssVar('--ar-section-soft', 'rgba(37,99,235,0.16)');
     const sectionAccent = cssVar('--ar-section-accent', cssVar('--ar-accent', '#2563eb'));
     const textSoft = cssVar('--ar-text-soft', '#c5ced8');

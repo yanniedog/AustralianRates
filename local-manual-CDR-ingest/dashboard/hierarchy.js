@@ -21,11 +21,6 @@
     })[ch]);
   }
 
-  function cssVar(name, fallback) {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return value || fallback;
-  }
-
   function num(value) {
     return Number(value || 0).toLocaleString('en-AU');
   }
@@ -36,14 +31,16 @@
     return (value * 100).toFixed(2) + '%';
   }
 
-  function rates(rows) {
-    return rows.map((row) => Number(row.rate)).filter((value) => Number.isFinite(value) && value > 0);
-  }
-
   function minMax(rows) {
-    const values = rates(rows);
-    if (!values.length) return { min: null, max: null };
-    return { min: Math.min(...values), max: Math.max(...values) };
+    let min = null;
+    let max = null;
+    for (let index = 0; index < rows.length; index += 1) {
+      const value = Number(rows[index].rate);
+      if (!Number.isFinite(value) || value <= 0) continue;
+      if (min == null || value < min) min = value;
+      if (max == null || value > max) max = value;
+    }
+    return { min, max };
   }
 
   function bestRate(rows, descending) {
@@ -91,17 +88,6 @@
     return String(value || 'Other').replace(/\s+/g, ' ').trim() || 'Other';
   }
 
-  function compareGroups(descending) {
-    return (a, b) => {
-      const av = bestRate(a.rows, descending);
-      const bv = bestRate(b.rows, descending);
-      if (av == null && bv == null) return a.label.localeCompare(b.label);
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      return descending ? bv - av : av - bv;
-    };
-  }
-
   function buildTree(rows, fields, index, descending) {
     if (!rows.length) return { kind: 'empty', rows: [] };
     if (index >= fields.length) return { kind: 'leaves', rows };
@@ -115,9 +101,28 @@
     const groups = [...grouped.entries()].map(([label, groupRows]) => ({
       label,
       rows: groupRows,
+      best: bestRate(groupRows, descending),
       child: buildTree(groupRows, fields, index + 1, descending),
-    })).sort(compareGroups(descending));
+    })).sort((a, b) => {
+      if (a.best == null && b.best == null) return a.label.localeCompare(b.label);
+      if (a.best == null) return 1;
+      if (b.best == null) return -1;
+      return descending ? b.best - a.best : a.best - b.best;
+    });
     return { kind: 'branch', field, groups, rows };
+  }
+
+  function prunePath(tree, activePath) {
+    const parts = String(activePath || '').split('>').filter(Boolean);
+    const kept = [];
+    let node = tree;
+    for (let index = 0; index < parts.length; index += 1) {
+      const groupIndex = Number(parts[index]);
+      if (!node || node.kind !== 'branch' || !Number.isInteger(groupIndex) || !node.groups[groupIndex]) break;
+      kept.push(String(groupIndex));
+      node = node.groups[groupIndex].child;
+    }
+    return kept.join('>');
   }
 
   function parentPath(path) {
@@ -214,14 +219,14 @@
       label.title = formatLabel(node.field, group.label);
     }
     const rate = child(row, 'span', 'ar-report-infobox-trate');
-    renderRateRange(rate, group.rows, bestRate(state.rows, state.descending), state.descending);
+    renderRateRange(rate, group.rows, state.globalBest, state.descending);
   }
 
   function renderTree(container, node, path, depth, activePath, state) {
     if (!node || node.kind === 'empty') return;
     if (node.kind === 'leaves') {
       node.rows.slice().sort((a, b) => state.descending ? Number(b.rate) - Number(a.rate) : Number(a.rate) - Number(b.rate))
-        .forEach((row) => renderLeaf(container, row, depth, bestRate(state.rows, state.descending), state.descending));
+        .forEach((row) => renderLeaf(container, row, depth, state.globalBest, state.descending));
       return;
     }
     const focusIndex = focusedChildIndex(path, activePath);
@@ -237,6 +242,7 @@
   }
 
   function panelTheme() {
+    const cssVar = window.LocalCdrUtils.cssVar;
     return {
       ttText: cssVar('--ar-text', '#e5e7eb'),
       ttBg: cssVar('--ar-surface-2', '#111827'),
@@ -265,7 +271,10 @@
     countEl.textContent = `${num(visible.length)} rates / ${num(productCount)} products / ${num(providerCount)} providers`;
     const panel = ensurePanel(container);
     if (!panel) return;
+    state.rows = visible;
+    state.globalBest = bestRate(visible, state.descending);
     const tree = buildTree(visible, tierFields(state.section), 0, state.descending);
+    state.hierarchyPath = prunePath(tree, state.hierarchyPath || '');
     if (!visible.length || tree.kind === 'empty') {
       panel.show({
         heading: state.section + ' hierarchy',
@@ -274,10 +283,9 @@
       });
       return;
     }
-    state.rows = visible;
     panel.show({
       heading: state.section === 'TD' ? 'Term deposit hierarchy' : state.section + ' hierarchy',
-      meta: `${num(providerCount)} providers · ${num(productCount)} products · ${pct(bestRate(visible, state.descending))} ${state.descending ? 'best yield' : 'best rate'}`,
+      meta: `${num(providerCount)} providers · ${num(productCount)} products · ${pct(state.globalBest)} ${state.descending ? 'best yield' : 'best rate'}`,
       compact: true,
       renderBody: (wrap) => {
         renderBreadcrumbs(wrap, tree, state.hierarchyPath || '');
