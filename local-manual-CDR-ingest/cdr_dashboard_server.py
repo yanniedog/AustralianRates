@@ -73,7 +73,7 @@ def make_handler(exports_root: Path):
                 return dashboard_cache.read(DASHBOARD_ROOT / "index.html"), "text/html; charset=utf-8"
             if path == "/assets/app.css":
                 return dashboard_cache.read(DASHBOARD_ROOT / "app.css"), "text/css; charset=utf-8"
-            if path in ("/assets/app.js", "/assets/local-brand.js", "/assets/hierarchy.js"):
+            if path in ("/assets/app.js", "/assets/chart.js", "/assets/local-brand.js", "/assets/hierarchy.js"):
                 return dashboard_cache.read(DASHBOARD_ROOT / path.removeprefix("/assets/")), "application/javascript; charset=utf-8"
             if path == "/assets/branding/ar-mark.svg":
                 return site_cache.read(SITE_ROOT / "assets" / "branding" / "ar-mark.svg"), "image/svg+xml"
