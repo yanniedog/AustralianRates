@@ -1,2 +1,0 @@
-# Standalone ingest/export/dashboard uses Python 3.10+ stdlib only.
-# XLSX files are written directly as Office Open XML ZIP packages.
