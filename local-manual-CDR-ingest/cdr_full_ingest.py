@@ -548,8 +548,11 @@ def filesystem_product_id_directory(product_id: str) -> str:
     stem = base.upper().split(".", 1)[0]
     if stem in _WIN_RESERVED_STEMS:
         base = f"id_{base}"
-    if len(base) > 160:
-        base = base[:160]
+    # Keep segment short for nested Windows paths; hash preserves uniqueness.
+    if len(base) > 80:
+        base = base[:80].rstrip(" .")
+        if not base:
+            base = "_"
     return f"{base}__{digest}"
 
 
@@ -601,8 +604,8 @@ def collect_register_brands(
     max_retries: int,
     sleep_ms: int,
     holders_filter: Optional[str],
-) -> Tuple[List[Dict[str, str]], bool]:
-    """Returns (brands, register_payload_ok) — latter True if any register URL returned usable JSON."""
+) -> Tuple[List[Dict[str, str]], bool, int]:
+    """Returns (brands_after_optional_filter, register_payload_ok, count_before_holders_filter)."""
     merged: Dict[Tuple[str, str, str], Dict[str, str]] = {}
     register_payload_ok = False
 
@@ -636,18 +639,23 @@ def collect_register_brands(
             )
             merged[key] = b
 
-    brands = list(merged.values())
+    brands_all = list(merged.values())
+    count_before_filter = len(brands_all)
+
     if holders_filter:
         hf = holders_filter.lower()
         brands = [
             b
-            for b in brands
+            for b in brands_all
             if hf in (b["brand_name"] or "").lower()
             or hf in (b["legal_entity_name"] or "").lower()
             or hf in (b["endpoint_url"] or "").lower()
         ]
+    else:
+        brands = brands_all
+
     brands.sort(key=lambda x: (x["brand_name"] or x["legal_entity_name"] or "").lower())
-    return brands, register_payload_ok
+    return brands, register_payload_ok, count_before_filter
 
 
 def classify_product_for_ingest(
@@ -892,7 +900,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     log(f"Output root: {date_root} (UTC date folder unless --date set)")
     date_root.mkdir(parents=True, exist_ok=True)
 
-    brands, register_ok = collect_register_brands(
+    brands, register_ok, brands_before_filter = collect_register_brands(
         timeout=args.timeout,
         max_retries=args.max_retries,
         sleep_ms=args.sleep_ms,
@@ -911,9 +919,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
             return 2
         if args.holders:
+            if brands_before_filter == 0:
+                log(
+                    "ERROR: register responded but extracted zero PRD brands before "
+                    "applying --holders filter (not a filter miss).",
+                )
+                return 2
             log(
                 f"ERROR: no holders matched --holders {args.holders!r} "
-                "(register responded successfully).",
+                "(register returned holders but none matched the filter).",
             )
             return 1
         log(
