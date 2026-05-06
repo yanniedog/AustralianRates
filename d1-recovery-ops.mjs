@@ -53,7 +53,8 @@ async function fetchJson(url, init = {}) {
 
 async function preflight() {
   const url = `${BASE}/admin/logs/system?format=jsonl&limit=200&level=info`
-  const { res, text } = await fetch(url, { headers: authHeaders() })
+  const res = await fetch(url, { headers: authHeaders() })
+  const text = await res.text()
   if (!res.ok) {
     console.error('preflight HTTP', res.status, text.slice(0, 200))
     process.exit(1)
@@ -89,7 +90,8 @@ async function stageA(outDir) {
   fs.writeFileSync(path.join(outDir, 'A_state.json'), JSON.stringify(state, null, 2), 'utf8')
 
   const logsUrl = `${BASE}/admin/logs/system?format=jsonl&limit=2000&level=warn`
-  const { res: lRes, text: warnText } = await fetch(logsUrl, { headers: authHeaders() })
+  const lRes = await fetch(logsUrl, { headers: authHeaders() })
+  const warnText = await lRes.text()
   if (!lRes.ok) {
     console.error('warn logs', lRes.status)
     process.exit(1)
@@ -116,7 +118,8 @@ async function stageA(outDir) {
     metricSource = 'cloudflare_d1_usage_graphql'
   } else {
     const bundleUrl = `${BASE}/admin/diagnostics/status-debug-bundle?sections=integrity_pulse`
-    const { res: bRes, text: bText } = await fetch(bundleUrl, { headers: authHeaders() })
+    const bRes = await fetch(bundleUrl, { headers: authHeaders() })
+    const bText = await bRes.text()
     if (!bRes.ok) {
       console.error('fallback bundle failed', bRes.status)
       process.exit(1)

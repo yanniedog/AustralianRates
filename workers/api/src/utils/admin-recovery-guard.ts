@@ -1,5 +1,7 @@
+import type { Context } from 'hono'
 import { parseBearerToken } from '../auth/admin'
-import type { EnvBindings } from '../types'
+import type { AppContext, EnvBindings } from '../types'
+import { jsonError } from './http'
 import { log } from './logger'
 import { isD1EmergencyMinimumWrites } from './d1-emergency'
 import { isD1NonEssentialWorkDisabled } from './d1-budget'
@@ -7,6 +9,44 @@ import { isD1NonEssentialWorkDisabled } from './d1-budget'
 const RATE_WINDOW_MS = 600_000
 
 export type RecoveryAuditReason = { incident_date: string; note: string }
+
+const FORCE_AUDIT_MESSAGE =
+  'force_recovery requires audit_reason: { incident_date (YYYY-MM-DD), note } with incident_date within the last 7 days UTC.'
+
+export async function guardAdminRecoveryMutation(
+  c: Context<AppContext>,
+  input: {
+    routePath: string
+    rateRouteKey: string
+    maxInWindow: number
+    rateLimitedDetail: string
+    body: Record<string, unknown>
+  },
+): Promise<{ ok: true; bypassReason: RecoveryAuditReason | null } | { ok: false; response: Response }> {
+  const force = recoveryBypassRequested(c.req.query('force_recovery'))
+  const auditReason = parseRecoveryAuditReason(input.body)
+  if (force && !auditReason) {
+    return { ok: false, response: jsonError(c, 400, 'BAD_REQUEST', FORCE_AUDIT_MESSAGE) }
+  }
+  const bypassReason = force ? auditReason : null
+  if (bypassReason) {
+    logRecoveryBypass(input.routePath, bypassReason)
+  }
+
+  if (!bypassReason && (await adminRecoveryBudgetActive(c.env))) {
+    return { ok: false, response: c.json({ error: 'budget_emergency_or_nonessential_disabled' }, 503) }
+  }
+
+  const tokenHash = await hashAdminBearerToken(c.req.header('Authorization'))
+  if (tokenHash && !bypassReason) {
+    const rate = await consumeAdminRecoveryRateLimit(c.env, input.rateRouteKey, tokenHash, input.maxInWindow)
+    if (!rate.allowed) {
+      return { ok: false, response: jsonError(c, 429, 'RATE_LIMITED', input.rateLimitedDetail) }
+    }
+  }
+
+  return { ok: true, bypassReason }
+}
 
 export async function hashAdminBearerToken(authHeader: string | undefined): Promise<string | null> {
   const token = parseBearerToken(authHeader)

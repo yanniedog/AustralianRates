@@ -1,25 +1,31 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildD1BudgetVisibilitySnapshot } from '../src/utils/d1-budget'
 import type { EnvBindings } from '../src/types'
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+const FIXED_YMD = '2099-06-15'
 
 function kvWithUsage(usage: Record<string, unknown>): KVNamespace {
   return {
-    get: async (key: string) => (key === `d1-budget:${today()}` ? JSON.stringify(usage) : null),
+    get: async (key: string) => (key === `d1-budget:${FIXED_YMD}` ? JSON.stringify(usage) : null),
     put: async () => undefined,
   } as unknown as KVNamespace
 }
 
 describe('buildD1BudgetVisibilitySnapshot', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(`${FIXED_YMD}T12:00:00.000Z`))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('exposes writes_today and reads_today from today’s KV usage row', async () => {
     const env = {
       IDEMPOTENCY_KV: kvWithUsage({
         reads: 42,
         writes: 7,
-        updated_at: '2026-05-06T00:00:00.000Z',
+        updated_at: '2099-06-15T00:00:00.000Z',
       }),
       D1_DAILY_READ_LIMIT: '100',
       D1_DAILY_WRITE_LIMIT: '50',
@@ -38,7 +44,7 @@ describe('buildD1BudgetVisibilitySnapshot', () => {
 
   it('reflects emergency minimum writes env flag', async () => {
     const env = {
-      IDEMPOTENCY_KV: kvWithUsage({ reads: 0, writes: 0, updated_at: '2026-05-06T00:00:00.000Z' }),
+      IDEMPOTENCY_KV: kvWithUsage({ reads: 0, writes: 0, updated_at: '2099-06-15T00:00:00.000Z' }),
       D1_EMERGENCY_MINIMUM_WRITES: '1',
     } as unknown as EnvBindings
     const snap = await buildD1BudgetVisibilitySnapshot(env)

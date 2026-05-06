@@ -27,12 +27,7 @@ import { shortenActiveIdempotencyLeaseToNow } from '../queue/consumer/idempotenc
 import { listHistoricalQuarantineCounts } from '../db/historical-quarantine'
 import type { AppContext, IngestMessage } from '../types'
 import {
-  adminRecoveryBudgetActive,
-  consumeAdminRecoveryRateLimit,
-  hashAdminBearerToken,
-  logRecoveryBypass,
-  parseRecoveryAuditReason,
-  recoveryBypassRequested,
+  guardAdminRecoveryMutation,
 } from '../utils/admin-recovery-guard'
 import { buildD1BudgetVisibilitySnapshot } from '../utils/d1-budget'
 import { jsonError, withNoStore } from '../utils/http'
@@ -233,31 +228,14 @@ adminHardeningRoutes.post('/runs/replay-dispatch', async (c) => {
 
 adminHardeningRoutes.post('/runs/reconcile-lender-day', async (c) => {
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
-  const force = recoveryBypassRequested(c.req.query('force_recovery'))
-  if (force && !parseRecoveryAuditReason(body)) {
-    return jsonError(
-      c,
-      400,
-      'BAD_REQUEST',
-      'force_recovery requires audit_reason: { incident_date (YYYY-MM-DD), note } with incident_date within the last 7 days UTC.',
-    )
-  }
-  const bypassReason = force ? parseRecoveryAuditReason(body)! : null
-  if (bypassReason) {
-    logRecoveryBypass('/runs/reconcile-lender-day', bypassReason)
-  }
-
-  if (!bypassReason && (await adminRecoveryBudgetActive(c.env))) {
-    return c.json({ error: 'budget_emergency_or_nonessential_disabled' }, 503)
-  }
-
-  const tokenHash = await hashAdminBearerToken(c.req.header('Authorization'))
-  if (tokenHash && !bypassReason) {
-    const rate = await consumeAdminRecoveryRateLimit(c.env, 'reconcile-lender-day', tokenHash, 30)
-    if (!rate.allowed) {
-      return jsonError(c, 429, 'RATE_LIMITED', 'Too many reconcile requests for this token window.')
-    }
-  }
+  const guarded = await guardAdminRecoveryMutation(c, {
+    routePath: '/runs/reconcile-lender-day',
+    rateRouteKey: 'reconcile-lender-day',
+    maxInWindow: 30,
+    rateLimitedDetail: 'Too many reconcile requests for this token window.',
+    body,
+  })
+  if (!guarded.ok) return guarded.response
 
   const collectionDate =
     typeof body.collection_date === 'string'
@@ -334,31 +312,14 @@ const IDEMPOTENCY_LEASE_SHORTEN_KINDS = new Set<IngestMessage['kind']>([
 
 adminHardeningRoutes.post('/diagnostics/idempotency/shorten-lease', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>
-  const force = recoveryBypassRequested(c.req.query('force_recovery'))
-  if (force && !parseRecoveryAuditReason(body)) {
-    return jsonError(
-      c,
-      400,
-      'BAD_REQUEST',
-      'force_recovery requires audit_reason: { incident_date (YYYY-MM-DD), note } with incident_date within the last 7 days UTC.',
-    )
-  }
-  const bypassReason = force ? parseRecoveryAuditReason(body)! : null
-  if (bypassReason) {
-    logRecoveryBypass('/diagnostics/idempotency/shorten-lease', bypassReason)
-  }
-
-  if (!bypassReason && (await adminRecoveryBudgetActive(c.env))) {
-    return c.json({ error: 'budget_emergency_or_nonessential_disabled' }, 503)
-  }
-
-  const tokenHash = await hashAdminBearerToken(c.req.header('Authorization'))
-  if (tokenHash && !bypassReason) {
-    const rate = await consumeAdminRecoveryRateLimit(c.env, 'shorten-lease', tokenHash, 10)
-    if (!rate.allowed) {
-      return jsonError(c, 429, 'RATE_LIMITED', 'Too many lease-shorten requests for this token window.')
-    }
-  }
+  const guarded = await guardAdminRecoveryMutation(c, {
+    routePath: '/diagnostics/idempotency/shorten-lease',
+    rateRouteKey: 'shorten-lease',
+    maxInWindow: 10,
+    rateLimitedDetail: 'Too many lease-shorten requests for this token window.',
+    body,
+  })
+  if (!guarded.ok) return guarded.response
 
   const kindRaw = String(body.kind || '').trim()
   const idempotencyKey = String(body.idempotency_key || body.idempotencyKey || '').trim()
