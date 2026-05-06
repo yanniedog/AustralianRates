@@ -85,6 +85,85 @@ export function activeClaimRetryDelaySeconds(
   return Math.max(15, Math.min(300, remainingSeconds + 5))
 }
 
+/** Schedule replay slightly after an idempotency lease expires (or immediately if already past). */
+export function nextIsoAfterLeaseExpires(
+  leaseUntil: string | null | undefined,
+  nowMs = Date.now(),
+  epsilonMs = 2000,
+): string {
+  const leaseMs = Date.parse(String(leaseUntil || ''))
+  const effectiveLease = Number.isFinite(leaseMs) ? leaseMs : nowMs
+  return new Date(Math.max(nowMs, effectiveLease) + Math.max(0, epsilonMs)).toISOString()
+}
+
+const SHORTEN_LEASE_MAX_REMAINING_MS = 60_000
+
+export type ShortenIdempotencyLeaseResult =
+  | {
+      ok: true
+      key: string
+      previous_lease_until: string
+      new_lease_until: string
+    }
+  | { ok: false; reason: string; detail?: string }
+
+/** Shorten an in-progress claim's lease to now. Never deletes the KV record. */
+export async function shortenActiveIdempotencyLeaseToNow(
+  env: EnvBindings,
+  input: { kind: IngestMessage['kind']; idempotencyKey: string },
+): Promise<ShortenIdempotencyLeaseResult> {
+  if (!isEnabled(env.FEATURE_QUEUE_IDEMPOTENCY_ENABLED)) {
+    return { ok: false, reason: 'feature_disabled' }
+  }
+  if (!env.IDEMPOTENCY_KV) {
+    return { ok: false, reason: 'kv_missing' }
+  }
+  const keyPart = String(input.idempotencyKey || '').trim()
+  if (!keyPart) {
+    return { ok: false, reason: 'missing_idempotency_key' }
+  }
+  const key = keyFor(input.kind, keyPart)
+  const existing = parseStoredClaim(await env.IDEMPOTENCY_KV.get(key))
+  if (!existing || existing.state !== 'in_progress') {
+    return { ok: false, reason: 'no_active_claim', detail: existing?.state ?? 'missing' }
+  }
+  const leaseMs = Date.parse(String(existing.lease_until || ''))
+  if (!Number.isFinite(leaseMs)) {
+    return { ok: false, reason: 'invalid_lease_until' }
+  }
+  const nowMs = Date.now()
+  if (leaseMs <= nowMs) {
+    return { ok: false, reason: 'lease_already_expired' }
+  }
+  const remainingMs = leaseMs - nowMs
+  if (remainingMs > SHORTEN_LEASE_MAX_REMAINING_MS) {
+    return {
+      ok: false,
+      reason: 'lease_remaining_exceeds_policy_max_seconds',
+      detail: `remaining_ms=${remainingMs} max_remaining_ms=${SHORTEN_LEASE_MAX_REMAINING_MS}`,
+    }
+  }
+  const now = new Date(nowMs).toISOString()
+  const ttlSeconds = idempotencyTtlSeconds(env)
+  try {
+    await env.IDEMPOTENCY_KV.put(
+      key,
+      JSON.stringify({
+        ...existing,
+        lease_until: now,
+      }),
+      { expirationTtl: ttlSeconds },
+    )
+    return { ok: true, key, previous_lease_until: existing.lease_until, new_lease_until: now }
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'kv_error',
+      detail: (error as Error)?.message || String(error),
+    }
+  }
+}
+
 export async function claimIdempotency(
   env: EnvBindings,
   input: {

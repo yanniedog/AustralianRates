@@ -217,6 +217,90 @@ export async function queueReplayFromExhaustedMessage(
   return row
 }
 
+/**
+ * Deferred replay after an idempotency active-lease collision at max queue attempts.
+ * Does not increment `queue_exhausted_count` (unlike {@link queueReplayFromExhaustedMessage}).
+ */
+export async function upsertReplayQueueDeferredAfterLease(
+  db: D1Database,
+  input: {
+    message: IngestMessage
+    errorMessage: string
+    maxReplayAttempts: number
+    nextAttemptAtIso: string
+  },
+): Promise<ReplayQueueRow> {
+  const scope = scopeForMessage(input.message)
+  const replayKey = buildReplayKey(input.message)
+  const now = new Date().toISOString()
+  const replayId = crypto.randomUUID()
+
+  await db
+    .prepare(
+      `INSERT INTO ingest_replay_queue (
+         replay_id, replay_key, message_kind, payload_json, run_id, lender_code, dataset_kind, product_id,
+         collection_date, queue_exhausted_count, replay_attempt_count, max_replay_attempts, status, last_error,
+         next_attempt_at, last_attempt_at, resolved_at, created_at, updated_at
+       ) VALUES (
+         ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+         ?9, 0, 0, ?10, 'queued', ?11,
+         ?12, NULL, NULL, ?13, ?13
+       )
+       ON CONFLICT(replay_key) DO UPDATE SET
+         payload_json = excluded.payload_json,
+         run_id = excluded.run_id,
+         lender_code = excluded.lender_code,
+         dataset_kind = excluded.dataset_kind,
+         product_id = excluded.product_id,
+         collection_date = excluded.collection_date,
+         queue_exhausted_count = ingest_replay_queue.queue_exhausted_count,
+         max_replay_attempts = excluded.max_replay_attempts,
+         status = CASE
+           WHEN ingest_replay_queue.status = 'succeeded' THEN ingest_replay_queue.status
+           WHEN ingest_replay_queue.status = 'failed' THEN ingest_replay_queue.status
+           ELSE 'queued'
+         END,
+         last_error = excluded.last_error,
+         next_attempt_at = CASE
+           WHEN ingest_replay_queue.status IN ('succeeded', 'failed') THEN ingest_replay_queue.next_attempt_at
+           ELSE excluded.next_attempt_at
+         END,
+         updated_at = excluded.updated_at`,
+    )
+    .bind(
+      replayId,
+      replayKey,
+      input.message.kind,
+      payloadJson(input.message),
+      scope.runId,
+      scope.lenderCode,
+      scope.datasetKind,
+      scope.productId,
+      scope.collectionDate,
+      Math.max(1, Math.floor(input.maxReplayAttempts)),
+      input.errorMessage.slice(0, 2000),
+      input.nextAttemptAtIso,
+      now,
+    )
+    .run()
+
+  const row = await db
+    .prepare(
+      `SELECT
+         replay_id, replay_key, message_kind, payload_json, run_id, lender_code, dataset_kind, product_id,
+         collection_date, queue_exhausted_count, replay_attempt_count, max_replay_attempts, status,
+         last_error, next_attempt_at, last_attempt_at, resolved_at, created_at, updated_at
+       FROM ingest_replay_queue
+       WHERE replay_key = ?1`,
+    )
+    .bind(replayKey)
+    .first<ReplayQueueRow>()
+  if (!row) {
+    throw new Error(`replay_queue_upsert_failed:${replayKey}`)
+  }
+  return row
+}
+
 export async function claimReplayQueueRows(
   db: D1Database,
   input: {

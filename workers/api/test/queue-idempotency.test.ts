@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   activeClaimRetryDelaySeconds,
   claimIdempotency,
   completeIdempotencyClaim,
   releaseIdempotencyClaim,
+  shortenActiveIdempotencyLeaseToNow,
 } from '../src/queue/consumer/idempotency'
 import type { EnvBindings, IngestMessage } from '../src/types'
 
@@ -139,5 +140,71 @@ describe('queue idempotency claim', () => {
     expect(activeClaimRetryDelaySeconds('2026-03-29T17:57:00.000Z', 900, Date.parse('2026-03-29T17:50:00.000Z'))).toBe(300)
     expect(activeClaimRetryDelaySeconds(null, 900, Date.parse('2026-03-29T17:50:00.000Z'))).toBe(300)
     expect(activeClaimRetryDelaySeconds('2026-03-29T17:50:05.000Z', 900, Date.parse('2026-03-29T17:50:00.000Z'))).toBe(15)
+  })
+
+  it('reject shorten when more than 60s remain on lease', async () => {
+    const kv = new MemoryKv()
+    const frozen = Date.parse('2026-06-01T12:00:00.000Z')
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(frozen)
+    const kind = 'product_detail_fetch'
+    const keyPart = 'demo-key'
+    const leaseUntil = new Date(frozen + 120_000).toISOString()
+    await kv.put(
+      `idem:${kind}:${keyPart}`,
+      JSON.stringify({
+        state: 'in_progress',
+        kind,
+        idempotency_key: keyPart,
+        run_id: null,
+        lender_code: 'cba',
+        claimed_at: new Date(frozen).toISOString(),
+        lease_until: leaseUntil,
+      }),
+    )
+    const env = makeEnv({
+      FEATURE_QUEUE_IDEMPOTENCY_ENABLED: 'true',
+      IDEMPOTENCY_TTL_SECONDS: '604800',
+      IDEMPOTENCY_KV: kv as unknown as KVNamespace,
+    })
+    const r = await shortenActiveIdempotencyLeaseToNow(env, { kind, idempotencyKey: keyPart })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.reason).toBe('lease_remaining_exceeds_policy_max_seconds')
+    spy.mockRestore()
+  })
+
+  it('shortens lease to now when within 60s and preserves KV row', async () => {
+    const kv = new MemoryKv()
+    const frozen = Date.parse('2026-06-01T12:00:00.000Z')
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(frozen)
+    const kind = 'product_detail_fetch'
+    const keyPart = 'demo-key-short'
+    const leaseUntil = new Date(frozen + 30_000).toISOString()
+    await kv.put(
+      `idem:${kind}:${keyPart}`,
+      JSON.stringify({
+        state: 'in_progress',
+        kind,
+        idempotency_key: keyPart,
+        run_id: null,
+        lender_code: 'cba',
+        claimed_at: new Date(frozen - 1000).toISOString(),
+        lease_until: leaseUntil,
+      }),
+    )
+    const env = makeEnv({
+      FEATURE_QUEUE_IDEMPOTENCY_ENABLED: 'true',
+      IDEMPOTENCY_TTL_SECONDS: '604800',
+      IDEMPOTENCY_KV: kv as unknown as KVNamespace,
+    })
+    const r = await shortenActiveIdempotencyLeaseToNow(env, { kind, idempotencyKey: keyPart })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.new_lease_until).toBe(new Date(frozen).toISOString())
+    const raw = await kv.get(`idem:${kind}:${keyPart}`)
+    expect(raw).toBeTruthy()
+    const parsed = JSON.parse(String(raw))
+    expect(parsed.state).toBe('in_progress')
+    expect(parsed.lease_until).toBe(r.new_lease_until)
+    spy.mockRestore()
   })
 })

@@ -4,6 +4,7 @@ import type { EnvBindings, IngestMessage, RunReportRow } from '../../types'
 import {
   handleReplayAttemptFailure,
   handleReplayAttemptSuccess,
+  scheduleReplayForActiveClaimLeaseWait,
   scheduleReplayForExhaustedMessage,
 } from '../../pipeline/replay-queue'
 import { triggerPostRunPackageRefresh } from '../../pipeline/post-run-refresh'
@@ -168,23 +169,23 @@ export async function consumeIngestQueue(
               const replayRow = replayTicketId
                 ? await handleReplayAttemptFailure(env, {
                     replayTicketId,
-                    errorMessage: 'queue_message_duplicate_active_claim',
+                    errorMessage: 'queue_message_duplicate_active_claim_max_attempts',
                   })
-                : await scheduleReplayForExhaustedMessage(env, {
+                : await scheduleReplayForActiveClaimLeaseWait(env, {
                     message: body,
-                    errorMessage: 'queue_message_duplicate_active_claim',
+                    leaseUntilIso: claim.leaseUntil,
                   })
               replayContext =
                 replayRow
                   ? ` replay_id=${replayRow.replay_id}` +
                     ` replay_status=${replayRow.status}` +
-                    ` next_attempt_at=${replayRow.next_attempt_at}`
+                    ` next_attempt_at=${replayRow.next_attempt_at}` +
+                    ` queue_exhausted_count=${replayRow.queue_exhausted_count}`
                   : ''
             }
             msg.ack()
             metrics.acked += 1
-            metrics.exhausted += 1
-            log.warn('consumer', 'queue_message_duplicate_exhausted', {
+            log.warn('consumer', 'queue_message_duplicate_active_claim_replay_deferred', {
               code: 'queue_idempotency_duplicate_claim',
               runId: context.runId ?? undefined,
               lenderCode: context.lenderCode ?? undefined,
