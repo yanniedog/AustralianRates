@@ -554,6 +554,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             log(msg)
 
+    # ThreadPoolExecutor collects per-holder failures in ``except`` below; we must not
+    # exit 0 if any worker raised (serial mode propagates; parallel used to hide it).
+    parallel_holder_exceptions = 0
+
     if run_banks:
         banks_root.mkdir(parents=True, exist_ok=True)
         seen_bank_dirs: Set[str] = set()
@@ -603,6 +607,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     try:
                         fut.result()
                     except Exception as e:
+                        parallel_holder_exceptions += 1
                         log_threadsafe(
                             f"ERROR: Banking ingest for {bank_name} failed: {e}",
                         )
@@ -653,9 +658,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                     try:
                         fut.result()
                     except Exception as e:
+                        parallel_holder_exceptions += 1
                         log_threadsafe(
                             f"ERROR: Energy ingest for {name} failed: {e}",
                         )
+
+    if parallel_holder_exceptions > 0:
+        log(
+            f"ERROR: {parallel_holder_exceptions} parallel holder worker(s) exited with "
+            "exceptions; treating run as failed (exit 2).",
+        )
+        return 2
 
     log("Done.")
     return 0

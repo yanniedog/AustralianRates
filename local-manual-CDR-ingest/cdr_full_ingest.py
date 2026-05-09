@@ -24,7 +24,7 @@ Use ``--no-banks`` or ``--no-energy`` to skip one sector.
 
 Holders are ingested in parallel via a thread pool per sector (default --workers 8).
 
-Exit codes: 0 success; 1 no holders matched ``--holders`` (register OK); 2 register failure or zero brands for enabled sector(s) without filter waiver.
+Exit codes: 0 success; 1 no holders matched ``--holders`` (register OK); 2 register failure, zero brands for enabled sector(s) without filter waiver, or a parallel holder worker raised an exception.
 Use ``--allow-empty-holders`` to exit 0 when register discovery fails, filters match nothing, or an enabled sector has no work (for automation during outages).
 
 Default run date folder uses UTC (YYYY-MM-DD). Banking layout:
