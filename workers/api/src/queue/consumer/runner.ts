@@ -1,7 +1,9 @@
 import { DEFAULT_MAX_QUEUE_ATTEMPTS } from '../../constants'
+import type { ReplayQueueRow } from '../../db/ingest-replay-queue'
 import { recordRunQueueOutcome } from '../../db/run-reports'
 import type { EnvBindings, IngestMessage, RunReportRow } from '../../types'
 import {
+  deferReplayAfterActiveClaimLeaseForTicket,
   handleReplayAttemptFailure,
   handleReplayAttemptSuccess,
   scheduleReplayForActiveClaimLeaseWait,
@@ -166,15 +168,24 @@ export async function consumeIngestQueue(
           if (attempts >= maxAttempts) {
             let replayContext = ''
             if (isIngestMessage(body)) {
-              const replayRow = replayTicketId
-                ? await handleReplayAttemptFailure(env, {
-                    replayTicketId,
-                    errorMessage: 'queue_message_duplicate_active_claim_max_attempts',
-                  })
-                : await scheduleReplayForActiveClaimLeaseWait(env, {
+              let replayRow: ReplayQueueRow | null = null
+              if (replayTicketId) {
+                replayRow = await deferReplayAfterActiveClaimLeaseForTicket(env, {
+                  replayTicketId,
+                  leaseUntilIso: claim.leaseUntil,
+                })
+                if (!replayRow) {
+                  replayRow = await scheduleReplayForActiveClaimLeaseWait(env, {
                     message: body,
                     leaseUntilIso: claim.leaseUntil,
                   })
+                }
+              } else {
+                replayRow = await scheduleReplayForActiveClaimLeaseWait(env, {
+                  message: body,
+                  leaseUntilIso: claim.leaseUntil,
+                })
+              }
               replayContext =
                 replayRow
                   ? ` replay_id=${replayRow.replay_id}` +
