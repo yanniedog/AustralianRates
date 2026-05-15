@@ -10,7 +10,12 @@ import { upsertLatestTdSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
 import { markProductsSeen } from './product-status'
 import { nowIso } from '../utils/time'
-import { chunkRows, equalStateValue, filterChangedRows } from './change-aware-writes'
+import {
+  cdrDetailPayloadUnchangedForLatestRow,
+  chunkRows,
+  equalStateValue,
+  filterChangedRows,
+} from './change-aware-writes'
 import {
   assertHistoricalWriteAllowed,
   isHistoricalWriteContractError,
@@ -101,9 +106,11 @@ async function filterChangedTdRows(db: D1Database, rows: NormalizedTdRow[]): Pro
       'interest_rate',
       'min_deposit',
       'max_deposit',
+      'cdr_product_detail_hash',
     ],
     seriesKeyForRow: tdSeriesKey,
     rowUnchanged: tdRowUnchanged,
+    asyncRefineUnchanged: cdrDetailPayloadUnchangedForLatestRow,
   })
 }
 

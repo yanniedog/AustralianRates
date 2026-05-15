@@ -10,7 +10,12 @@ import { upsertLatestHomeLoanSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
 import { markProductsSeen } from './product-status'
 import { nowIso } from '../utils/time'
-import { chunkRows, equalStateValue, filterChangedRows } from './change-aware-writes'
+import {
+  cdrDetailPayloadUnchangedForLatestRow,
+  chunkRows,
+  equalStateValue,
+  filterChangedRows,
+} from './change-aware-writes'
 import {
   assertHistoricalWriteAllowed,
   isHistoricalWriteContractError,
@@ -174,9 +179,11 @@ async function filterChangedHomeLoanRows(db: D1Database, rows: NormalizedRateRow
       'interest_rate',
       'comparison_rate',
       'annual_fee',
+      'cdr_product_detail_hash',
     ],
     seriesKeyForRow: homeLoanSeriesKey,
     rowUnchanged: homeLoanRowUnchanged,
+    asyncRefineUnchanged: cdrDetailPayloadUnchangedForLatestRow,
   })
 }
 
