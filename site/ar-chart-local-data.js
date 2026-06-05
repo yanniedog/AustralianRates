@@ -149,6 +149,8 @@
                     ? count
                     : rows.length;
         if (!rows.length) return knownTotal === 0;
+        // Snapshot/API cap: universe (total) exceeds returned rows even when rows.length === limit.
+        if (knownTotal > rows.length) return false;
         if (limit > 0 && rows.length < Math.min(limit, knownTotal)) return false;
         if ((coverageLimited || snapshotTruncated) && limit > 0 && rows.length < limit) return false;
         return true;
