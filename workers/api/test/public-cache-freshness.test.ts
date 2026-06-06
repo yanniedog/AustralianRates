@@ -63,6 +63,18 @@ describe('public daily cache freshness', () => {
     expect(result.reason).toBe('end_date_after_latest_available')
   })
 
+  it('rejects a cache row when endDate lags the latest available collection date after ingest', () => {
+    const result = publicCacheFreshnessStatus({
+      now: new Date('2026-05-04T10:00:00.000Z'),
+      builtAt: '2026-05-04T08:00:00.000Z',
+      filtersResolved: { startDate: '2026-04-01', endDate: '2026-05-03' },
+      latestAvailableCollectionDate: '2026-05-04',
+    })
+
+    expect(result.fresh).toBe(false)
+    expect(result.reason).toBe('end_date_behind_latest_available')
+  })
+
   it('rejects a non-current-day cache row when it is ahead of the latest available collection date', () => {
     const result = publicCacheFreshnessStatus({
       now,
