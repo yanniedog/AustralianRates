@@ -58,6 +58,7 @@ function isSnapshotPayloadFresh(
     builtAt: payload.builtAt,
     filtersResolved: snapshotFiltersResolved(payload),
     sourceRunFinishedAt: payload.sourceRunFinishedAt ?? null,
+    latestRunFinishedAt: options?.latestRunFinishedAt ?? null,
     latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
     now: options?.now,
     timeZone: options?.timeZone,
@@ -325,8 +326,13 @@ export async function getCachedOrComputeSnapshot(
     if (kvCached) {
       try {
         const payload = JSON.parse(kvCached) as SnapshotPayload
+        const latestRunFinishedAt =
+          options && Object.prototype.hasOwnProperty.call(options, 'latestRunFinishedAt')
+            ? options.latestRunFinishedAt ?? null
+            : await latestRunFinishedAtOrNull(env.DB)
         if (
           !isSnapshotPayloadFresh(payload, {
+            latestRunFinishedAt,
             latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
             now: options?.now,
             timeZone: options?.timeZone,
