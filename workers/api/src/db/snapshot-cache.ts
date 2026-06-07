@@ -77,6 +77,33 @@ export function buildSnapshotInlineKvKey(section: ChartCacheSection, scope: Snap
   return `snapshot-inline:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}:d${day}`
 }
 
+/** Per-section watermark for Pages middleware freshness (endDate must not lag this). */
+export function buildSnapshotLatestAvailableMetaKvKey(section: ChartCacheSection): string {
+  return `snapshot-meta:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:latest_available_collection_date`
+}
+
+export async function writeSnapshotLatestAvailableMetaKv(
+  kv: KVNamespace | undefined,
+  section: ChartCacheSection,
+  latestAvailableCollectionDate: string | null | undefined,
+): Promise<void> {
+  if (!kv) return
+  const value =
+    typeof latestAvailableCollectionDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(latestAvailableCollectionDate)
+      ? latestAvailableCollectionDate
+      : null
+  if (!value) return
+  try {
+    await kv.put(buildSnapshotLatestAvailableMetaKvKey(section), value, { expirationTtl: CHART_CACHE_KV_TTL })
+  } catch (error) {
+    log.warn('snapshot_cache', 'snapshot latest-available meta KV put failed', {
+      code: 'snapshot_latest_available_meta_kv_put_failed',
+      error,
+      context: { section, value },
+    })
+  }
+}
+
 function isNoSuchTableError(error: unknown, table: string): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return /no such table/i.test(message) && message.includes(table)
@@ -96,8 +123,10 @@ export async function writeSnapshotKvBundles(
   section: ChartCacheSection,
   scope: SnapshotScope,
   payload: SnapshotPayload,
+  options?: { latestAvailableCollectionDate?: string | null },
 ): Promise<void> {
   if (!kv) return
+  await writeSnapshotLatestAvailableMetaKv(kv, section, options?.latestAvailableCollectionDate)
   // Use the payload's own filtersResolved.endDate as the KV key date so that
   // snapshots built across Melbourne midnight don't land on the wrong day's key.
   // Also write under the current Melbourne date key so the middleware can find
@@ -352,7 +381,9 @@ export async function getCachedOrComputeSnapshot(
     })
     const d1Cached = await readD1SnapshotCache(env.DB, section, scope, readOptions)
     if (d1Cached) {
-      await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, d1Cached)
+      await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, d1Cached, {
+        latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+      })
       return { ...d1Cached, fromCache: 'd1' }
     }
   }
@@ -362,7 +393,9 @@ export async function getCachedOrComputeSnapshot(
   }
 
   const payload = await compute()
-  const kvWrite = writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, payload)
+  const kvWrite = writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, payload, {
+    latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+  })
   if (scope && options?.allowD1Fallback !== false) {
     const d1Write = writeD1SnapshotCache(env.DB, section, scope, payload, {
       sourceRunFinishedAt: options?.latestRunFinishedAt,
