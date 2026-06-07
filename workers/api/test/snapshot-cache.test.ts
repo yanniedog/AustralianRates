@@ -112,8 +112,8 @@ describe('snapshot cache KV hits', () => {
 
   it('writes latest-available meta KV when snapshot bundles are stored', async () => {
     const kv = new MemoryKv()
-    const section = 'home_loans'
-    const scope = 'window:90D'
+    const section = 'home_loans' as const
+    const scope = 'window:90D' as const
     const payload = {
       builtAt: new Date().toISOString(),
       scope,
