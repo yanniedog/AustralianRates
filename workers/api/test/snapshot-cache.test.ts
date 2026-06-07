@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildSnapshotKvKey, getCachedOrComputeSnapshot } from '../src/db/snapshot-cache'
+import {
+  buildSnapshotKvKey,
+  buildSnapshotLatestAvailableMetaKvKey,
+  getCachedOrComputeSnapshot,
+  writeSnapshotKvBundles,
+} from '../src/db/snapshot-cache'
 
 class MemoryKv {
   readonly values = new Map<string, string>()
@@ -103,5 +108,27 @@ describe('snapshot cache KV hits', () => {
     expect(computed).toBe(true)
     expect(result.fromCache).toBe('live')
     expect((result.data as { filtersResolved?: { endDate?: string } }).filtersResolved?.endDate).toBe('2026-05-04')
+  })
+
+  it('writes latest-available meta KV when snapshot bundles are stored', async () => {
+    const kv = new MemoryKv()
+    const section = 'home_loans' as const
+    const scope = 'window:90D' as const
+    const payload = {
+      builtAt: new Date().toISOString(),
+      scope,
+      section,
+      data: {
+        filtersResolved: { startDate: '2026-04-18', endDate: '2026-06-07' },
+        siteUi: { ok: true },
+      },
+    }
+
+    await writeSnapshotKvBundles(kv as unknown as KVNamespace, section, scope, payload, {
+      latestAvailableCollectionDate: '2026-06-07',
+    })
+
+    const metaKey = buildSnapshotLatestAvailableMetaKvKey(section)
+    expect(await kv.get(metaKey)).toBe('2026-06-07')
   })
 })

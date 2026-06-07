@@ -120,7 +120,9 @@ export async function refreshPublicSnapshotPackages(
         sourceRunFinishedAt: latestRunFinishedAt,
         latestAvailableCollectionDate: latestAvailableBySection.get(section) ?? null,
       })
-      await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
+      await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot, {
+        latestAvailableCollectionDate: latestAvailableBySection.get(section) ?? null,
+      })
       refreshed++
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e)
@@ -208,7 +210,9 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
           filters,
         })
         await writeD1SnapshotCache(db, section, cacheScope, snapshot, { sourceRunFinishedAt })
-        await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
+        await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot, {
+          latestAvailableCollectionDate,
+        })
         refreshed++
       } catch (e) {
         const msg = (e as Error)?.message ?? String(e)
