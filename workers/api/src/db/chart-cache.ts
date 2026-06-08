@@ -531,7 +531,14 @@ export async function readD1ChartCache(
     now?: Date
     timeZone?: string
   },
-): Promise<{ rows: Array<Record<string, unknown>>; representation: 'day' | 'change'; fallbackReason: string | null; builtAt: string } | null> {
+): Promise<{
+  rows: Array<Record<string, unknown>>
+  representation: 'day' | 'change'
+  fallbackReason: string | null
+  builtAt: string
+  filtersResolved?: PublicCacheMetadata['filtersResolved']
+  sourceRunFinishedAt?: string | null
+} | null> {
   let row: ChartCacheRow | null = null
   try {
     row = await db
@@ -626,6 +633,8 @@ export async function readD1ChartCache(
     representation,
     fallbackReason: freshness.fresh ? null : freshness.reason,
     builtAt,
+    filtersResolved: meta.filtersResolved,
+    sourceRunFinishedAt: meta.sourceRunFinishedAt ?? null,
   }
 }
 
@@ -790,6 +799,31 @@ export type ChartAnalyticsPayload = {
   rows: Array<Record<string, unknown>>
   representation: 'day' | 'change'
   fallbackReason: string | null
+  builtAt?: string
+  filtersResolved?: PublicCacheMetadata['filtersResolved']
+  sourceRunFinishedAt?: string | null
+}
+
+function isChartKvPayloadFresh(
+  payload: ChartAnalyticsPayload,
+  options?: {
+    latestRunFinishedAt?: string | null
+    latestAvailableCollectionDate?: string | null
+    now?: Date
+    timeZone?: string
+  },
+): boolean {
+  const builtAt = payload.builtAt
+  if (!builtAt) return false
+  return publicCacheFreshnessStatus({
+    builtAt,
+    filtersResolved: payload.filtersResolved ?? inferFiltersResolvedFromRows(payload.rows),
+    sourceRunFinishedAt: payload.sourceRunFinishedAt ?? null,
+    latestRunFinishedAt: options?.latestRunFinishedAt ?? null,
+    latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    now: options?.now,
+    timeZone: options?.timeZone,
+  }).fresh
 }
 
 async function writeChartPayloadToKv(
@@ -818,12 +852,22 @@ export async function getCachedOrCompute(
 ): Promise<ChartAnalyticsPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const key = buildChartCacheKey(section, representation, { ...params, __kvDay: getMelbourneNowParts().date })
 
+  const latestRunFinishedAt = await latestRunFinishedAtOrNull(env.DB)
+  const now = new Date()
+  const freshnessOptions = {
+    latestRunFinishedAt,
+    latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    now,
+  }
+
   if (env.CHART_CACHE_KV) {
     const kvCached = await env.CHART_CACHE_KV.get(key)
     if (kvCached) {
       try {
         const parsed = JSON.parse(kvCached) as ChartAnalyticsPayload
-        return { ...parsed, fromCache: 'kv' }
+        if (isChartKvPayloadFresh(parsed, freshnessOptions)) {
+          return { ...parsed, fromCache: 'kv' }
+        }
       } catch {
         /* invalid JSON, fall through to compute */
       }
@@ -832,8 +876,6 @@ export async function getCachedOrCompute(
 
   const cacheScope = resolveChartCacheScope(section, params)
   if (cacheScope) {
-    const latestRunFinishedAt = await latestRunFinishedAtOrNull(env.DB)
-    const now = new Date()
     const d1Cached = await readD1ChartCache(env.DB, section, representation, cacheScope, {
       latestRunFinishedAt,
       latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
@@ -845,8 +887,13 @@ export async function getCachedOrCompute(
         rows: d1Cached.rows,
         representation: d1Cached.representation,
         fallbackReason: d1Cached.fallbackReason,
+        builtAt: d1Cached.builtAt,
+        filtersResolved: d1Cached.filtersResolved ?? inferFiltersResolvedFromRows(d1Cached.rows),
+        sourceRunFinishedAt: d1Cached.sourceRunFinishedAt ?? null,
       } satisfies ChartAnalyticsPayload
-      await writeChartPayloadToKv(env.CHART_CACHE_KV, key, d1Payload)
+      if (!d1Cached.fallbackReason) {
+        await writeChartPayloadToKv(env.CHART_CACHE_KV, key, d1Payload)
+      }
       return {
         ...d1Payload,
         fromCache: 'd1',
@@ -864,8 +911,13 @@ export async function getCachedOrCompute(
         rows: filterRowsToScopeWindow(fallbackCached.rows, cacheScope),
         representation: fallbackCached.representation,
         fallbackReason: fallbackCached.fallbackReason,
+        builtAt: fallbackCached.builtAt,
+        filtersResolved: fallbackCached.filtersResolved ?? inferFiltersResolvedFromRows(fallbackCached.rows),
+        sourceRunFinishedAt: fallbackCached.sourceRunFinishedAt ?? null,
       } satisfies ChartAnalyticsPayload
-      await writeChartPayloadToKv(env.CHART_CACHE_KV, key, d1Payload)
+      if (!fallbackCached.fallbackReason) {
+        await writeChartPayloadToKv(env.CHART_CACHE_KV, key, d1Payload)
+      }
       return {
         ...d1Payload,
         fromCache: 'd1',
@@ -878,6 +930,12 @@ export async function getCachedOrCompute(
   }
 
   const result = await compute()
-  await writeChartPayloadToKv(env.CHART_CACHE_KV, key, result)
-  return { ...result, fromCache: 'live' }
+  const livePayload = {
+    ...result,
+    builtAt: new Date().toISOString(),
+    filtersResolved: inferFiltersResolvedFromRows(result.rows),
+    sourceRunFinishedAt: latestRunFinishedAt,
+  } satisfies ChartAnalyticsPayload
+  await writeChartPayloadToKv(env.CHART_CACHE_KV, key, livePayload)
+  return { ...livePayload, fromCache: 'live' }
 }

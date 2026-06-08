@@ -109,6 +109,27 @@
         return latestAll && Array.isArray(latestAll.rows) ? latestAll.rows : [];
     }
 
+    function snapshotLatestAllIsComplete() {
+        var data = snapshotData();
+        var block = data && data.latestAll;
+        if (!block || typeof block !== 'object' || !Array.isArray(block.rows)) return false;
+        var rows = block.rows;
+        var total = Number(block.total);
+        var meta = block.meta && typeof block.meta === 'object' ? block.meta : null;
+        var coverage = meta && meta.coverage && typeof meta.coverage === 'object' ? meta.coverage : null;
+        var coverageTotal = coverage ? Number(coverage.total_rows) : NaN;
+        var knownTotal = Number.isFinite(total)
+            ? total
+            : Number.isFinite(coverageTotal)
+                ? coverageTotal
+                : rows.length;
+        if (!rows.length) return knownTotal === 0;
+        if (knownTotal > rows.length) return false;
+        if (meta && meta.snapshot_rows_truncated) return false;
+        if (coverage && coverage.limited) return false;
+        return true;
+    }
+
     function snapshotCurrentLeaders() {
         var data = snapshotData();
         var currentLeaders = data && data.currentLeaders;
@@ -722,7 +743,7 @@
             if (defaultLeaders && defaultLeaders.length && section !== 'home-loans') return sortRows(defaultLeaders).slice(0, QUICK_COMPARE_LIMIT);
         }
         var rows = snapshotLatestAllRows();
-        if (!rows.length) return null;
+        if (!rows.length || !snapshotLatestAllIsComplete()) return null;
         if (section === 'home-loans' && context.activeCount === 0) {
             return loadHomeLoanScenarioRibbonFromSnapshot(context.params, rows);
         }

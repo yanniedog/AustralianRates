@@ -17,10 +17,10 @@ function snapshotPayloadFresh(
   if (
     typeof latestAvailableCollectionDate === 'string' &&
     /^\d{4}-\d{2}-\d{2}$/.test(latestAvailableCollectionDate) &&
-    endDate &&
-    endDate < latestAvailableCollectionDate
+    endDate
   ) {
-    return false
+    if (endDate < latestAvailableCollectionDate) return false
+    if (endDate > latestAvailableCollectionDate) return false
   }
   const melbourne = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' })
   const today = melbourne.format(new Date(nowMs))
@@ -68,5 +68,18 @@ describe('middleware snapshotPayloadFresh', () => {
         nowMs,
       ),
     ).toBe(true)
+  })
+
+  it('rejects endDate ahead of latest available collection date even when it is today', () => {
+    expect(
+      snapshotPayloadFresh(
+        {
+          builtAt: new Date(nowMs - 2 * 60 * 60 * 1000).toISOString(),
+          data: { filtersResolved: { endDate: '2026-06-07' } },
+        },
+        '2026-06-06',
+        nowMs,
+      ),
+    ).toBe(false)
   })
 })
