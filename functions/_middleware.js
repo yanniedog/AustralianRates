@@ -37,10 +37,10 @@ function snapshotPayloadFresh(payload, latestAvailableCollectionDate) {
     if (
         typeof latestAvailableCollectionDate === 'string' &&
         /^\d{4}-\d{2}-\d{2}$/.test(latestAvailableCollectionDate) &&
-        endDate &&
-        endDate < latestAvailableCollectionDate
+        endDate
     ) {
-        return false;
+        if (endDate < latestAvailableCollectionDate) return false;
+        if (endDate > latestAvailableCollectionDate) return false;
     }
     var today = melbourneDateYmd();
     var yesterday = melbourneDateYmdOffset(-1);
