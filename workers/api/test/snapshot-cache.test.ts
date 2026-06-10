@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSnapshotKvKey,
   buildSnapshotLatestAvailableMetaKvKey,
+  buildSnapshotLatestRunFinishedMetaKvKey,
   getCachedOrComputeSnapshot,
   writeSnapshotKvBundles,
 } from '../src/db/snapshot-cache'
@@ -126,9 +127,11 @@ describe('snapshot cache KV hits', () => {
 
     await writeSnapshotKvBundles(kv as unknown as KVNamespace, section, scope, payload, {
       latestAvailableCollectionDate: '2026-06-07',
+      latestRunFinishedAt: '2026-06-07T07:30:00.000Z',
     })
 
     const metaKey = buildSnapshotLatestAvailableMetaKvKey(section)
     expect(await kv.get(metaKey)).toBe('2026-06-07')
+    expect(await kv.get(buildSnapshotLatestRunFinishedMetaKvKey(section))).toBe('2026-06-07T07:30:00.000Z')
   })
 })
