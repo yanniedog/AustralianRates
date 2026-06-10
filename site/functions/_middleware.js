@@ -28,7 +28,7 @@ function melbourneDateYmd() {
     return melbourneDateYmdOffset(0);
 }
 
-function snapshotPayloadFresh(payload, latestAvailableCollectionDate) {
+function snapshotPayloadFresh(payload, latestAvailableCollectionDate, latestRunFinishedAt) {
     if (!payload || typeof payload !== 'object') return false;
     var builtAt = new Date(String(payload.builtAt || '')).getTime();
     if (!Number.isFinite(builtAt) || Date.now() - builtAt > SNAPSHOT_FRESH_MS) return false;
@@ -37,9 +37,14 @@ function snapshotPayloadFresh(payload, latestAvailableCollectionDate) {
     if (
         typeof latestAvailableCollectionDate === 'string' &&
         /^\d{4}-\d{2}-\d{2}$/.test(latestAvailableCollectionDate) &&
-        endDate &&
-        endDate < latestAvailableCollectionDate
+        endDate
     ) {
+        if (endDate < latestAvailableCollectionDate) return false;
+        if (endDate > latestAvailableCollectionDate) return false;
+    }
+    var sourceRunMs = new Date(String(payload.sourceRunFinishedAt || '')).getTime();
+    var latestRunMs = new Date(String(latestRunFinishedAt || '')).getTime();
+    if (Number.isFinite(sourceRunMs) && Number.isFinite(latestRunMs) && sourceRunMs < latestRunMs) {
         return false;
     }
     var today = melbourneDateYmd();
@@ -289,16 +294,23 @@ function snapshotLatestAvailableMetaKvKey(dbSection) {
     return 'snapshot-meta:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':latest_available_collection_date';
 }
 
+function snapshotLatestRunFinishedMetaKvKey(dbSection) {
+    return 'snapshot-meta:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':latest_run_finished_at';
+}
+
 async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
     if (!env || !env.CHART_CACHE_KV) return null;
     const dbSection = SECTION_KV_KEY[sectionApiName];
     if (!dbSection) return null;
     const scope = buildScope(chartWindow, preset);
     var latestAvailableCollectionDate = null;
+    var latestRunFinishedAt = null;
     try {
         latestAvailableCollectionDate = await env.CHART_CACHE_KV.get(snapshotLatestAvailableMetaKvKey(dbSection));
+        latestRunFinishedAt = await env.CHART_CACHE_KV.get(snapshotLatestRunFinishedMetaKvKey(dbSection));
     } catch (_err) {
         latestAvailableCollectionDate = null;
+        latestRunFinishedAt = null;
     }
     const dates = Array.from(new Set([melbourneDateYmd(), melbourneDateYmdOffset(-1)]));
     const inlineKeys = dates.map(function (date) {
@@ -311,14 +323,14 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
             const body = await env.CHART_CACHE_KV.get(inlineKey);
             if (body) {
                 const parsed = JSON.parse(body);
-                if (snapshotPayloadFresh(parsed, latestAvailableCollectionDate)) return { ok: true, body: wrapSnapshotPayload(parsed), source: 'kv-inline' };
+                if (snapshotPayloadFresh(parsed, latestAvailableCollectionDate, latestRunFinishedAt)) return { ok: true, body: wrapSnapshotPayload(parsed), source: 'kv-inline' };
                 lastFailure = 'kv-stale-inline:' + dates[i];
             }
             const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope + ':d' + dates[i];
             const mainBody = await env.CHART_CACHE_KV.get(mainKey);
             if (!mainBody) continue;
             const parsed = JSON.parse(mainBody);
-            if (!snapshotPayloadFresh(parsed, latestAvailableCollectionDate)) {
+            if (!snapshotPayloadFresh(parsed, latestAvailableCollectionDate, latestRunFinishedAt)) {
                 lastFailure = 'kv-stale-main:' + dates[i];
                 continue;
             }

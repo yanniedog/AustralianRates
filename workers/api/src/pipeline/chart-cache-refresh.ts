@@ -122,6 +122,7 @@ export async function refreshPublicSnapshotPackages(
       })
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot, {
         latestAvailableCollectionDate: latestAvailableBySection.get(section) ?? null,
+        latestRunFinishedAt: latestRunFinishedAt,
       })
       refreshed++
     } catch (e) {
@@ -212,6 +213,7 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
         await writeD1SnapshotCache(db, section, cacheScope, snapshot, { sourceRunFinishedAt })
         await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot, {
           latestAvailableCollectionDate,
+          latestRunFinishedAt: sourceRunFinishedAt,
         })
         refreshed++
       } catch (e) {

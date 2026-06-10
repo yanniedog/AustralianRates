@@ -19,9 +19,11 @@ import {
   buildPublicCacheReadFreshnessOptions,
   logPublicCacheServedBoundedStale,
   logPublicCacheWedgedSection,
+  queryLatestSectionMaxCollectionDate,
   serializeJsonForKv,
   type PublicCacheReadFreshnessOptions,
 } from './public-cache-support'
+import { PUBLIC_PACKAGE_SECTIONS } from '../pipeline/public-package-scopes'
 import { getMelbourneNowParts } from '../utils/time'
 import { getLatestCompletedDailyRunFinishedAt } from './run-reports'
 import {
@@ -82,26 +84,90 @@ export function buildSnapshotLatestAvailableMetaKvKey(section: ChartCacheSection
   return `snapshot-meta:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:latest_available_collection_date`
 }
 
+/** Per-section daily-run watermark for Pages middleware (payload sourceRunFinishedAt must not lag this). */
+export function buildSnapshotLatestRunFinishedMetaKvKey(section: ChartCacheSection): string {
+  return `snapshot-meta:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:latest_run_finished_at`
+}
+
+function normalizeYmd(value: string | null | undefined): string | null {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null
+}
+
+function normalizeIsoTimestamp(value: string | null | undefined): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const ms = Date.parse(value)
+  return Number.isFinite(ms) ? value : null
+}
+
+export async function writeSnapshotFreshnessMetaKv(
+  kv: KVNamespace | undefined,
+  section: ChartCacheSection,
+  input: {
+    latestAvailableCollectionDate?: string | null
+    latestRunFinishedAt?: string | null
+  },
+): Promise<void> {
+  if (!kv) return
+  const latestAvailable = normalizeYmd(input.latestAvailableCollectionDate)
+  const latestRunFinishedAt = normalizeIsoTimestamp(input.latestRunFinishedAt)
+  const writes: Array<Promise<void>> = []
+  if (latestAvailable) {
+    writes.push(
+      kv
+        .put(buildSnapshotLatestAvailableMetaKvKey(section), latestAvailable, { expirationTtl: CHART_CACHE_KV_TTL })
+        .then(() => undefined)
+        .catch((error) => {
+          log.warn('snapshot_cache', 'snapshot latest-available meta KV put failed', {
+            code: 'snapshot_latest_available_meta_kv_put_failed',
+            error,
+            context: { section, value: latestAvailable },
+          })
+        }),
+    )
+  }
+  if (latestRunFinishedAt) {
+    writes.push(
+      kv
+        .put(buildSnapshotLatestRunFinishedMetaKvKey(section), latestRunFinishedAt, {
+          expirationTtl: CHART_CACHE_KV_TTL,
+        })
+        .then(() => undefined)
+        .catch((error) => {
+          log.warn('snapshot_cache', 'snapshot latest-run-finished meta KV put failed', {
+            code: 'snapshot_latest_run_finished_meta_kv_put_failed',
+            error,
+            context: { section, value: latestRunFinishedAt },
+          })
+        }),
+    )
+  }
+  if (writes.length) await Promise.all(writes)
+}
+
 export async function writeSnapshotLatestAvailableMetaKv(
   kv: KVNamespace | undefined,
   section: ChartCacheSection,
   latestAvailableCollectionDate: string | null | undefined,
 ): Promise<void> {
-  if (!kv) return
-  const value =
-    typeof latestAvailableCollectionDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(latestAvailableCollectionDate)
-      ? latestAvailableCollectionDate
-      : null
-  if (!value) return
-  try {
-    await kv.put(buildSnapshotLatestAvailableMetaKvKey(section), value, { expirationTtl: CHART_CACHE_KV_TTL })
-  } catch (error) {
-    log.warn('snapshot_cache', 'snapshot latest-available meta KV put failed', {
-      code: 'snapshot_latest_available_meta_kv_put_failed',
-      error,
-      context: { section, value },
-    })
-  }
+  await writeSnapshotFreshnessMetaKv(kv, section, { latestAvailableCollectionDate })
+}
+
+/** Push DB freshness watermarks to KV so Pages middleware can reject stale inline snapshots before full rebuild completes. */
+export async function refreshPublicSnapshotFreshnessMetaFromDb(env: {
+  DB: D1Database
+  CHART_CACHE_KV?: KVNamespace
+}): Promise<void> {
+  if (!env.CHART_CACHE_KV) return
+  const latestRunFinishedAt = await latestRunFinishedAtOrNull(env.DB)
+  await Promise.all(
+    PUBLIC_PACKAGE_SECTIONS.map(async (section) => {
+      const latestAvailableCollectionDate = await queryLatestSectionMaxCollectionDate(env.DB, section)
+      await writeSnapshotFreshnessMetaKv(env.CHART_CACHE_KV, section, {
+        latestAvailableCollectionDate,
+        latestRunFinishedAt,
+      })
+    }),
+  )
 }
 
 function isNoSuchTableError(error: unknown, table: string): boolean {
@@ -123,10 +189,13 @@ export async function writeSnapshotKvBundles(
   section: ChartCacheSection,
   scope: SnapshotScope,
   payload: SnapshotPayload,
-  options?: { latestAvailableCollectionDate?: string | null },
+  options?: { latestAvailableCollectionDate?: string | null; latestRunFinishedAt?: string | null },
 ): Promise<void> {
   if (!kv) return
-  await writeSnapshotLatestAvailableMetaKv(kv, section, options?.latestAvailableCollectionDate)
+  await writeSnapshotFreshnessMetaKv(kv, section, {
+    latestAvailableCollectionDate: options?.latestAvailableCollectionDate,
+    latestRunFinishedAt: options?.latestRunFinishedAt ?? payload.sourceRunFinishedAt ?? null,
+  })
   // Use the payload's own filtersResolved.endDate as the KV key date so that
   // snapshots built across Melbourne midnight don't land on the wrong day's key.
   // Also write under the current Melbourne date key so the middleware can find
@@ -383,6 +452,7 @@ export async function getCachedOrComputeSnapshot(
     if (d1Cached) {
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, d1Cached, {
         latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+        latestRunFinishedAt: options?.latestRunFinishedAt ?? null,
       })
       return { ...d1Cached, fromCache: 'd1' }
     }
@@ -395,6 +465,7 @@ export async function getCachedOrComputeSnapshot(
   const payload = await compute()
   const kvWrite = writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, payload, {
     latestAvailableCollectionDate: options?.latestAvailableCollectionDate ?? null,
+    latestRunFinishedAt: options?.latestRunFinishedAt ?? null,
   })
   if (scope && options?.allowD1Fallback !== false) {
     const d1Write = writeD1SnapshotCache(env.DB, section, scope, payload, {

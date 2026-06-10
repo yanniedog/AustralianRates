@@ -7,6 +7,7 @@ import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import { refreshChartPivotCache } from './chart-cache-refresh'
+import { refreshPublicSnapshotFreshnessMetaFromDb } from '../db/snapshot-cache'
 
 function targetCacheRefreshTotalMinutes(env: EnvBindings): number {
   const hour = Math.max(
@@ -36,6 +37,18 @@ export async function triggerPostRunPackageRefresh(env: EnvBindings, runIds: Ite
     if (typeof id === 'string' && id.length > 0) triggeredRuns++
   }
   if (triggeredRuns === 0) return
+  try {
+    await refreshPublicSnapshotFreshnessMetaFromDb(env)
+    log.info('post_run_refresh', 'snapshot freshness meta KV updated after run finalisation', {
+      context: `triggered_runs=${triggeredRuns}`,
+    })
+  } catch (error) {
+    log.warn('post_run_refresh', 'snapshot freshness meta KV update failed', {
+      code: 'post_run_freshness_meta_failed',
+      error,
+      context: `triggered_runs=${triggeredRuns}`,
+    })
+  }
   if (isAfterScheduledCacheRefreshWindow(env)) {
     try {
       const result = await refreshChartPivotCache(env)
