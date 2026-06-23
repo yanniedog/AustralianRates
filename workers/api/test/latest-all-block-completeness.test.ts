@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 /**
- * Mirror of `latestAllBlockIsCompleteForLimit` in `site/ar-chart-local-data.js`.
+ * Mirror of `latestAllBlockIsCompleteForLimit` in `site/ar-latest-all-completeness.js`.
  * Keep in sync when changing snapshot latest-all completeness rules.
  */
 function latestAllBlockIsCompleteForLimit(

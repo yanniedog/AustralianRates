@@ -587,6 +587,16 @@
                 return null;
             }
         }
+        if (value != null && matcher.dataKey === 'latestAll') {
+            var LA = window.AR.latestAllCompleteness || {};
+            var requestedLimit = parsed.searchParams.get('limit');
+            if (
+                typeof LA.latestAllBlockIsCompleteForLimit === 'function'
+                && !LA.latestAllBlockIsCompleteForLimit(value, requestedLimit)
+            ) {
+                return null;
+            }
+        }
         return value == null ? null : value;
     }
 
