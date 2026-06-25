@@ -1,6 +1,6 @@
 import { DEFAULT_MAX_QUEUE_ATTEMPTS } from '../../constants'
 import type { ReplayQueueRow } from '../../db/ingest-replay-queue'
-import { recordRunQueueOutcome } from '../../db/run-reports'
+import { recordRunQueueOutcome, recordRunQueueOutcomeIfAbsent } from '../../db/run-reports'
 import type { EnvBindings, IngestMessage, RunReportRow } from '../../types'
 import {
   deferReplayAfterActiveClaimLeaseForTicket,
@@ -45,8 +45,11 @@ async function recordOutcomeAndCapture(
   env: EnvBindings,
   finalisedRunIds: Set<string>,
   input: { runId: string; lenderCode: string; success: boolean; errorMessage?: string },
+  options?: { ifAbsent?: boolean },
 ): Promise<void> {
-  const row = await recordRunQueueOutcome(env.DB, input)
+  const row = options?.ifAbsent
+    ? await recordRunQueueOutcomeIfAbsent(env.DB, input)
+    : await recordRunQueueOutcome(env.DB, input)
   const finalised = runIdIfFinalisedDaily(row)
   if (finalised) finalisedRunIds.add(finalised)
 }
@@ -222,6 +225,18 @@ export async function consumeIngestQueue(
               ` elapsed_ms=${elapsedMs(messageStartedAt)}`,
           })
           continue
+        }
+        if (claim.reason === 'duplicate' && context.runId && context.lenderCode) {
+          await recordOutcomeAndCapture(
+            env,
+            finalisedRunIds,
+            {
+              runId: context.runId,
+              lenderCode: context.lenderCode,
+              success: true,
+            },
+            { ifAbsent: true },
+          )
         }
         msg.ack()
         metrics.acked += 1
