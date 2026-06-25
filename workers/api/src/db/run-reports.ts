@@ -240,6 +240,37 @@ export async function markRunFailed(db: D1Database, runId: string, errorMessage:
   return getRunReport(db, runId)
 }
 
+function lenderQueueOutcomeCompleted(summary: PerLenderSummary, lenderCode: string): boolean {
+  const lender = summary[lenderCode] as LenderProgress | undefined
+  if (!lender) return false
+  const enqueued = Number(lender.enqueued) || 0
+  if (enqueued <= 0) return false
+  const completed = (Number(lender.processed) || 0) + (Number(lender.failed) || 0)
+  return completed >= enqueued
+}
+
+/** True when this lender already contributed processed/failed counts for the run. */
+export function isLenderQueueOutcomeRecorded(summary: PerLenderSummary, lenderCode: string): boolean {
+  return lenderQueueOutcomeCompleted(summary, lenderCode)
+}
+
+/**
+ * Record a queue outcome once per lender. Safe when a redelivered message ACKs a
+ * completed idempotency claim after the first worker crashed post-complete.
+ */
+export async function recordRunQueueOutcomeIfAbsent(
+  db: D1Database,
+  input: { runId: string; lenderCode: string; success: boolean; errorMessage?: string },
+): Promise<RunReportRow | null> {
+  const row = await getRunReport(db, input.runId)
+  if (!row) return null
+  const summary = asPerLenderSummary(parseJson<Record<string, unknown>>(row.per_lender_json, {}))
+  if (lenderQueueOutcomeCompleted(summary, input.lenderCode)) {
+    return row
+  }
+  return recordRunQueueOutcome(db, input)
+}
+
 export async function recordRunQueueOutcome(
   db: D1Database,
   input: { runId: string; lenderCode: string; success: boolean; errorMessage?: string },

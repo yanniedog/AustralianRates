@@ -56,7 +56,7 @@ import {
   type SnapshotScope,
 } from '../db/snapshot-cache'
 import type { ChartCacheSection } from '../db/chart-cache'
-import { queryCachedLatestSectionMaxCollectionDate } from '../db/public-cache-support'
+import { queryLatestSectionMaxCollectionDate } from '../db/public-cache-support'
 import { resolveFiltersForScope, type ScopedFilters } from '../db/scope-filters'
 import { publicApiBasePathForSection } from '../pipeline/public-cache-datasets'
 import { resolvePublicSnapshotRequestScope } from '../pipeline/public-package-scopes'
@@ -378,7 +378,7 @@ async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKin
   const query = c.req.query()
   const scope = resolveRequestScope(section, query.chart_window, query.preset)
   const wantsLite = parseBooleanQuery(query.lite)
-  const latestAvailableCollectionDate = await queryCachedLatestSectionMaxCollectionDate(getReadDb(c), section)
+  const latestAvailableCollectionDate = await queryLatestSectionMaxCollectionDate(getReadDb(c), section)
   let payload: Awaited<ReturnType<typeof getCachedOrComputeSnapshot>>
   try {
     // KV-only would 503 after SNAPSHOT_PAYLOAD_VERSION bumps until cron repopulates.
