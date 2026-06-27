@@ -147,4 +147,18 @@ describe('public daily cache freshness', () => {
     expect(result.canServe).toBe(false)
     expect(result.reason).toBe('end_date_beyond_max_staleness')
   })
+
+  it('does not allow bounded stale serving when source run predates the latest completed ingest', () => {
+    const result = publicCacheStaleServeStatus({
+      now: new Date('2026-05-06T10:00:00.000Z'),
+      builtAt: '2026-05-06T08:00:00.000Z',
+      filtersResolved: { startDate: '2026-04-01', endDate: '2026-05-06' },
+      latestAvailableCollectionDate: '2026-05-06',
+      latestRunFinishedAt: '2026-05-06T09:00:00.000Z',
+      sourceRunFinishedAt: '2026-05-06T07:00:00.000Z',
+    })
+
+    expect(result.canServe).toBe(false)
+    expect(result.reason).toBe('source_older_than_latest_run')
+  })
 })

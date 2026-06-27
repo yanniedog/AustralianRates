@@ -195,5 +195,11 @@ export function publicCacheStaleServeStatus(
   if (latestAvailable == null && endDate !== today && endDate !== yesterday) {
     return { ...freshness, canServe: false, endDate }
   }
+  // Same-day endDate can match latestAvailable while sourceRunFinishedAt predates the
+  // latest completed ingest. Serving that bounded-stale package shows today's date
+  // with pre-ingest rates (Pages middleware rejects; API must not serve it either).
+  if (freshness.reason === 'source_older_than_latest_run') {
+    return { ...freshness, canServe: false, endDate }
+  }
   return { ...freshness, canServe: true, endDate }
 }
