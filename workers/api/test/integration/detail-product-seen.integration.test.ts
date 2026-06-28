@@ -1,40 +1,57 @@
 import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
+import type { NormalizedRateRow } from '../../src/ingest/normalize'
+import { upsertHistoricalRateRows } from '../../src/db/historical-rates'
 import { finalizePresenceForRun } from '../../src/db/presence-finalize'
 import {
   markProductsSeenForRun,
   productIdsSeenFromDetailFetch,
 } from '../../src/queue/consumer/series-tracking'
+import homeFixtureRaw from '../fixtures/real-normalized-home-loan-row.json?raw'
+
+function homeFixture(): NormalizedRateRow {
+  return JSON.parse(homeFixtureRaw) as NormalizedRateRow
+}
 
 async function resetPresenceTables(): Promise<void> {
-  const tables = ['run_seen_products', 'run_seen_series', 'product_presence_status', 'product_catalog']
+  const tables = [
+    'run_seen_products',
+    'run_seen_series',
+    'product_presence_status',
+    'product_catalog',
+    'latest_home_loan_series',
+    'historical_loan_rates',
+    'home_loan_rate_events',
+    'home_loan_rate_intervals',
+    'cdr_detail_payload_store',
+    'series_catalog',
+    'series_presence_status',
+  ]
   for (const table of tables) {
     await env.DB.exec(`DELETE FROM ${table};`)
   }
 }
 
-async function seedActiveCatalogProduct(input: {
+async function seedActiveHomeLoanProduct(collectionDate: string): Promise<{
   productId: string
   bankName: string
-  collectionDate: string
-}): Promise<void> {
-  await env.DB
-    .prepare(
-      `INSERT INTO product_catalog (
-         dataset_kind, bank_name, product_id, product_code,
-         first_seen_collection_date, last_seen_collection_date
-       ) VALUES ('home_loans', ?1, ?2, ?2, ?3, ?3)`,
-    )
-    .bind(input.bankName, input.productId, input.collectionDate)
-    .run()
-  await env.DB
-    .prepare(
-      `INSERT INTO product_presence_status (
-         section, bank_name, product_id, is_removed, last_seen_collection_date
-       ) VALUES ('home_loans', ?1, ?2, 0, ?3)`,
-    )
-    .bind(input.bankName, input.productId, input.collectionDate)
-    .run()
+}> {
+  const productId = `shell-${crypto.randomUUID()}`
+  const bankName = 'ANZ'
+  const row: NormalizedRateRow = {
+    ...homeFixture(),
+    bankName,
+    productId,
+    collectionDate,
+    runId: `daily:test:${crypto.randomUUID()}`,
+    sourceUrl: 'https://api.anz/cds-au/v1/banking/products/detail-seen-shell',
+    productUrl: 'https://www.anz.com.au/personal/home-loans/',
+    runSource: 'scheduled',
+    retrievalType: 'present_scrape_same_date',
+    fetchEventId: 901,
+  }
+  await upsertHistoricalRateRows(env.DB, [row])
+  return { productId, bankName }
 }
 
 describe('detail product seen tracking', () => {
@@ -46,12 +63,9 @@ describe('detail product seen tracking', () => {
   it('keeps shell catalog products active when detail fetch returns zero ingestible rows', async () => {
     await resetPresenceTables()
 
-    const productId = `shell-${crypto.randomUUID()}`
-    const runId = `daily:test:${crypto.randomUUID()}`
-    const bankName = 'ANZ'
     const collectionDate = '2026-06-28'
-
-    await seedActiveCatalogProduct({ productId, bankName, collectionDate })
+    const runId = `daily:test:${crypto.randomUUID()}`
+    const { productId, bankName } = await seedActiveHomeLoanProduct(collectionDate)
 
     await markProductsSeenForRun(env.DB, {
       runId,
@@ -85,12 +99,9 @@ describe('detail product seen tracking', () => {
   it('removes active catalog products that never reached run_seen_products', async () => {
     await resetPresenceTables()
 
-    const productId = `missing-${crypto.randomUUID()}`
-    const runId = `daily:test:${crypto.randomUUID()}`
-    const bankName = 'ANZ'
     const collectionDate = '2026-06-28'
-
-    await seedActiveCatalogProduct({ productId, bankName, collectionDate })
+    const runId = `daily:test:${crypto.randomUUID()}`
+    const { productId, bankName } = await seedActiveHomeLoanProduct(collectionDate)
 
     const result = await finalizePresenceForRun(env.DB, {
       runId,
