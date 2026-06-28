@@ -16,7 +16,14 @@ import { ensureProductDetailFetchEventId } from '../detail-fetch-event'
 import { markDetailProcessedAndFinalize } from '../finalization'
 import { classifyDetailFetchOutcome, classifyValidatedRowsOutcome, INGEST_OUTCOME_POLICY, type IngestOutcome } from '../ingest-outcomes'
 import { elapsedMs, serializeForLog } from '../log-helpers'
-import { bankNameForLender, markHomeLoanSeriesSeenForRun, markProductsSeenForRun, markSavingsSeriesSeenForRun, markTdSeriesSeenForRun } from '../series-tracking'
+import {
+  bankNameForLender,
+  markHomeLoanSeriesSeenForRun,
+  markProductsSeenForRun,
+  markSavingsSeriesSeenForRun,
+  markTdSeriesSeenForRun,
+  productIdsSeenFromDetailFetch,
+} from '../series-tracking'
 import { splitValidatedRows, splitValidatedSavingsRows, splitValidatedTdRows } from '../validation'
 import { isD1EmergencyMinimumWrites } from '../../../utils/d1-emergency'
 
@@ -216,7 +223,10 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         dataset: 'home_loans',
         bankName,
         collectionDate: job.collectionDate,
-        productIds: details.rows.map((row) => row.productId),
+        productIds: productIdsSeenFromDetailFetch(
+          job.productId,
+          details.rows.map((row) => row.productId),
+        ),
         skip: isD1EmergencyMinimumWrites(env),
       })
       await markHomeLoanSeriesSeenForRun(env.DB, {
@@ -349,7 +359,10 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         dataset: 'savings',
         bankName,
         collectionDate: job.collectionDate,
-        productIds: details.savingsRows.map((row) => row.productId),
+        productIds: productIdsSeenFromDetailFetch(
+          job.productId,
+          details.savingsRows.map((row) => row.productId),
+        ),
         skip: isD1EmergencyMinimumWrites(env),
       })
       await markSavingsSeriesSeenForRun(env.DB, {
@@ -482,7 +495,10 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         dataset: 'term_deposits',
         bankName,
         collectionDate: job.collectionDate,
-        productIds: details.tdRows.map((row) => row.productId),
+        productIds: productIdsSeenFromDetailFetch(
+          job.productId,
+          details.tdRows.map((row) => row.productId),
+        ),
         skip: isD1EmergencyMinimumWrites(env),
       })
       await markTdSeriesSeenForRun(env.DB, {

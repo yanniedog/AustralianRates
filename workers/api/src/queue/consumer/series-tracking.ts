@@ -8,6 +8,14 @@ export function bankNameForLender(lender: { canonical_bank_name: string; name: s
   return lender.canonical_bank_name || lender.name
 }
 
+/** Detail jobs must record the requested product even when CDR JSON has zero ingestible rows. */
+export function productIdsSeenFromDetailFetch(
+  jobProductId: string,
+  rowProductIds: Iterable<string>,
+): string[] {
+  return Array.from(new Set([jobProductId, ...rowProductIds].filter(Boolean)))
+}
+
 export async function markProductsSeenForRun(
   db: D1Database,
   input: {
