@@ -96,6 +96,42 @@ describe('detail product seen tracking', () => {
     expect(Number(presence?.is_removed ?? 1)).toBe(0)
   })
 
+  it('keeps active series when detail fetch returns zero ingestible rows', async () => {
+    await resetPresenceTables()
+
+    const collectionDate = '2026-06-28'
+    const runId = `daily:test:${crypto.randomUUID()}`
+    const { productId, bankName } = await seedActiveHomeLoanProduct(collectionDate)
+
+    await markProductsSeenForRun(env.DB, {
+      runId,
+      lenderCode: 'anz',
+      dataset: 'home_loans',
+      bankName,
+      collectionDate,
+      productIds: productIdsSeenFromDetailFetch(productId, []),
+    })
+
+    const result = await finalizePresenceForRun(env.DB, {
+      runId,
+      lenderCode: 'anz',
+      dataset: 'home_loans',
+      bankName,
+      collectionDate,
+    })
+
+    expect(result.removedSeries).toBe(0)
+    const seriesPresence = await env.DB
+      .prepare(
+        `SELECT is_removed
+         FROM series_presence_status
+         WHERE dataset_kind = 'home_loans' AND bank_name = ?1 AND product_id = ?2`,
+      )
+      .bind(bankName, productId)
+      .first<{ is_removed: number }>()
+    expect(Number(seriesPresence?.is_removed ?? 1)).toBe(0)
+  })
+
   it('removes active catalog products that never reached run_seen_products', async () => {
     await resetPresenceTables()
 
@@ -112,6 +148,7 @@ describe('detail product seen tracking', () => {
     })
 
     expect(result.removedProducts).toBe(1)
+    expect(result.removedSeries).toBeGreaterThan(0)
     const presence = await env.DB
       .prepare(
         `SELECT is_removed
