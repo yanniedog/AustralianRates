@@ -342,22 +342,48 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   }
   collectionMs = elapsedMs(collectStartedAt)
 
+  const savingsCatalogSupplementProductIds: string[] = []
   if (shouldFetchSavings && savingsIndexSucceeded) {
     const refs = await getActiveCdrProductRefs(env.DB, { dataset: 'savings', bankName })
     for (const ref of refs) {
       if (savingsProductEndpointMap.has(ref.productId)) continue
       savingsProductEndpointMap.set(ref.productId, ref.endpointUrl)
+      savingsCatalogSupplementProductIds.push(ref.productId)
       savingsCatalogSupplements += 1
     }
   }
+  if (savingsCatalogSupplementProductIds.length > 0) {
+    await markProductsSeenForRun(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'savings',
+      bankName,
+      collectionDate: job.collectionDate,
+      productIds: savingsCatalogSupplementProductIds,
+      skip: isD1EmergencyMinimumWrites(env),
+    })
+  }
+  const tdCatalogSupplementProductIds: string[] = []
   if (shouldFetchTd && tdIndexSucceeded) {
     const refs = await getActiveCdrProductRefs(env.DB, { dataset: 'term_deposits', bankName })
     for (const ref of refs) {
       if (job.lenderCode === 'macquarie' && excludeMacquarieBusinessTermDepositProductId(ref.productId)) continue
       if (tdProductEndpointMap.has(ref.productId)) continue
       tdProductEndpointMap.set(ref.productId, ref.endpointUrl)
+      tdCatalogSupplementProductIds.push(ref.productId)
       tdCatalogSupplements += 1
     }
+  }
+  if (tdCatalogSupplementProductIds.length > 0) {
+    await markProductsSeenForRun(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'term_deposits',
+      bankName,
+      collectionDate: job.collectionDate,
+      productIds: tdCatalogSupplementProductIds,
+      skip: isD1EmergencyMinimumWrites(env),
+    })
   }
 
   const uniqueSavingsProductIds = Array.from(savingsProductEndpointMap.keys())
