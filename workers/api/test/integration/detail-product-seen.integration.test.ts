@@ -60,6 +60,35 @@ describe('detail product seen tracking', () => {
     expect(productIdsSeenFromDetailFetch('P123', ['P123', 'P456'])).toEqual(['P123', 'P456'])
   })
 
+  it('keeps catalog-supplement products active when detail job fails after supplement enqueue', async () => {
+    await resetPresenceTables()
+
+    const collectionDate = '2026-06-28'
+    const runId = `daily:test:${crypto.randomUUID()}`
+    const { productId, bankName } = await seedActiveHomeLoanProduct(collectionDate)
+
+    // Index missed this product; catalog supplement enqueues detail and records presence.
+    await markProductsSeenForRun(env.DB, {
+      runId,
+      lenderCode: 'anz',
+      dataset: 'home_loans',
+      bankName,
+      collectionDate,
+      productIds: [productId],
+    })
+
+    const result = await finalizePresenceForRun(env.DB, {
+      runId,
+      lenderCode: 'anz',
+      dataset: 'home_loans',
+      bankName,
+      collectionDate,
+    })
+
+    expect(result.removedProducts).toBe(0)
+    expect(result.removedSeries).toBe(0)
+  })
+
   it('keeps shell catalog products active when detail fetch returns zero ingestible rows', async () => {
     await resetPresenceTables()
 
