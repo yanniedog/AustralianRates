@@ -725,11 +725,15 @@
         return entries;
     }
 
+    function homeLoanScenarioLeadersComplete(scenarioLeaders) {
+        return Array.isArray(scenarioLeaders) && scenarioLeaders.length === MORTGAGE_SAMPLE_SCENARIOS.length;
+    }
+
     function loadQuickCompareFromSnapshot(context) {
         var currentLeaders = snapshotCurrentLeaders();
         if (section === 'home-loans' && context.activeCount === 0) {
             var scenarioLeaders = currentLeaders && Array.isArray(currentLeaders.scenarios) ? currentLeaders.scenarios : null;
-            if (scenarioLeaders && scenarioLeaders.length) return scenarioLeaders;
+            if (homeLoanScenarioLeadersComplete(scenarioLeaders)) return scenarioLeaders;
         }
         if (context.activeCount === 0) {
             var defaultLeaders = currentLeaders && Array.isArray(currentLeaders.rows) ? currentLeaders.rows : null;
