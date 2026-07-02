@@ -57,7 +57,12 @@ import {
 } from '../db/snapshot-cache'
 import type { ChartCacheSection } from '../db/chart-cache'
 import { queryLatestSectionMaxCollectionDate } from '../db/public-cache-support'
-import { resolveFiltersForScope, type ScopedFilters } from '../db/scope-filters'
+import {
+  parseChartCacheScope,
+  resolveFiltersForScope,
+  stripConsumerPresetFilters,
+  type ScopedFilters,
+} from '../db/scope-filters'
 import { publicApiBasePathForSection } from '../pipeline/public-cache-datasets'
 import { resolvePublicSnapshotRequestScope } from '../pipeline/public-package-scopes'
 import { getAppConfig } from '../db/app-config'
@@ -325,7 +330,13 @@ export async function buildSnapshotPayload(
   }
   const latestAllEntry = data.latestAll as { rows?: Array<Record<string, unknown>> } | undefined
   if (latestAllEntry && Array.isArray(latestAllEntry.rows) && latestAllEntry.rows.length) {
-    data.currentLeaders = buildSnapshotCurrentLeaders(section, latestAllEntry.rows)
+    const { preset } = parseChartCacheScope(scope)
+    if (section === 'home_loans' && preset === 'consumer-default') {
+      const leadersEntry = await buildLatestAllEntry(db, section, stripConsumerPresetFilters(section, filters))
+      data.currentLeaders = buildSnapshotCurrentLeaders(section, leadersEntry.rows as Array<Record<string, unknown>>)
+    } else {
+      data.currentLeaders = buildSnapshotCurrentLeaders(section, latestAllEntry.rows)
+    }
   }
 
   const analyticsResult = await analyticsPromise
