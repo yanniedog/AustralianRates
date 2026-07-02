@@ -137,6 +137,19 @@ export function applyPresetFilters(
   return filters
 }
 
+/** Remove consumer-default preset fields so scenario leaders span all LVR tiers and rate types. */
+export function stripConsumerPresetFilters(section: ChartCacheSection, filters: ScopedFilters): ScopedFilters {
+  if (section === 'home_loans') {
+    const { securityPurpose, repaymentType, rateStructure, lvrTier, minRate, ...rest } = filters
+    return rest
+  }
+  if (section === 'savings') {
+    const { accountType, ...rest } = filters
+    return rest
+  }
+  return filters
+}
+
 /** Base filters (no preset, no window). Same shape chart-cache-refresh has used. */
 async function defaultFilters(
   db: D1Database,
