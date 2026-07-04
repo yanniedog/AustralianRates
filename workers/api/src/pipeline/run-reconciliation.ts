@@ -164,6 +164,7 @@ function snapshotForReadiness(row: LenderDatasetReadinessRow): Parameters<typeof
  * Force-finalize all unfinalized lender_dataset_runs for a run (retain as much info as possible when abandoning).
  * Skips rows that are not yet ready per {@link isLenderDatasetReadyForFinalization} so we do not set `finalized_at`
  * while detail work is still incomplete (e.g. EOD run close shortly after midnight UTC).
+ * Presence finalization runs only when expected_detail_count > 0 (shell rows at job start must not blanket-wipe).
  */
 async function forceFinalizeAllUnfinalizedForRun(
   db: D1Database,
@@ -192,16 +193,19 @@ async function forceFinalizeAllUnfinalizedForRun(
       })
       continue
     }
-    try {
-      await finalizePresenceForRun(db, {
-        runId: row.run_id,
-        lenderCode: row.lender_code,
-        dataset: row.dataset_kind,
-        bankName: row.bank_name,
-        collectionDate: row.collection_date,
-      })
-    } catch (e) {
-      pushError(errors, `${row.lender_code}:${row.dataset_kind}:presence:${(e as Error)?.message || String(e)}`)
+    const expected = Number(row.expected_detail_count ?? 0)
+    if (expected > 0) {
+      try {
+        await finalizePresenceForRun(db, {
+          runId: row.run_id,
+          lenderCode: row.lender_code,
+          dataset: row.dataset_kind,
+          bankName: row.bank_name,
+          collectionDate: row.collection_date,
+        })
+      } catch (e) {
+        pushError(errors, `${row.lender_code}:${row.dataset_kind}:presence:${(e as Error)?.message || String(e)}`)
+      }
     }
     try {
       const updated = await tryMarkLenderDatasetFinalized(db, {
