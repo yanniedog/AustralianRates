@@ -2,6 +2,7 @@ import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import { ensureLenderDatasetRun } from '../../src/db/lender-dataset-runs'
 import { markProductsSeen } from '../../src/db/product-status'
+import { createRunReport } from '../../src/db/run-reports'
 import { cancelAllRunningRuns } from '../../src/pipeline/run-reconciliation'
 
 async function resetTables(): Promise<void> {
@@ -26,13 +27,11 @@ describe('cancel-all-running presence safety', () => {
     const bankName = 'ANZ'
     const collectionDate = '2026-07-04'
 
-    await env.DB
-      .prepare(
-        `INSERT INTO run_reports (run_id, run_type, started_at, status, per_lender_json, errors_json)
-         VALUES (?1, 'daily', ?2, 'running', '{}', '[]')`,
-      )
-      .bind(runId, '2026-07-04T00:00:00.000Z')
-      .run()
+    await createRunReport(env.DB, {
+      runId,
+      runType: 'daily',
+      startedAt: '2026-07-04T00:00:00.000Z',
+    })
 
     await ensureLenderDatasetRun(env.DB, {
       runId,
