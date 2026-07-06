@@ -268,11 +268,16 @@ export async function consumeIngestQueue(
       }
 
       if (context.runId && context.lenderCode) {
-        await recordOutcomeAndCapture(env, finalisedRunIds, {
-          runId: context.runId,
-          lenderCode: context.lenderCode,
-          success: true,
-        })
+        await recordOutcomeAndCapture(
+          env,
+          finalisedRunIds,
+          {
+            runId: context.runId,
+            lenderCode: context.lenderCode,
+            success: true,
+          },
+          { ifAbsent: true },
+        )
       }
 
       msg.ack()
