@@ -203,13 +203,17 @@ async function processHomeDataset(
       dataset: 'home_loans',
     })
   }
-  await finalizePresenceForRun(env.DB, {
-    runId: input.runId,
-    lenderCode: input.lenderCode,
-    dataset: 'home_loans',
-    bankName,
-    collectionDate: input.collectionDate,
-  })
+  await finalizePresenceForRun(
+    env.DB,
+    {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      dataset: 'home_loans',
+      bankName,
+      collectionDate: input.collectionDate,
+    },
+    { performRemovals: false },
+  )
   await tryMarkLenderDatasetFinalized(env.DB, {
     runId: input.runId,
     lenderCode: input.lenderCode,
@@ -299,13 +303,17 @@ async function processSavingsDataset(
       dataset: 'savings',
     })
   }
-  await finalizePresenceForRun(env.DB, {
-    runId: input.runId,
-    lenderCode: input.lenderCode,
-    dataset: 'savings',
-    bankName,
-    collectionDate: input.collectionDate,
-  })
+  await finalizePresenceForRun(
+    env.DB,
+    {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      dataset: 'savings',
+      bankName,
+      collectionDate: input.collectionDate,
+    },
+    { performRemovals: false },
+  )
   await tryMarkLenderDatasetFinalized(env.DB, {
     runId: input.runId,
     lenderCode: input.lenderCode,
@@ -395,13 +403,17 @@ async function processTdDataset(
       dataset: 'term_deposits',
     })
   }
-  await finalizePresenceForRun(env.DB, {
-    runId: input.runId,
-    lenderCode: input.lenderCode,
-    dataset: 'term_deposits',
-    bankName,
-    collectionDate: input.collectionDate,
-  })
+  await finalizePresenceForRun(
+    env.DB,
+    {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      dataset: 'term_deposits',
+      bankName,
+      collectionDate: input.collectionDate,
+    },
+    { performRemovals: false },
+  )
   await tryMarkLenderDatasetFinalized(env.DB, {
     runId: input.runId,
     lenderCode: input.lenderCode,
