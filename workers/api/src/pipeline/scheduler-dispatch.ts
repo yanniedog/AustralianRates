@@ -25,6 +25,7 @@ import { getMelbourneNowParts } from '../utils/time'
 import { collectRbaCashRateForDate } from '../ingest/rba'
 import { runScheduledHistoricalQualitySnapshot } from './historical-quality-scheduler'
 import { isD1NonEssentialWorkDisabled } from '../utils/d1-budget'
+import { isD1EmergencyMinimumWrites } from '../utils/d1-emergency'
 import { runPublicPackageRefreshCron } from './public-package-refresh-cron'
 
 type CronEvent = ScheduledController & { cron?: string }
@@ -79,6 +80,7 @@ async function runSiteHealthCron(env: EnvBindings) {
       // completion window before reconciliation treats the run as stale.
       staleRunMinutes: 90,
       timeZone: env.MELBOURNE_TIMEZONE,
+      skipPresenceFinalization: isD1EmergencyMinimumWrites(env),
     })
     log.info('scheduler', 'Site health preflight reconciliation completed', {
       context: JSON.stringify({

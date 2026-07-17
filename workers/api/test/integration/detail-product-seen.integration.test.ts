@@ -188,4 +188,36 @@ describe('detail product seen tracking', () => {
       .first<{ is_removed: number }>()
     expect(Number(presence?.is_removed ?? 0)).toBe(1)
   })
+
+  it('performRemovals:false keeps active catalog products not in run_seen_products', async () => {
+    await resetPresenceTables()
+
+    const collectionDate = '2026-06-28'
+    const runId = `repair:test:${crypto.randomUUID()}`
+    const { productId, bankName } = await seedActiveHomeLoanProduct(collectionDate)
+
+    const result = await finalizePresenceForRun(
+      env.DB,
+      {
+        runId,
+        lenderCode: 'anz',
+        dataset: 'home_loans',
+        bankName,
+        collectionDate,
+      },
+      { performRemovals: false },
+    )
+
+    expect(result.removedProducts).toBe(0)
+    expect(result.removedSeries).toBe(0)
+    const presence = await env.DB
+      .prepare(
+        `SELECT is_removed
+         FROM product_presence_status
+         WHERE section = 'home_loans' AND bank_name = ?1 AND product_id = ?2`,
+      )
+      .bind(bankName, productId)
+      .first<{ is_removed: number }>()
+    expect(Number(presence?.is_removed ?? 1)).toBe(0)
+  })
 })
