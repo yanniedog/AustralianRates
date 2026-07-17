@@ -16,6 +16,7 @@ import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import { buildScheduledRunId } from '../utils/idempotency'
+import { isD1EmergencyMinimumWrites } from '../utils/d1-emergency'
 
 function compactErrorSample(values: string[], max = 3): string[] {
   return values.slice(0, Math.max(1, max))
@@ -58,6 +59,7 @@ async function runOptionalScheduledPrelude(env: EnvBindings) {
       // before reconciliation treats it as stale.
       staleRunMinutes: 90,
       timeZone: env.MELBOURNE_TIMEZONE,
+      skipPresenceFinalization: isD1EmergencyMinimumWrites(env),
     })
     const ready = reconciliation.ready_finalizations
     const stale = reconciliation.stale_runs
