@@ -26,6 +26,7 @@ import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/ru
 import { collectEconomicSeries } from '../economic/collect'
 import { getLenderDatasetRun, tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
 import { finalizePresenceForRun } from '../db/presence-finalize'
+import { isD1EmergencyMinimumWrites } from '../utils/d1-emergency'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminCloudflareRoutes } from './admin-cloudflare'
@@ -768,6 +769,7 @@ adminRoutes.post('/runs/reconcile', async (c) => {
     idleMinutes,
     staleRunMinutes,
     timeZone: c.env.MELBOURNE_TIMEZONE,
+    skipPresenceFinalization: isD1EmergencyMinimumWrites(c.env),
   })
   return c.json({
     ok: true,
@@ -780,7 +782,10 @@ adminRoutes.post('/runs/reconcile', async (c) => {
 adminRoutes.post('/runs/cancel-all-running', async (c) => {
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const dryRun = Boolean(body.dry_run ?? body.dryRun)
-  const result = await cancelAllRunningRuns(c.env.DB, { dryRun })
+  const result = await cancelAllRunningRuns(c.env.DB, {
+    dryRun,
+    skipPresenceFinalization: isD1EmergencyMinimumWrites(c.env),
+  })
   return c.json({
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,
@@ -814,7 +819,7 @@ adminRoutes.post('/runs/lender-dataset/force-finalize', async (c) => {
     return c.json({ ok: true, auth_mode: c.get('adminAuthState')?.mode || null, already_finalized: true })
   }
   try {
-    if (Number(run.expected_detail_count ?? 0) > 0) {
+    if (Number(run.expected_detail_count ?? 0) > 0 && !isD1EmergencyMinimumWrites(c.env)) {
       await finalizePresenceForRun(c.env.DB, {
         runId,
         lenderCode,
