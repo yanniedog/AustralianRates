@@ -43,6 +43,10 @@ Also wait 7 minutes after tagging bots in PR comments or review replies, then re
 
 After `wait-for-bots` exits 0, and before replying to any thread:
 
+**Automated reviewers to watch every time:** **`sourcery-ai`**, **`gemini-code-assist`**, **`chatgpt-codex-connector`** (Codex). Reviews alone miss inline threads — always combine Conversation + **`pulls/<n>/comments`**.
+
+Default stance on substantive suggestions from those bots: **implement on this branch**, then reply in-thread **`implemented in <sha>`**. Defer or decline only with an explicit reason in that thread.
+
 1. Fetch ALL threads:
    - `gh pr view <n> --comments`
    - `gh api repos/<owner>/<repo>/pulls/<n>/reviews`

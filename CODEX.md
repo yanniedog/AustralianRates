@@ -37,7 +37,9 @@ c. `gh pr view <n> --comments`
 d. `gh api repos/<owner>/<repo>/pulls/<n>/reviews`
 e. `gh api repos/<owner>/<repo>/pulls/<n>/comments`
 f. On github.com: scan Conversation + Files until in-flight bot activity settles.
-g. Note all bots that commented after your last push: Gemini Code Assist, Codex, Copilot, CodeRabbit, Greptile, Sourcery, security scanners.
+g. Note all bots that commented after your last push; **always poll reviews and inline comments for** **`sourcery-ai`**, **`gemini-code-assist`**, and **`chatgpt-codex-connector`** first (then Copilot, CodeRabbit, Greptile, security scanners).
+
+**Policy:** treat substantive suggestions from Sourcery, Gemini, and Codex as **implement on this branch by default**; defer or decline only with an explicit in-thread reason.
 
 **Do not assume “bots are done” from a handful of early comments.** Bots post in waves; the synthesis step handles reading every thread before you reply.
 

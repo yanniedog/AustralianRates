@@ -1,5 +1,5 @@
 ---
-description: "Bot reply requirement for Gemini, Codex, and similar automated reviewers — reply in-thread before merge"
+description: "Mandatory sweep + replies for Sourcery, Gemini, Codex; implement substantive bot advice by default"
 alwaysApply: true
 ---
 
@@ -7,4 +7,28 @@ alwaysApply: true
 
 Bot reply standard is defined inline in `git-pr-workflow-default.mdc` (section "Bot/reviewer reply standard").
 
-**Summary:** for every substantive thread from `gemini-code-assist`, `chatgpt-codex-connector`, `copilot`, `coderabbit`, `sourcery-ai`, scanners — reply in-thread before merge: implemented (+ SHA) / deferred (reason) / declined (reason). Do not merge with unanswered threads. Green `ci_result` does not replace thread closure.
+Repo policy (**extended**): after **every** open PR — especially once CI is green and after **`npm run wait-for-bots`** — actively watch for and fully consider feedback from these reviewers:
+
+| Priority | GitHub bot identity | Notes |
+|----------|---------------------|--------|
+| 1 | `sourcery-ai` | Often leaves overview + inline file threads |
+| 2 | `gemini-code-assist` | File-level inline comments |
+| 3 | `chatgpt-codex-connector` (Codex) | Inline severity badges / summaries |
+
+**Sweep checklist (never rely only on Conversation summaries)**
+
+1. `gh api repos/<owner>/<repo>/pulls/<n>/reviews` — capture reviews from all three above plus Copilot, CodeRabbit, etc.
+2. `gh api repos/<owner>/<repo>/pulls/<n>/comments` — capture **every** inline thread for those bots (Gemini/Codex frequently attach comments here).
+3. github.com **Files** tab — reopen threads grouped by path until none pending.
+
+**Disposition bias**
+
+- **Substantive** feedback from these bots (correctness, resilience, security, perf, clarity, hygiene): **implement by default** on the same PR branch when feasible; reply **in-thread** with **`implemented in <sha>`**.
+- **Defer** only with a concrete reason (risk window, scope, dependency on another PR) + optional **`docs/REFACTOR_BACKLOG.md`** link; reply in-thread.
+- **Decline** only with a concrete reason that cites repo constraints (`AGENTS.md`, compatibility, etc.); reply in-thread.
+
+Do **not** merge while **any** substantive inline thread from Sourcery, Gemini, or Codex is unresolved **without** an explicit defer or decline reply.
+
+Still applies to other bots (`copilot`, `coderabbit`, `greptile`, scanners): same reply standard.
+
+Green **`ci_result`** does **not** replace thread closure.
