@@ -40,12 +40,12 @@
 
 .ar-local-cdr .local-section-card {
   display: grid;
-  min-height: 118px;
-  gap: 10px;
+  min-height: 86px;
+  gap: 8px;
   padding: 12px;
   border: 1px solid var(--ar-line);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--ar-surface) 88%, transparent);
+  background: color-mix(in srgb, var(--ar-surface-2) 78%, var(--ar-surface));
   color: var(--ar-text);
   text-align: left;
   box-shadow: none;
@@ -53,8 +53,8 @@
 
 .ar-local-cdr .local-section-card:hover,
 .ar-local-cdr .local-section-card.is-active {
-  border-color: color-mix(in srgb, var(--ar-section-accent) 48%, var(--ar-line-strong));
-  background: var(--ar-section-soft);
+  border-color: color-mix(in srgb, var(--ar-line-strong) 82%, var(--ar-line));
+  background: color-mix(in srgb, var(--ar-surface-2) 58%, #111827) !important;
 }
 
 .ar-local-cdr .local-section-card-head {
@@ -76,9 +76,10 @@
 
 .ar-local-cdr .local-section-logo-rail {
   display: flex;
+  flex-wrap: wrap;
   min-width: 0;
-  gap: 4px;
-  overflow: hidden;
+  gap: 6px;
+  overflow: visible;
 }
 
 .ar-local-cdr .local-section-logo-rail .bank-badge {
@@ -93,6 +94,36 @@
 .ar-local-cdr .local-section-logo-rail .bank-badge-logo-wrap {
   width: 24px;
   height: 24px;
+}
+
+.ar-local-cdr .local-selected-logos {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ar-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ar-surface-2) 76%, var(--ar-surface));
+}
+
+.ar-local-cdr .local-selected-logos[hidden] {
+  display: none;
+}
+
+.ar-local-cdr .local-selected-logos-title {
+  color: var(--ar-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ar-local-cdr .local-section-logo-rail-full .bank-badge {
+  width: 28px;
+  min-width: 28px;
+}
+
+.ar-local-cdr .local-section-logo-rail-full .bank-badge-logo-wrap {
+  width: 28px;
+  height: 28px;
 }
 
 .ar-local-cdr .local-filter-strip {
@@ -131,30 +162,6 @@
   min-height: 520px;
 }
 
-.ar-local-cdr .chart-series-list {
-  gap: 8px;
-  padding: 10px;
-}
-
-.ar-local-cdr .local-series-card {
-  display: grid;
-  gap: 4px;
-  padding: 10px;
-  border: 1px solid var(--ar-line);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--ar-surface-2) 84%, transparent);
-}
-
-.ar-local-cdr .local-series-card strong {
-  font-size: 0.84rem;
-  line-height: 1.2;
-}
-
-.ar-local-cdr .local-series-card span {
-  color: var(--ar-text-muted);
-  font-size: 0.72rem;
-}
-
 .ar-local-cdr .local-table-panel {
   margin-top: 14px;
 }
@@ -172,15 +179,17 @@
 }
 
 .ar-local-cdr #hierarchy {
-  min-height: 420px;
+  min-height: 0;
+  height: 100%;
+  padding: 10px;
 }
 
 .ar-local-cdr #hierarchy .ar-report-underchart-tree {
   display: flex;
-  height: min(620px, 72vh);
+  height: 100%;
   padding: 10px 12px 12px;
-  border: 0;
-  border-radius: 0;
+  border: 1px solid var(--ar-line);
+  border-radius: 8px;
   background: color-mix(in srgb, var(--ar-surface-2) 76%, var(--ar-surface));
 }
 
