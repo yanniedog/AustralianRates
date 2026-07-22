@@ -24,6 +24,8 @@ type StoredIdempotencyClaim = {
   claimed_at: string
   lease_until: string
   completed_at?: string
+  /** Set after run_reports queue outcome is recorded for this message (detail fanout safe). */
+  outcome_recorded?: boolean
 }
 
 export type IdempotencyClaimResult = {
@@ -298,6 +300,40 @@ export async function claimIdempotency(
       error: (error as Error)?.message || String(error),
     }
   }
+}
+
+export async function isIdempotencyOutcomeRecorded(
+  env: EnvBindings,
+  input: { kind: IngestMessage['kind']; idempotencyKey: string | null },
+): Promise<boolean> {
+  if (!isEnabled(env.FEATURE_QUEUE_IDEMPOTENCY_ENABLED)) return false
+  if (!env.IDEMPOTENCY_KV) return false
+  const keyPart = String(input.idempotencyKey || '').trim()
+  if (!keyPart) return false
+  const existing = parseStoredClaim(await env.IDEMPOTENCY_KV.get(keyFor(input.kind, keyPart)))
+  return Boolean(existing?.outcome_recorded)
+}
+
+export async function markIdempotencyOutcomeRecorded(
+  env: EnvBindings,
+  input: { kind: IngestMessage['kind']; idempotencyKey: string | null },
+): Promise<void> {
+  if (!isEnabled(env.FEATURE_QUEUE_IDEMPOTENCY_ENABLED)) return
+  if (!env.IDEMPOTENCY_KV) return
+  const keyPart = String(input.idempotencyKey || '').trim()
+  if (!keyPart) return
+  const key = keyFor(input.kind, keyPart)
+  const ttlSeconds = idempotencyTtlSeconds(env)
+  const existing = parseStoredClaim(await env.IDEMPOTENCY_KV.get(key))
+  if (!existing || existing.outcome_recorded) return
+  await env.IDEMPOTENCY_KV.put(
+    key,
+    JSON.stringify({
+      ...existing,
+      outcome_recorded: true,
+    }),
+    { expirationTtl: ttlSeconds },
+  )
 }
 
 export async function completeIdempotencyClaim(
