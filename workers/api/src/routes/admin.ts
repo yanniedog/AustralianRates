@@ -27,6 +27,7 @@ import { collectEconomicSeries } from '../economic/collect'
 import { getLenderDatasetRun, tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
 import { finalizePresenceForRun } from '../db/presence-finalize'
 import { isD1EmergencyMinimumWrites } from '../utils/d1-emergency'
+import { isLenderDatasetReadyForFinalization } from '../utils/lender-dataset-invariants'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminCloudflareRoutes } from './admin-cloudflare'
@@ -819,7 +820,12 @@ adminRoutes.post('/runs/lender-dataset/force-finalize', async (c) => {
     return c.json({ ok: true, auth_mode: c.get('adminAuthState')?.mode || null, already_finalized: true })
   }
   try {
-    if (Number(run.expected_detail_count ?? 0) > 0 && !isD1EmergencyMinimumWrites(c.env)) {
+    const readiness = isLenderDatasetReadyForFinalization(run)
+    if (
+      readiness.ready &&
+      Number(run.expected_detail_count ?? 0) > 0 &&
+      !isD1EmergencyMinimumWrites(c.env)
+    ) {
       await finalizePresenceForRun(c.env.DB, {
         runId,
         lenderCode,
