@@ -2267,3 +2267,24 @@ body.ar-public .lwc-report-moves-strip-lane.is-down .lwc-report-moves-strip-bar 
         white-space: nowrap;
     }
 }
+
+/* Touch devices: comfortable tap targets for breadcrumb buttons and hierarchy rows.
+   Apple HIG minimum is 44x44; we use 36 here as a balance with information density. */
+@media (pointer: coarse) {
+    body.ar-public .ar-report-underchart-tree-crumb,
+    body.ar-public button.ar-report-underchart-tree-crumb.secondary {
+        min-height: 32px;
+        padding: 6px 10px;
+        font-size: 0.72rem;
+    }
+
+    body.ar-public .ar-report-infobox-trow {
+        min-height: 36px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+
+    body.ar-public .ar-report-infobox-trow--leaf {
+        min-height: 32px;
+    }
+}

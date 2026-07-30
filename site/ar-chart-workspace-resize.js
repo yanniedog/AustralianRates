@@ -54,10 +54,17 @@
     }
 
     function topHeightConfig() {
-        var total = workspaceHeight() || Math.max(420, Math.round((window.innerHeight || 844) * 0.58));
-        var min = Math.max(160, Math.round(total * 0.3));
-        var max = Math.max(min + 72, total - 160);
-        var value = clamp(Math.round(total * 0.5), min, max);
+        // Anchor preferred to viewport so the chart row gets a comfortable share
+        // even before the workspace has been measured (initial paint on mobile
+        // routinely returns a small height, which previously clamped the chart
+        // to ~160px and made it unreadable).
+        var vh = window.innerHeight || 844;
+        var preferred = Math.max(240, Math.round(vh * 0.5));
+        var measured = workspaceHeight();
+        var total = measured > preferred + 160 ? measured : preferred + 220;
+        var min = 240;
+        var max = Math.max(min + 80, total - 180);
+        var value = clamp(preferred, min, max);
         return { min: min, max: max, value: value };
     }
 
