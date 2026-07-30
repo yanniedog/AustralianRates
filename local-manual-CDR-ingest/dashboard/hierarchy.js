@@ -1,7 +1,8 @@
-(function () {
+﻿(function () {
   'use strict';
 
   const PALETTE = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#0891b2', '#ca8a04', '#db2777', '#64748b'];
+  const { pct, rateValue } = window.LocalCdrUtils;
 
   function clear(element) {
     while (element.firstChild) element.removeChild(element.firstChild);
@@ -25,17 +26,11 @@
     return Number(value || 0).toLocaleString('en-AU');
   }
 
-  function pct(raw) {
-    const value = Number(raw);
-    if (!Number.isFinite(value)) return '';
-    return (value * 100).toFixed(2) + '%';
-  }
-
   function minMax(rows) {
     let min = null;
     let max = null;
     for (let index = 0; index < rows.length; index += 1) {
-      const value = Number(rows[index].rate);
+      const value = rateValue(rows[index].rate);
       if (!Number.isFinite(value) || value <= 0) continue;
       if (min == null || value < min) min = value;
       if (max == null || value > max) max = value;
@@ -47,6 +42,12 @@
     const mm = minMax(rows);
     if (mm.min == null) return null;
     return descending ? mm.max : mm.min;
+  }
+
+  function rangeText(rows) {
+    const mm = minMax(rows);
+    if (mm.min == null) return 'no rates';
+    return mm.min === mm.max ? pct(mm.min) : `${pct(mm.min)}-${pct(mm.max)}`;
   }
 
   function hashText(value) {
@@ -64,21 +65,14 @@
   }
 
   function fieldLabel(field) {
-    return {
-      provider: 'Provider',
-      loan_purpose: 'Purpose',
-      category: 'Category',
-      term: 'Term',
-      rate_type: 'Rate type',
-      repayment_type: 'Repayment',
-      product_name: 'Product',
-    }[field] || field;
+    const labels = { provider: 'Provider', loan_purpose: 'Purpose', category: 'Category', term: 'Term', rate_type: 'Rate type', repayment_type: 'Repayment', product_name: 'Product' };
+    return labels[field] || field;
   }
 
   function tierFields(section) {
-    if (section === 'Mortgage') return ['provider', 'loan_purpose', 'rate_type', 'repayment_type', 'product_name'];
-    if (section === 'TD') return ['provider', 'term', 'product_name', 'rate_type'];
-    return ['provider', 'category', 'product_name', 'rate_type'];
+    if (section === 'Mortgage') return ['loan_purpose', 'rate_type', 'repayment_type', 'provider', 'product_name'];
+    if (section === 'TD') return ['term', 'provider', 'product_name', 'rate_type'];
+    return ['category', 'provider', 'product_name', 'rate_type'];
   }
 
   function tierValue(row, field) {
@@ -193,7 +187,7 @@
     dot.style.setProperty('--ar-swatch-color', swatch(row));
     const label = child(rateRow, 'span', 'ar-report-infobox-tlabel');
     const bits = [row.rate_type, row.application_type, row.repayment_type || row.loan_purpose].filter(Boolean);
-    child(label, 'span', 'ar-ribbon-tleaf-product', bits.join(' · ') || 'Rate');
+    child(label, 'span', 'ar-ribbon-tleaf-product', bits.join(' - ') || 'Rate');
     const rate = child(rateRow, 'span', 'ar-report-infobox-trate');
     renderRateRange(rate, [row], best, descending);
   }
@@ -207,10 +201,10 @@
     row.dataset.localHierarchyPath = targetPath;
     row.setAttribute('data-ribbon-tree-path', path);
     row.setAttribute('role', 'button');
-    row.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    row.setAttribute('aria-label', (expanded ? 'Collapse tier, ' : 'Expand tier, ') + formatLabel(node.field, group.label));
+    row.setAttribute('aria-expanded', expanded ? 'v' : '>');
+    row.setAttribute('aria-label', (expanded ? 'v' : '>') + formatLabel(node.field, group.label));
     row.tabIndex = 0;
-    child(row, 'span', 'ar-report-infobox-twist', expanded ? '▼' : '▶');
+    child(row, 'span', 'ar-report-infobox-twist', expanded ? 'v' : '>');
     const label = child(row, 'span', 'ar-report-infobox-tlabel');
     if (node.field === 'provider' && window.LocalCdrBrand) {
       window.LocalCdrBrand.appendProviderBadge(label, group.label, true);
@@ -225,8 +219,8 @@
   function renderTree(container, node, path, depth, activePath, state) {
     if (!node || node.kind === 'empty') return;
     if (node.kind === 'leaves') {
-      node.rows.slice().sort((a, b) => state.descending ? Number(b.rate) - Number(a.rate) : Number(a.rate) - Number(b.rate))
-        .forEach((row) => renderLeaf(container, row, depth, state.globalBest, state.descending));
+      const sorted = node.rows.slice().sort((a, b) => state.descending ? rateValue(b.rate) - rateValue(a.rate) : rateValue(a.rate) - rateValue(b.rate));
+      sorted.forEach((row) => renderLeaf(container, row, depth, state.globalBest, state.descending));
       return;
     }
     const focusIndex = focusedChildIndex(path, activePath);
@@ -243,16 +237,14 @@
 
   function panelTheme() {
     const cssVar = window.LocalCdrUtils.cssVar;
-    return {
-      ttText: cssVar('--ar-text', '#e5e7eb'),
-      ttBg: cssVar('--ar-surface-2', '#111827'),
-      ttBorder: cssVar('--ar-line', '#334155'),
-      muted: cssVar('--ar-text-muted', '#94a3b8'),
-    };
+    return { ttText: cssVar('--ar-text', '#e5e7eb'), ttBg: cssVar('--ar-surface-2', '#111827'), ttBorder: cssVar('--ar-line', '#334155'), muted: cssVar('--ar-text-muted', '#94a3b8') };
   }
 
   function ensurePanel(container) {
-    if (container.__localPanel) return container.__localPanel;
+    if (container.__localPanel) {
+      if (!container.contains(container.__localPanel.el)) container.appendChild(container.__localPanel.el);
+      return container.__localPanel;
+    }
     clear(container);
     const creator = window.AR && window.AR.chartReportPlotHierarchyPanel;
     const panel = creator && creator.createRibbonHierarchyPanel
@@ -265,7 +257,7 @@
   }
 
   function render(container, countEl, rows, state) {
-    const visible = rows.slice(0, 2000);
+    const visible = rows;
     const productCount = new Set(visible.map((row) => row.product_key || row.product_id || row.product_name)).size;
     const providerCount = new Set(visible.map((row) => row.provider).filter(Boolean)).size;
     countEl.textContent = `${num(visible.length)} rates / ${num(productCount)} products / ${num(providerCount)} providers`;
@@ -277,15 +269,14 @@
     state.hierarchyPath = prunePath(tree, state.hierarchyPath || '');
     if (!visible.length || tree.kind === 'empty') {
       panel.show({
-        heading: state.section + ' hierarchy',
-        meta: 'No rows',
+        heading: state.section + ' hierarchy', meta: 'No rows',
         renderBody: (wrap) => child(wrap, 'div', 'chart-series-empty', 'No hierarchy data available.'),
       });
       return;
     }
     panel.show({
-      heading: state.section === 'TD' ? 'Term deposit hierarchy' : state.section + ' hierarchy',
-      meta: `${num(providerCount)} providers · ${num(productCount)} products · ${pct(state.globalBest)} ${state.descending ? 'best yield' : 'best rate'}`,
+      heading: 'Current slice',
+      meta: `${state.manifest.run_date} - ${rangeText(visible)} - ${num(productCount)} products - ${num(providerCount)} providers`,
       compact: true,
       renderBody: (wrap) => {
         renderBreadcrumbs(wrap, tree, state.hierarchyPath || '');
@@ -294,5 +285,5 @@
     });
   }
 
-  window.LocalCdrHierarchy = { render };
+window.LocalCdrHierarchy = { render };
 })();

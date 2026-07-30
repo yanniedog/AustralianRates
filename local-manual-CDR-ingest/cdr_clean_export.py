@@ -80,6 +80,46 @@ def number_text(value: Any) -> str:
         return raw
 
 
+def rate_text(value: Any, divisor: float = 1.0) -> str:
+    raw = number_text(value)
+    if not raw:
+        return ""
+    try:
+        number = float(raw)
+    except ValueError:
+        return raw
+    if divisor != 1:
+        number = number / divisor
+    elif number > 1:
+        number = number / 100
+    return f"{number:.6g}"
+
+
+def rate_divisor(items: List[Dict[str, Any]], family: str) -> float:
+    values: List[float] = []
+    for item in items:
+        try:
+            values.append(float(number_text(item.get("rate"))))
+        except ValueError:
+            pass
+    if any(value > 1 for value in values):
+        return 100
+    if family == "lending" and any(0.3 < value <= 1 for value in values):
+        return 10
+    return 1
+
+
+def normalized_rate_text(value: Any, divisor: float, family: str) -> str:
+    raw = rate_text(value, divisor)
+    try:
+        number = float(raw)
+    except ValueError:
+        return raw
+    if family == "lending" and 0 < number < 0.02:
+        number *= 10
+    return f"{number:.6g}"
+
+
 def detail_json(record: Mapping[str, Any]) -> str:
     return json.dumps(clean_value(dict(record)), ensure_ascii=False, sort_keys=True)
 
@@ -125,16 +165,21 @@ def append_bank_details(
     base: Mapping[str, str],
     rec: Mapping[str, Any],
 ) -> None:
+    wanted = {"Mortgage": {"lending"}, "Savings": {"deposit"}, "TD": {"deposit"}}.get(base.get("dataset", ""), {"deposit", "lending"})
     for family, key in (("deposit", "depositRates"), ("lending", "lendingRates")):
-        for idx, item in enumerate(as_items(rec.get(key)), 1):
+        if family not in wanted:
+            continue
+        items = as_items(rec.get(key))
+        divisor = rate_divisor(items, family)
+        for idx, item in enumerate(items, 1):
             cleaned = clean_value(item)
             dataset["rates"].append(
                 {
                     **base,
                     "rate_family": family,
                     "rate_index": idx,
-                    "rate": number_text(item.get("rate")),
-                    "comparison_rate": number_text(item.get("comparisonRate")),
+                    "rate": normalized_rate_text(item.get("rate"), divisor, family),
+                    "comparison_rate": normalized_rate_text(item.get("comparisonRate"), divisor, family),
                     "rate_type": text(item.get("depositRateType") or item.get("lendingRateType")),
                     "application_type": text(item.get("applicationType")),
                     "application_frequency": text(item.get("applicationFrequency")),

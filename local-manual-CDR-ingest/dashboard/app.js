@@ -11,6 +11,7 @@
     hierarchyPath: '',
   };
   const $ = (id) => document.getElementById(id);
+  const { bankRateMatchesSection, normalizeRows, pct } = window.LocalCdrUtils;
 
   function clear(element) {
     while (element.firstChild) element.removeChild(element.firstChild);
@@ -34,12 +35,6 @@
     return response.json();
   }
 
-  function pct(raw) {
-    const value = Number(raw);
-    if (!Number.isFinite(value)) return '';
-    return (value * 100).toFixed(2) + '%';
-  }
-
   function num(value) {
     return Number(value || 0).toLocaleString('en-AU');
   }
@@ -52,6 +47,7 @@
       if (!state.banks) return [];
       return state.banks.rates.filter((row) =>
         (!dataset || row.dataset === dataset) &&
+        bankRateMatchesSection(row) &&
         (!provider || String(row.provider || '').toLowerCase().includes(provider)) &&
         (!q || String(row.product_name || '').toLowerCase().includes(q))
       );
@@ -121,7 +117,7 @@
     clear(wrap);
     if (!state.banks || !window.LocalCdrBrand) return;
     ['Mortgage', 'Savings', 'TD'].forEach((section) => {
-      const rows = state.banks.rates.filter((row) => row.dataset === section);
+      const rows = state.banks.rates.filter((row) => row.dataset === section && bankRateMatchesSection(row));
       const products = new Set(rows.map((row) => row.product_key || row.product_id || row.product_name));
       const providers = [...new Set(rows.map((row) => row.provider).filter(Boolean))].sort();
       const card = child(wrap, 'button', 'local-section-card' + (state.section === section ? ' is-active' : ''));
@@ -130,10 +126,19 @@
       const head = child(card, 'span', 'local-section-card-head');
       child(head, 'span', 'local-section-kicker', section === 'TD' ? 'Term Deposits' : section);
       child(head, 'strong', '', section === 'Mortgage' ? 'Home loans' : section === 'Savings' ? 'Savings accounts' : 'Term deposits');
-      const logos = child(card, 'span', 'local-section-logo-rail');
-      providers.slice(0, 6).forEach((provider) => window.LocalCdrBrand.appendProviderBadge(logos, provider, false));
       child(card, 'span', 'local-section-card-meta', `${num(rows.length)} rates / ${num(products.size)} products / ${num(providers.length)} providers`);
     });
+  }
+
+  function renderSelectedLogos() {
+    const wrap = $('selectedLogos');
+    clear(wrap);
+    if (!state.banks || state.sector !== 'banks' || !window.LocalCdrBrand) { wrap.hidden = true; return; }
+    const rows = state.banks.rates.filter((row) => row.dataset === state.section && bankRateMatchesSection(row));
+    const providers = [...new Set(rows.map((row) => row.provider).filter(Boolean))].sort(), label = state.section === 'TD' ? 'Term Deposit' : state.section;
+    wrap.hidden = false; child(wrap, 'span', 'local-selected-logos-title', `${label} providers`);
+    const rail = child(wrap, 'span', 'local-section-logo-rail local-section-logo-rail-full');
+    providers.forEach((provider) => window.LocalCdrBrand.appendProviderBadge(rail, provider, false));
   }
 
   function updateHero(rows, items) {
@@ -142,9 +147,7 @@
     $('hero-leader').textContent = state.sector === 'banks' && items[0] ? pct(items[0].value) : num(rows.length);
   }
 
-  function setLastRefreshed() {
-    $('last-refreshed').textContent = new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
-  }
+  function setLastRefreshed() { $('last-refreshed').textContent = new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }); }
 
   function renderStats(rows) {
     const counts = state.sector === 'banks' ? state.manifest.banks_counts : state.manifest.energy_counts;
@@ -158,25 +161,13 @@
     });
   }
 
-  function renderRail(items) {
-    $('chart-series-note').textContent = state.sector === 'banks' ? 'Top visible rates' : 'Visible plan sample';
-    const list = $('chart-series-list');
-    clear(list);
-    items.slice(0, 24).forEach((item) => {
-      const card = child(list, 'article', 'local-series-card');
-      card.setAttribute('role', 'listitem');
-      child(card, 'strong', '', item.label);
-      child(card, 'span', '', item.meta || '');
-      child(card, 'span', '', state.sector === 'banks' ? pct(item.value) : 'Plan');
-    });
-  }
-
   function renderFlatTable(rows) {
     const keys = ['provider', 'plan_name', 'fuel_type', 'last_updated', 'description'];
     const visible = rows.slice(0, 1500);
     $('table-count').textContent = num(visible.length) + ' visible';
     const table = $('table');
-    $('hierarchy').hidden = true;
+    $('chart-side-panel').hidden = true;
+    document.querySelector('.local-table-panel').hidden = false;
     table.hidden = false;
     clear(table);
     const thead = child(table, 'thead');
@@ -192,18 +183,19 @@
   function renderTable(rows) {
     if (state.sector === 'banks') {
       $('table').hidden = true;
+      document.querySelector('.local-table-panel').hidden = true;
+      $('chart-side-panel').hidden = false;
       $('hierarchy').hidden = false;
       window.LocalCdrHierarchy.render($('hierarchy'), $('table-count'), rows, state);
     } else renderFlatTable(rows);
   }
 
   function render() {
-    const rows = rateRows();
+    const rows = normalizeRows(rateRows());
     const items = chartRows(rows);
     setLinks();
     updateHero(rows, items);
     renderStats(rows);
-    renderRail(items);
     renderTable(rows);
     window.LocalCdrChart.draw($('chart'), items, state.sector);
     $('chart-status').textContent = `${num(rows.length)} local ${state.sector === 'banks' ? 'rate rows' : 'plans'} loaded`;
@@ -220,10 +212,11 @@
     $('chart-status').textContent = 'Loading local CDR data';
     $('table-count').textContent = '';
     clear($('table'));
-    clear($('chart-series-list'));
+    clear($('hierarchy'));
     if (!state[state.sector]) state[state.sector] = await getJson(`/api/${state.sector}?date=${state.manifest.run_date}`);
     setupFilters();
     renderSectionCards();
+    renderSelectedLogos();
     render();
     setLastRefreshed();
   }
@@ -239,7 +232,7 @@
       const action = event.target.closest('[data-local-hierarchy-action]');
       if (!action) return;
       state.hierarchyPath = action.dataset.localHierarchyPath || '';
-      renderTable(rateRows());
+      renderTable(normalizeRows(rateRows()));
     });
     $('hierarchy').addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -248,7 +241,7 @@
       if (!action) return;
       event.preventDefault();
       state.hierarchyPath = action.dataset.localHierarchyPath || '';
-      renderTable(rateRows());
+      renderTable(normalizeRows(rateRows()));
     });
     ['dataset', 'provider', 'query'].forEach((id) => $(id).addEventListener('input', render));
     $('dataset').addEventListener('change', render);
@@ -260,9 +253,9 @@
     });
     window.addEventListener('resize', () => {
       window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => window.LocalCdrChart.draw($('chart'), chartRows(rateRows()), state.sector), 120);
+      resizeTimer = window.setTimeout(() => window.LocalCdrChart.draw($('chart'), chartRows(normalizeRows(rateRows())), state.sector), 120);
     });
-    window.addEventListener('ar:theme-changed', () => window.LocalCdrChart.draw($('chart'), chartRows(rateRows()), state.sector));
+    window.addEventListener('ar:theme-changed', () => window.LocalCdrChart.draw($('chart'), chartRows(normalizeRows(rateRows())), state.sector));
     if (window.ARTheme && window.ARTheme.initToggles) window.ARTheme.initToggles(document);
   }
 

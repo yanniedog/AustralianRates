@@ -56,6 +56,7 @@
           <span class="market-intro-live-card"><span class="market-intro-live-label">Rows</span><strong id="hero-rows">...</strong></span>
         </div>
         <div id="sectionCards" class="local-section-cards" aria-label="Banking sections"></div>
+        <div id="selectedLogos" class="local-selected-logos" aria-label="Selected section providers"></div>
       </div>
     </section>
     <section class="market-terminal" aria-label="Local CDR workspace">
@@ -92,10 +93,7 @@
                   </div>
                   <div class="chart-workspace-resizer" role="separator" aria-hidden="true"></div>
                   <aside id="chart-side-panel" class="chart-side-panel" aria-label="Visible rows">
-                    <div class="chart-selection-rail">
-                      <p id="chart-series-note" class="chart-series-note hint" aria-live="polite"></p>
-                      <div id="chart-series-list" class="chart-series-list" role="list"></div>
-                    </div>
+                    <div id="hierarchy" class="chart-selection-rail"></div>
                   </aside>
                 </div>
               </div>
@@ -105,10 +103,9 @@
               <p id="chart-status" class="hint">Loading local CDR data</p>
             </div>
           </section>
-          <section class="panel terminal-subpanel local-table-panel" aria-label="Visible data">
-            <div class="terminal-panel-head"><h2 class="terminal-panel-title">Rate hierarchy</h2><span id="table-count" class="hint"></span></div>
+          <section class="panel terminal-subpanel local-table-panel" aria-label="Visible data" hidden>
+            <div class="terminal-panel-head"><h2 class="terminal-panel-title">Visible data</h2><span id="table-count" class="hint"></span></div>
             <div class="local-table-wrap">
-              <div id="hierarchy"></div>
               <table id="table"></table>
             </div>
           </section>
