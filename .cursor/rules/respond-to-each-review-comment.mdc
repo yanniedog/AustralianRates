@@ -7,11 +7,17 @@ alwaysApply: true
 
 Full bot reply standard is inline in `git-pr-workflow-default.mdc` (section "Bot/reviewer reply standard").
 
+## Priority bots (always sweep after CI green)
+
+Treat **`sourcery-ai`**, **`gemini-code-assist`**, and **`chatgpt-codex-connector`** as mandatory watch targets on **every** PR: poll **`pulls/<n>/reviews`** and **`pulls/<n>/comments`** (and the Files tab on github.com). Never infer “no feedback” from CI alone.
+
+Default disposition for **substantive** suggestions from those bots: **implement on this branch**, then reply in-thread with **`implemented in <sha>`**. **Defer** or **decline** only with an explicit written reason in that thread.
+
 ## What counts as feedback
 
 - Required workflow failures (tests, lint, `ci_result`).
 - Inline comments and reviews from humans.
-- Bot comments: `gemini-code-assist`, `chatgpt-codex-connector`, `copilot`, `coderabbit`, `sourcery-ai`, Greptile, security scanners.
+- Bot comments: `gemini-code-assist`, `chatgpt-codex-connector`, `copilot`, `coderabbit`, `sourcery-ai`, Greptile, security scanners (priority trio listed above).
 
 ## Mandatory per finding
 
