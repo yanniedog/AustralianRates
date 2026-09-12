@@ -145,10 +145,11 @@
 
         handle.addEventListener('dblclick', function (event) {
             event.preventDefault();
-            var widthCfg = sideWidthConfig();
-            var topCfg = topHeightConfig();
-            sizes.sideWidth = widthCfg.value;
-            sizes.topHeight = topCfg.value;
+            if (desktopQuery.matches) {
+                sizes.sideWidth = sideWidthConfig().value;
+            } else {
+                sizes.topHeight = topHeightConfig().value;
+            }
             applySizes();
             saveSizes();
         });
