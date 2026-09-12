@@ -61,7 +61,7 @@
         var vh = window.innerHeight || 844;
         var preferred = Math.max(240, Math.round(vh * 0.5));
         var measured = workspaceHeight();
-        var total = measured > preferred + 160 ? measured : preferred + 220;
+        var total = Math.max(measured, preferred + 220);
         var min = 240;
         var max = Math.max(min + 80, total - 180);
         var value = clamp(preferred, min, max);
