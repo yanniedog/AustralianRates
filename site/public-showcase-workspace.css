@@ -643,3 +643,19 @@ body.ar-legal .legal-hero { animation: none; }
         font-size: 0.68rem;
     }
 }
+
+/* Enlarge interactive hierarchy controls on touch devices. */
+@media (pointer: coarse) {
+    body.ar-public .ar-report-underchart-tree-crumb,
+    body.ar-public button.ar-report-underchart-tree-crumb.secondary {
+        min-height: 32px;
+        padding: 6px 10px;
+        font-size: 0.72rem;
+    }
+
+    body.ar-public .ar-report-infobox-trow--branch {
+        min-height: 36px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+}

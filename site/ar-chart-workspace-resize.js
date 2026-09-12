@@ -61,9 +61,11 @@
         var vh = window.innerHeight || 844;
         var preferred = Math.max(240, Math.round(vh * 0.5));
         var measured = workspaceHeight();
-        var total = Math.max(measured, preferred + 220);
+        var figure = workspace.closest('.chart-figure');
+        var figureHeight = figure ? parseFloat(window.getComputedStyle(figure).height) : 0;
+        var total = figureHeight || measured || 480;
         var min = 240;
-        var max = Math.max(min + 80, total - 180);
+        var max = Math.max(min, total - 180);
         var value = clamp(preferred, min, max);
         return { min: min, max: max, value: value };
     }
@@ -79,7 +81,9 @@
         var topCfg = topHeightConfig();
         return {
             sideWidth: clamp(parseNumber(loaded.sideWidth, widthCfg.value), widthCfg.min, widthCfg.max),
-            topHeight: clamp(parseNumber(loaded.topHeight, topCfg.value), topCfg.min, topCfg.max),
+            topHeight: desktopQuery.matches
+                ? parseNumber(loaded.topHeight, topCfg.value)
+                : clamp(parseNumber(loaded.topHeight, topCfg.value), topCfg.min, topCfg.max),
         };
     }
 
@@ -95,7 +99,9 @@
         var widthCfg = sideWidthConfig();
         var topCfg = topHeightConfig();
         sizes.sideWidth = clamp(sizes.sideWidth, widthCfg.min, widthCfg.max);
-        sizes.topHeight = clamp(sizes.topHeight, topCfg.min, topCfg.max);
+        if (!desktopQuery.matches) {
+            sizes.topHeight = clamp(sizes.topHeight, topCfg.min, topCfg.max);
+        }
         workspace.style.setProperty('--ar-chart-side-panel-width', sizes.sideWidth + 'px');
         workspace.style.setProperty('--ar-chart-mobile-top-height', sizes.topHeight + 'px');
         syncAria();
@@ -139,10 +145,11 @@
 
         handle.addEventListener('dblclick', function (event) {
             event.preventDefault();
-            var widthCfg = sideWidthConfig();
-            var topCfg = topHeightConfig();
-            sizes.sideWidth = widthCfg.value;
-            sizes.topHeight = topCfg.value;
+            if (desktopQuery.matches) {
+                sizes.sideWidth = sideWidthConfig().value;
+            } else {
+                sizes.topHeight = topHeightConfig().value;
+            }
             applySizes();
             saveSizes();
         });
