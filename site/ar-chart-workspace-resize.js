@@ -61,9 +61,11 @@
         var vh = window.innerHeight || 844;
         var preferred = Math.max(240, Math.round(vh * 0.5));
         var measured = workspaceHeight();
-        var total = Math.max(measured, preferred + 220);
+        var figure = workspace.closest('.chart-figure');
+        var figureHeight = figure ? parseFloat(window.getComputedStyle(figure).height) : 0;
+        var total = figureHeight || measured || 480;
         var min = 240;
-        var max = Math.max(min + 80, total - 180);
+        var max = Math.max(min, total - 180);
         var value = clamp(preferred, min, max);
         return { min: min, max: max, value: value };
     }
