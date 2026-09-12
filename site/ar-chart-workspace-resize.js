@@ -81,7 +81,9 @@
         var topCfg = topHeightConfig();
         return {
             sideWidth: clamp(parseNumber(loaded.sideWidth, widthCfg.value), widthCfg.min, widthCfg.max),
-            topHeight: clamp(parseNumber(loaded.topHeight, topCfg.value), topCfg.min, topCfg.max),
+            topHeight: desktopQuery.matches
+                ? parseNumber(loaded.topHeight, topCfg.value)
+                : clamp(parseNumber(loaded.topHeight, topCfg.value), topCfg.min, topCfg.max),
         };
     }
 
@@ -97,7 +99,9 @@
         var widthCfg = sideWidthConfig();
         var topCfg = topHeightConfig();
         sizes.sideWidth = clamp(sizes.sideWidth, widthCfg.min, widthCfg.max);
-        sizes.topHeight = clamp(sizes.topHeight, topCfg.min, topCfg.max);
+        if (!desktopQuery.matches) {
+            sizes.topHeight = clamp(sizes.topHeight, topCfg.min, topCfg.max);
+        }
         workspace.style.setProperty('--ar-chart-side-panel-width', sizes.sideWidth + 'px');
         workspace.style.setProperty('--ar-chart-mobile-top-height', sizes.topHeight + 'px');
         syncAria();
