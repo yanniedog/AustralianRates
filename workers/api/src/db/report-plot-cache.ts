@@ -251,16 +251,7 @@ export async function getCachedOrComputeReportPlot(
   // Include Melbourne date in KV key so entries don't serve across day boundaries.
   // D1 cache uses scope (date-agnostic) with a 90-min TTL — no change needed there.
   const kvKey = buildReportPlotCacheKey(section, mode, { ...params, __kvDay: getMelbourneNowParts().date })
-  if (env.CHART_CACHE_KV) {
-    const kvCached = await env.CHART_CACHE_KV.get(kvKey)
-    if (kvCached) {
-      try {
-        return { ...(JSON.parse(kvCached) as ReportPlotPayload), fromCache: 'kv' }
-      } catch {
-        /* ignore invalid KV entry */
-      }
-    }
-  }
+  // KV entries lack freshness metadata; D1 path enforces publicCacheFreshnessStatus.
 
   const scope = resolveDefaultReportPlotCacheScope(section, params)
   if (scope) {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildSnapshotKvKey, getCachedOrComputeSnapshot } from '../src/db/snapshot-cache'
+import {
+  buildSnapshotKvKey,
+  buildSnapshotLatestAvailableMetaKvKey,
+  buildSnapshotLatestRunFinishedMetaKvKey,
+  getCachedOrComputeSnapshot,
+  writeSnapshotKvBundles,
+} from '../src/db/snapshot-cache'
 
 class MemoryKv {
   readonly values = new Map<string, string>()
@@ -55,5 +61,77 @@ describe('snapshot cache KV hits', () => {
     expect(result.fromCache).toBe('kv')
     expect(result.section).toBe(section)
     expect(kv.putCalls).toBe(0)
+  })
+
+  it('rejects stale KV snapshot when endDate lags latest available collection date', async () => {
+    const kv = new MemoryKv()
+    const section = 'home_loans'
+    const scope = 'window:90D'
+    const mainKey = buildSnapshotKvKey(section, scope)
+    const payload = {
+      builtAt: '2026-05-04T08:00:00.000Z',
+      scope,
+      section,
+      sourceRunFinishedAt: '2026-05-03T07:00:00.000Z',
+      data: {
+        filtersResolved: { startDate: '2026-04-01', endDate: '2026-05-03' },
+        siteUi: { ok: true },
+      },
+    }
+
+    kv.values.set(mainKey, JSON.stringify(payload))
+
+    let computed = false
+    const result = await getCachedOrComputeSnapshot(
+      { DB: {} as D1Database, CHART_CACHE_KV: kv as unknown as KVNamespace },
+      section,
+      scope,
+      async () => {
+        computed = true
+        return {
+          builtAt: new Date().toISOString(),
+          scope,
+          section,
+          data: {
+            filtersResolved: { startDate: '2026-04-01', endDate: '2026-05-04' },
+            siteUi: { ok: true },
+          },
+        }
+      },
+      {
+        latestAvailableCollectionDate: '2026-05-04',
+        latestRunFinishedAt: '2026-05-04T07:30:00.000Z',
+        now: new Date('2026-05-04T10:00:00.000Z'),
+        allowD1Fallback: false,
+      },
+    )
+
+    expect(computed).toBe(true)
+    expect(result.fromCache).toBe('live')
+    expect((result.data as { filtersResolved?: { endDate?: string } }).filtersResolved?.endDate).toBe('2026-05-04')
+  })
+
+  it('writes latest-available meta KV when snapshot bundles are stored', async () => {
+    const kv = new MemoryKv()
+    const section = 'home_loans' as const
+    const scope = 'window:90D' as const
+    const payload = {
+      builtAt: new Date().toISOString(),
+      scope,
+      section,
+      data: {
+        filtersResolved: { startDate: '2026-04-18', endDate: '2026-06-07' },
+        siteUi: { ok: true },
+      },
+    }
+
+    await writeSnapshotKvBundles(kv as unknown as KVNamespace, section, scope, payload, {
+      latestAvailableCollectionDate: '2026-06-07',
+      latestRunFinishedAt: '2026-06-07T07:30:00.000Z',
+    })
+
+    const metaKey = buildSnapshotLatestAvailableMetaKvKey(section)
+    expect(await kv.get(metaKey)).toBe('2026-06-07')
+    expect(await kv.get(buildSnapshotLatestRunFinishedMetaKvKey(section))).toBe('2026-06-07T07:30:00.000Z')
   })
 })

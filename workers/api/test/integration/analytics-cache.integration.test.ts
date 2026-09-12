@@ -200,7 +200,7 @@ describe('analytics cache headers', () => {
 
     const reportSecondResponse = await SELF.fetch(reportUrl)
     expect(reportSecondResponse.status).toBe(200)
-    expect(reportSecondResponse.headers.get('X-AR-Cache')).toBe('kv')
+    expect(reportSecondResponse.headers.get('X-AR-Cache')).toBe('d1')
     await reportSecondResponse.text()
   })
 

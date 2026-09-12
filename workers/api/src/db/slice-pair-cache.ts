@@ -36,19 +36,7 @@ export async function getCachedOrComputeSlicePairStats(
   options?: { allowLiveCompute?: boolean },
 ): Promise<SlicePairStatsPayload & { fromCache: 'kv' | 'live' }> {
   const key = buildSlicePairStatsCacheKey(section, params)
-  if (env.CHART_CACHE_KV) {
-    const kvCached = await env.CHART_CACHE_KV.get(key)
-    if (kvCached) {
-      try {
-        const parsed = JSON.parse(kvCached) as { v?: number; stats?: SlicePairStatsPayload }
-        if (parsed?.v === SLICE_PAIR_STATS_PAYLOAD_VERSION && parsed.stats) {
-          return { ...parsed.stats, fromCache: 'kv' }
-        }
-      } catch {
-        /* ignore invalid KV entry */
-      }
-    }
-  }
+  // KV entries lack freshness metadata; always compute or use D1-backed routes.
 
   if (options?.allowLiveCompute === false) {
     throw new Error(`slice_pair_live_compute_disabled:${section}`)

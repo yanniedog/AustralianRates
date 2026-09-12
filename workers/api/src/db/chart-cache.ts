@@ -818,17 +818,8 @@ export async function getCachedOrCompute(
 ): Promise<ChartAnalyticsPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const key = buildChartCacheKey(section, representation, { ...params, __kvDay: getMelbourneNowParts().date })
 
-  if (env.CHART_CACHE_KV) {
-    const kvCached = await env.CHART_CACHE_KV.get(key)
-    if (kvCached) {
-      try {
-        const parsed = JSON.parse(kvCached) as ChartAnalyticsPayload
-        return { ...parsed, fromCache: 'kv' }
-      } catch {
-        /* invalid JSON, fall through to compute */
-      }
-    }
-  }
+  // KV entries lack freshness metadata (builtAt, sourceRunFinishedAt). Serving them
+  // would bypass publicCacheFreshnessStatus for up to CHART_CACHE_KV_TTL after ingest.
 
   const cacheScope = resolveChartCacheScope(section, params)
   if (cacheScope) {

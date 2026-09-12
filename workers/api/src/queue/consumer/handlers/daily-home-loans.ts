@@ -239,13 +239,26 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
 
   collectionMs = elapsedMs(collectionStartedAt)
 
+  const catalogSupplementProductIds: string[] = []
   if (successfulIndexFetch) {
     const refs = await getActiveCdrProductRefs(env.DB, { dataset: 'home_loans', bankName })
     for (const ref of refs) {
       if (discoveredProductEndpointMap.has(ref.productId)) continue
       discoveredProductEndpointMap.set(ref.productId, ref.endpointUrl)
+      catalogSupplementProductIds.push(ref.productId)
       catalogSupplements += 1
     }
+  }
+  if (catalogSupplementProductIds.length > 0) {
+    await markProductsSeenForRun(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+      bankName,
+      collectionDate: job.collectionDate,
+      productIds: catalogSupplementProductIds,
+      skip: isD1EmergencyMinimumWrites(env),
+    })
   }
 
   const productIds = Array.from(discoveredProductEndpointMap.keys())

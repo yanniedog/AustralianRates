@@ -6,7 +6,7 @@ import {
   type ChartCacheScope,
   type ChartCacheSection,
 } from '../db/chart-cache'
-import { queryCachedLatestSectionMaxCollectionDate } from '../db/public-cache-support'
+import { queryLatestSectionMaxCollectionDate } from '../db/public-cache-support'
 import { getCachedOrComputeSnapshot } from '../db/snapshot-cache'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
@@ -128,7 +128,7 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
     Boolean(defaultPublicSnapshotScopeForQuery(options.section, params)) ||
     Boolean(resolveDefaultChartCacheScope(options.section, params))
   const latestAvailableCollectionDate = couldUsePublicCache
-    ? await queryCachedLatestSectionMaxCollectionDate(db, options.section)
+    ? await queryLatestSectionMaxCollectionDate(db, options.section)
     : null
 
   const packaged = await getPackagedCompactSeries(

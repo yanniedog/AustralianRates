@@ -27,24 +27,36 @@ export async function findMissingSeriesKeys(
     dataset: DatasetKind
     bankName: string
     activeSeriesKeys: string[]
+    /** Products seen this run with zero parsed series — do not remove their active series. */
+    preserveProductIds?: string[]
   },
 ): Promise<string[]> {
   const keys = uniqueSeriesKeys(input.activeSeriesKeys)
   const activeSet = new Set(keys)
+  const preserveProductIds = new Set(
+    (input.preserveProductIds ?? []).map((productId) => String(productId || '').trim()).filter(Boolean),
+  )
   const currentResult = await db
     .prepare(
-      `SELECT series_key
+      `SELECT series_key, product_id
        FROM series_presence_status
        WHERE dataset_kind = ?1
          AND bank_name = ?2
          AND is_removed = 0`,
     )
     .bind(input.dataset, input.bankName)
-    .all<{ series_key: string }>()
+    .all<{ series_key: string; product_id: string }>()
 
   return (currentResult.results ?? [])
-    .map((row) => String(row.series_key || '').trim())
-    .filter((seriesKey) => seriesKey.length > 0 && !activeSet.has(seriesKey))
+    .map((row) => ({
+      seriesKey: String(row.series_key || '').trim(),
+      productId: String(row.product_id || '').trim(),
+    }))
+    .filter(
+      ({ seriesKey, productId }) =>
+        seriesKey.length > 0 && !activeSet.has(seriesKey) && !preserveProductIds.has(productId),
+    )
+    .map(({ seriesKey }) => seriesKey)
 }
 
 export async function markSeriesSeen(
@@ -110,26 +122,9 @@ export async function markMissingSeriesRemoved(
     dataset: DatasetKind
     bankName: string
     activeSeriesKeys: string[]
+    preserveProductIds?: string[]
   },
 ): Promise<number> {
-  const keys = uniqueSeriesKeys(input.activeSeriesKeys)
-  if (keys.length === 0) {
-    const result = await db
-      .prepare(
-        `UPDATE series_presence_status
-         SET
-           is_removed = 1,
-           removed_at = COALESCE(removed_at, CURRENT_TIMESTAMP)
-         WHERE
-           dataset_kind = ?1
-           AND bank_name = ?2
-           AND is_removed = 0`,
-      )
-      .bind(input.dataset, input.bankName)
-      .run()
-    return Number(result.meta?.changes ?? 0)
-  }
-
   const missingKeys = await findMissingSeriesKeys(db, input)
   if (missingKeys.length === 0) return 0
 

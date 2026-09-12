@@ -1,6 +1,6 @@
 import { DEFAULT_MAX_QUEUE_ATTEMPTS } from '../../constants'
 import type { ReplayQueueRow } from '../../db/ingest-replay-queue'
-import { recordRunQueueOutcome } from '../../db/run-reports'
+import { recordRunQueueOutcome, recordRunQueueOutcomeIfAbsent } from '../../db/run-reports'
 import type { EnvBindings, IngestMessage, RunReportRow } from '../../types'
 import {
   deferReplayAfterActiveClaimLeaseForTicket,
@@ -18,6 +18,8 @@ import {
   activeClaimRetryDelaySeconds,
   claimIdempotency,
   completeIdempotencyClaim,
+  isIdempotencyOutcomeRecorded,
+  markIdempotencyOutcomeRecorded,
   releaseIdempotencyClaim,
 } from './idempotency'
 import { elapsedMs, serializeForLog } from './log-helpers'
@@ -45,10 +47,60 @@ async function recordOutcomeAndCapture(
   env: EnvBindings,
   finalisedRunIds: Set<string>,
   input: { runId: string; lenderCode: string; success: boolean; errorMessage?: string },
+  options?: { ifAbsent?: boolean },
 ): Promise<void> {
-  const row = await recordRunQueueOutcome(env.DB, input)
+  const row = options?.ifAbsent
+    ? await recordRunQueueOutcomeIfAbsent(env.DB, input)
+    : await recordRunQueueOutcome(env.DB, input)
   const finalised = runIdIfFinalisedDaily(row)
   if (finalised) finalisedRunIds.add(finalised)
+}
+
+/**
+ * Record queue outcome at most once per idempotency key so detail-fanout duplicate
+ * ACKs cannot inflate processed_total before all lender messages complete.
+ */
+async function recordOutcomeOncePerMessage(
+  env: EnvBindings,
+  finalisedRunIds: Set<string>,
+  input: {
+    kind: IngestMessage['kind']
+    idempotencyKey: string | null
+    runId: string | null
+    lenderCode: string | null
+    success: boolean
+    errorMessage?: string
+    duplicateAck?: boolean
+  },
+): Promise<void> {
+  if (!input.runId || !input.lenderCode) return
+
+  const idempotencyKey = String(input.idempotencyKey || '').trim()
+  if (idempotencyKey) {
+    if (await isIdempotencyOutcomeRecorded(env, { kind: input.kind, idempotencyKey })) {
+      return
+    }
+    await recordOutcomeAndCapture(env, finalisedRunIds, {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      success: input.success,
+      errorMessage: input.errorMessage,
+    })
+    await markIdempotencyOutcomeRecorded(env, { kind: input.kind, idempotencyKey })
+    return
+  }
+
+  await recordOutcomeAndCapture(
+    env,
+    finalisedRunIds,
+    {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      success: input.success,
+      errorMessage: input.errorMessage,
+    },
+    { ifAbsent: input.duplicateAck },
+  )
 }
 
 async function tryCompleteIdempotency(
@@ -223,6 +275,16 @@ export async function consumeIngestQueue(
           })
           continue
         }
+        if (claim.reason === 'duplicate' && context.runId && context.lenderCode) {
+          await recordOutcomeOncePerMessage(env, finalisedRunIds, {
+            kind: body.kind,
+            idempotencyKey,
+            runId: context.runId,
+            lenderCode: context.lenderCode,
+            success: true,
+            duplicateAck: true,
+          })
+        }
         msg.ack()
         metrics.acked += 1
         if (replayTicketId) {
@@ -253,7 +315,9 @@ export async function consumeIngestQueue(
       }
 
       if (context.runId && context.lenderCode) {
-        await recordOutcomeAndCapture(env, finalisedRunIds, {
+        await recordOutcomeOncePerMessage(env, finalisedRunIds, {
+          kind: body.kind,
+          idempotencyKey,
           runId: context.runId,
           lenderCode: context.lenderCode,
           success: true,

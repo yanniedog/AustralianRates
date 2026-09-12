@@ -18,6 +18,8 @@ type ReconciliationOptions = {
   staleUnfinalizedMinutes?: number
   maxRows?: number
   timeZone?: string
+  /** When true, skip finalizePresenceForRun (e.g. D1 emergency mode where run_seen_products were not written). */
+  skipPresenceFinalization?: boolean
 }
 
 type LenderDatasetFinalizeCandidate = {
@@ -164,10 +166,12 @@ function snapshotForReadiness(row: LenderDatasetReadinessRow): Parameters<typeof
  * Force-finalize all unfinalized lender_dataset_runs for a run (retain as much info as possible when abandoning).
  * Skips rows that are not yet ready per {@link isLenderDatasetReadyForFinalization} so we do not set `finalized_at`
  * while detail work is still incomplete (e.g. EOD run close shortly after midnight UTC).
+ * Presence finalization runs only when expected_detail_count > 0 (shell rows at job start must not blanket-wipe).
  */
 async function forceFinalizeAllUnfinalizedForRun(
   db: D1Database,
   runId: string,
+  options?: { skipPresenceFinalization?: boolean },
 ): Promise<{ finalized: number; errors: string[] }> {
   const errors: string[] = []
   let finalized = 0
@@ -192,16 +196,19 @@ async function forceFinalizeAllUnfinalizedForRun(
       })
       continue
     }
-    try {
-      await finalizePresenceForRun(db, {
-        runId: row.run_id,
-        lenderCode: row.lender_code,
-        dataset: row.dataset_kind,
-        bankName: row.bank_name,
-        collectionDate: row.collection_date,
-      })
-    } catch (e) {
-      pushError(errors, `${row.lender_code}:${row.dataset_kind}:presence:${(e as Error)?.message || String(e)}`)
+    const expected = Number(row.expected_detail_count ?? 0)
+    if (expected > 0 && !options?.skipPresenceFinalization) {
+      try {
+        await finalizePresenceForRun(db, {
+          runId: row.run_id,
+          lenderCode: row.lender_code,
+          dataset: row.dataset_kind,
+          bankName: row.bank_name,
+          collectionDate: row.collection_date,
+        })
+      } catch (e) {
+        pushError(errors, `${row.lender_code}:${row.dataset_kind}:presence:${(e as Error)?.message || String(e)}`)
+      }
     }
     try {
       const updated = await tryMarkLenderDatasetFinalized(db, {
@@ -257,7 +264,7 @@ async function runWithTransientRetry<T>(task: () => Promise<T>): Promise<T> {
 
 export async function reconcileReadyFinalizations(
   db: D1Database,
-  options?: { dryRun?: boolean; idleMinutes?: number; maxRows?: number },
+  options?: { dryRun?: boolean; idleMinutes?: number; maxRows?: number; skipPresenceFinalization?: boolean },
 ): Promise<ReadyFinalizationReconciliation> {
   const dryRun = Boolean(options?.dryRun)
   const idleMinutes = Math.max(1, Math.floor(Number(options?.idleMinutes) || 5))
@@ -316,7 +323,7 @@ export async function reconcileReadyFinalizations(
 
     try {
       const expected = Number(row.expected_detail_count || 0)
-      if (expected > 0) {
+      if (expected > 0 && !options?.skipPresenceFinalization) {
         await runWithTransientRetry(async () =>
           finalizePresenceForRun(db, {
             runId: row.run_id,
@@ -363,7 +370,7 @@ export async function reconcileReadyFinalizations(
 
 export async function closeStaleRunningRuns(
   db: D1Database,
-  options?: { dryRun?: boolean; staleRunMinutes?: number; maxRows?: number; timeZone?: string },
+  options?: { dryRun?: boolean; staleRunMinutes?: number; maxRows?: number; timeZone?: string; skipPresenceFinalization?: boolean },
 ): Promise<StaleRunClosureReconciliation> {
   const dryRun = Boolean(options?.dryRun)
   const staleMinutes = Math.max(1, Math.floor(Number(options?.staleRunMinutes) || 120))
@@ -420,7 +427,9 @@ export async function closeStaleRunningRuns(
     }
 
     if (eodAbandon) {
-      const { finalized: nFinalized, errors: eodErrors } = await forceFinalizeAllUnfinalizedForRun(db, row.run_id)
+      const { finalized: nFinalized, errors: eodErrors } = await forceFinalizeAllUnfinalizedForRun(db, row.run_id, {
+        skipPresenceFinalization: options?.skipPresenceFinalization,
+      })
       abandonedEod += 1
       if (eodErrors.length > 0) {
         eodErrors.forEach((e) => pushError(errors, `${row.run_id}:${e}`))
@@ -480,7 +489,7 @@ export type CancelAllRunningRunsResult = {
  */
 export async function cancelAllRunningRuns(
   db: D1Database,
-  options?: { dryRun?: boolean },
+  options?: { dryRun?: boolean; skipPresenceFinalization?: boolean },
 ): Promise<CancelAllRunningRunsResult> {
   const dryRun = Boolean(options?.dryRun)
   const errors: string[] = []
@@ -512,7 +521,9 @@ export async function cancelAllRunningRuns(
       continue
     }
 
-    const { errors: eodErrors } = await forceFinalizeAllUnfinalizedForRun(db, row.run_id)
+    const { errors: eodErrors } = await forceFinalizeAllUnfinalizedForRun(db, row.run_id, {
+      skipPresenceFinalization: options?.skipPresenceFinalization,
+    })
     if (eodErrors.length > 0) {
       eodErrors.forEach((e) => pushError(errors, `${row.run_id}:${e}`))
     }
@@ -560,7 +571,7 @@ export async function cancelAllRunningRuns(
  */
 export async function forceCloseStaleUnfinalizedLenderDatasets(
   db: D1Database,
-  options?: { dryRun?: boolean; staleUnfinalizedMinutes?: number; maxRows?: number },
+  options?: { dryRun?: boolean; staleUnfinalizedMinutes?: number; maxRows?: number; skipPresenceFinalization?: boolean },
 ): Promise<StaleUnfinalizedClosureReconciliation> {
   const dryRun = Boolean(options?.dryRun)
   const staleMinutes = Math.max(
@@ -593,7 +604,7 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
       forceClosedRows += 1
       continue
     }
-    if (readiness.ready && expected > 0) {
+    if (readiness.ready && expected > 0 && !options?.skipPresenceFinalization) {
       try {
         await finalizePresenceForRun(db, {
           runId: row.run_id,
@@ -696,6 +707,7 @@ export async function runLifecycleReconciliation(
     staleRunMinutes: options?.staleRunMinutes,
     maxRows: options?.maxRows,
     timeZone: options?.timeZone,
+    skipPresenceFinalization: options?.skipPresenceFinalization,
   })
 
   // 2. Force-close lender_dataset_runs that have been unfinalized too long (prevents reconciliation stall).
@@ -703,6 +715,7 @@ export async function runLifecycleReconciliation(
     dryRun,
     staleUnfinalizedMinutes: options?.staleUnfinalizedMinutes,
     maxRows: options?.maxRows,
+    skipPresenceFinalization: options?.skipPresenceFinalization,
   })
 
   // 3. Normal finalization for rows that are ready (idle past cutoff).
@@ -713,6 +726,7 @@ export async function runLifecycleReconciliation(
       dryRun,
       idleMinutes: options?.idleMinutes,
       maxRows: options?.maxRows,
+      skipPresenceFinalization: options?.skipPresenceFinalization,
     })
     readyPasses.push({
       ...result,

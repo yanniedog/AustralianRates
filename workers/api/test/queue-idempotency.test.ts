@@ -3,6 +3,8 @@ import {
   activeClaimRetryDelaySeconds,
   claimIdempotency,
   completeIdempotencyClaim,
+  isIdempotencyOutcomeRecorded,
+  markIdempotencyOutcomeRecorded,
   releaseIdempotencyClaim,
   shortenActiveIdempotencyLeaseToNow,
 } from '../src/queue/consumer/idempotency'
@@ -247,5 +249,25 @@ describe('queue idempotency claim', () => {
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.reason).toBe('claim_changed_retry')
     spy.mockRestore()
+  })
+
+  it('tracks queue outcome recording per idempotency key', async () => {
+    const kv = new MemoryKv()
+    const env = makeEnv({
+      FEATURE_QUEUE_IDEMPOTENCY_ENABLED: 'true',
+      IDEMPOTENCY_TTL_SECONDS: '604800',
+      IDEMPOTENCY_KV: kv as unknown as KVNamespace,
+    })
+    const kind = 'product_detail_fetch' as const
+    const key = 'run:abc:detail:1'
+
+    await claimIdempotency(env, { kind, idempotencyKey: key, runId: 'run:abc', lenderCode: 'anz' })
+    await completeIdempotencyClaim(env, { kind, idempotencyKey: key })
+
+    expect(await isIdempotencyOutcomeRecorded(env, { kind, idempotencyKey: key })).toBe(false)
+    await markIdempotencyOutcomeRecorded(env, { kind, idempotencyKey: key })
+    expect(await isIdempotencyOutcomeRecorded(env, { kind, idempotencyKey: key })).toBe(true)
+    await markIdempotencyOutcomeRecorded(env, { kind, idempotencyKey: key })
+    expect(kv.putCalls).toBe(3)
   })
 })

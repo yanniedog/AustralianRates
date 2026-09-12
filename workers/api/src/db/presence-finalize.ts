@@ -11,6 +11,7 @@ function sectionForDataset(dataset: DatasetKind): 'home_loans' | 'savings' | 'te
 export async function finalizePresenceForRun(
   db: D1Database,
   input: { runId: string; lenderCode: string; dataset: DatasetKind; bankName: string; collectionDate: string },
+  options?: { performRemovals?: boolean },
 ): Promise<{
   seenProducts: number
   removedProducts: number
@@ -38,7 +39,7 @@ export async function finalizePresenceForRun(
 
   const seenSeries = await db
     .prepare(
-      `SELECT DISTINCT series_key
+      `SELECT DISTINCT series_key, product_id
        FROM run_seen_series
        WHERE run_id = ?1
          AND lender_code = ?2
@@ -46,14 +47,19 @@ export async function finalizePresenceForRun(
          AND bank_name = ?4`,
     )
     .bind(input.runId, input.lenderCode, input.dataset, input.bankName)
-    .all<{ series_key: string }>()
+    .all<{ series_key: string; product_id: string }>()
 
   const productIds = (seenProducts.results ?? []).map((row) => String(row.product_id || '').trim()).filter(Boolean)
   const seriesKeys = (seenSeries.results ?? []).map((row) => String(row.series_key || '').trim()).filter(Boolean)
+  const productsWithSeenSeries = new Set(
+    (seenSeries.results ?? []).map((row) => String(row.product_id || '').trim()).filter(Boolean),
+  )
+  const productIdsSeenWithoutSeries = productIds.filter((productId) => !productsWithSeenSeries.has(productId))
   const removedSeriesKeys = await findMissingSeriesKeys(db, {
     dataset: input.dataset,
     bankName: input.bankName,
     activeSeriesKeys: seriesKeys,
+    preserveProductIds: productIdsSeenWithoutSeries,
   })
 
   const seenTouched = await markProductsSeen(db, {
@@ -93,22 +99,28 @@ export async function finalizePresenceForRun(
     )
     .bind(input.dataset, input.bankName)
     .run()
-  const removedProducts = await markMissingProductsRemoved(db, {
-    section: sectionForDataset(input.dataset),
-    bankName: input.bankName,
-    activeProductIds: productIds,
-  })
-  const removedSeries = await markMissingSeriesRemoved(db, {
-    dataset: input.dataset,
-    bankName: input.bankName,
-    activeSeriesKeys: seriesKeys,
-  })
-  if (removedSeriesKeys.length > 0) {
-    await writeRemovedSeriesProjections(db, {
-      dataset: input.dataset,
-      collectionDate: input.collectionDate,
-      seriesKeys: removedSeriesKeys,
+  const performRemovals = options?.performRemovals !== false
+  let removedProducts = 0
+  let removedSeries = 0
+  if (performRemovals) {
+    removedProducts = await markMissingProductsRemoved(db, {
+      section: sectionForDataset(input.dataset),
+      bankName: input.bankName,
+      activeProductIds: productIds,
     })
+    removedSeries = await markMissingSeriesRemoved(db, {
+      dataset: input.dataset,
+      bankName: input.bankName,
+      activeSeriesKeys: seriesKeys,
+      preserveProductIds: productIdsSeenWithoutSeries,
+    })
+    if (removedSeriesKeys.length > 0) {
+      await writeRemovedSeriesProjections(db, {
+        dataset: input.dataset,
+        collectionDate: input.collectionDate,
+        seriesKeys: removedSeriesKeys,
+      })
+    }
   }
 
   await db
