@@ -10,7 +10,12 @@ import { upsertLatestSavingsSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
 import { markProductsSeen } from './product-status'
 import { nowIso } from '../utils/time'
-import { chunkRows, equalStateValue, filterChangedRows } from './change-aware-writes'
+import {
+  cdrDetailPayloadUnchangedForLatestRow,
+  chunkRows,
+  equalStateValue,
+  filterChangedRows,
+} from './change-aware-writes'
 import {
   assertHistoricalWriteAllowed,
   isHistoricalWriteContractError,
@@ -107,9 +112,11 @@ async function filterChangedSavingsRows(db: D1Database, rows: NormalizedSavingsR
       'max_balance',
       'conditions',
       'monthly_fee',
+      'cdr_product_detail_hash',
     ],
     seriesKeyForRow: savingsSeriesKey,
     rowUnchanged: savingsRowUnchanged,
+    asyncRefineUnchanged: cdrDetailPayloadUnchangedForLatestRow,
   })
 }
 

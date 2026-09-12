@@ -1,7 +1,21 @@
+import { sha256HexFromText } from '../utils/hash'
+
 export type ChangeAwareFilterResult<Row> = {
   changed: Row[]
   unchangedRows: Row[]
   unchanged: number
+}
+
+/** When rate fields match latest, still treat as changed if non-empty CDR JSON hashes differ from latest. */
+export async function cdrDetailPayloadUnchangedForLatestRow(
+  current: Record<string, unknown>,
+  row: { cdrProductDetailJson?: string | null },
+): Promise<boolean> {
+  const json = row.cdrProductDetailJson?.trim()
+  if (!json) return true
+  const stored = String(current.cdr_product_detail_hash ?? '').trim()
+  const next = await sha256HexFromText(json)
+  return stored === next
 }
 
 export function equalStateValue(left: unknown, right: unknown): boolean {
@@ -31,6 +45,7 @@ export async function filterChangedRows<Row>(
     selectColumns: string[]
     seriesKeyForRow: (row: Row) => string
     rowUnchanged: (current: Record<string, unknown>, row: Row) => boolean
+    asyncRefineUnchanged?: (current: Record<string, unknown>, row: Row) => Promise<boolean>
   },
 ): Promise<ChangeAwareFilterResult<Row>> {
   const keyed = input.rows.map((row) => ({ row, seriesKey: input.seriesKeyForRow(row) }))
@@ -54,7 +69,13 @@ export async function filterChangedRows<Row>(
   for (const item of keyed) {
     const current = currentByKey.get(item.seriesKey)
     if (current && Number(current.is_removed ?? 0) === 0 && input.rowUnchanged(current, item.row)) {
-      unchangedRows.push(item.row)
+      const stillUnchanged =
+        !input.asyncRefineUnchanged || (await input.asyncRefineUnchanged(current, item.row))
+      if (stillUnchanged) {
+        unchangedRows.push(item.row)
+      } else {
+        changed.push(item.row)
+      }
     } else {
       changed.push(item.row)
     }

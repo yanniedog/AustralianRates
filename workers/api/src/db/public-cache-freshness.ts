@@ -34,6 +34,7 @@ export type PublicCacheFreshnessRejectionReason =
   | 'invalid_end_date'
   | 'end_date_beyond_max_staleness'
   | 'end_date_after_latest_available'
+  | 'end_date_behind_latest_available'
   | 'end_date_not_current_or_latest'
   | 'source_older_than_latest_run'
 
@@ -145,6 +146,9 @@ export function publicCacheFreshnessStatus(input: PublicCacheFreshnessInput): Pu
   if (latestAvailable != null && endDate > latestAvailable) {
     return reject('end_date_after_latest_available', endDate)
   }
+  if (latestAvailable != null && endDate < latestAvailable) {
+    return reject('end_date_behind_latest_available', endDate)
+  }
   if (endDate !== today && endDate !== yesterday && endDate !== latestAvailable) {
     return reject('end_date_not_current_or_latest', endDate)
   }
@@ -189,6 +193,12 @@ export function publicCacheStaleServeStatus(
     return { ...freshness, canServe: false, reason: 'end_date_after_latest_available', endDate }
   }
   if (latestAvailable == null && endDate !== today && endDate !== yesterday) {
+    return { ...freshness, canServe: false, endDate }
+  }
+  // Same-day endDate can match latestAvailable while sourceRunFinishedAt predates the
+  // latest completed ingest. Serving that bounded-stale package shows today's date
+  // with pre-ingest rates (Pages middleware rejects; API must not serve it either).
+  if (freshness.reason === 'source_older_than_latest_run') {
     return { ...freshness, canServe: false, endDate }
   }
   return { ...freshness, canServe: true, endDate }

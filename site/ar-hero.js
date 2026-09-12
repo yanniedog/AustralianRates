@@ -103,10 +103,22 @@
         return snapshot && snapshot.data ? snapshot.data : null;
     }
 
-    function snapshotLatestAllRows() {
+    function snapshotLatestAllRowsComplete() {
         var data = snapshotData();
         var latestAll = data && data.latestAll;
-        return latestAll && Array.isArray(latestAll.rows) ? latestAll.rows : [];
+        if (!latestAll || !Array.isArray(latestAll.rows)) return null;
+        var LA = window.AR.latestAllCompleteness || {};
+        if (
+            typeof LA.latestAllBlockIsCompleteForLimit === 'function'
+            && !LA.latestAllBlockIsCompleteForLimit(latestAll, 0)
+        ) {
+            return null;
+        }
+        return latestAll.rows;
+    }
+
+    function snapshotLatestAllRows() {
+        return snapshotLatestAllRowsComplete() || [];
     }
 
     function snapshotCurrentLeaders() {
@@ -168,7 +180,9 @@
         }
         var cms = snapshotChartModelTotal(data);
         if (Number.isFinite(cms)) return cms;
-        return numericSnapshotValue(snapshotLatestAllRows().length);
+        var latestAllRows = snapshotLatestAllRowsComplete();
+        if (latestAllRows) return numericSnapshotValue(latestAllRows.length);
+        return NaN;
     }
 
     function snapshotSlicePairStatsPayload(data) {
@@ -711,11 +725,15 @@
         return entries;
     }
 
+    function homeLoanScenarioLeadersComplete(scenarioLeaders) {
+        return Array.isArray(scenarioLeaders) && scenarioLeaders.length === MORTGAGE_SAMPLE_SCENARIOS.length;
+    }
+
     function loadQuickCompareFromSnapshot(context) {
         var currentLeaders = snapshotCurrentLeaders();
         if (section === 'home-loans' && context.activeCount === 0) {
             var scenarioLeaders = currentLeaders && Array.isArray(currentLeaders.scenarios) ? currentLeaders.scenarios : null;
-            if (scenarioLeaders && scenarioLeaders.length) return scenarioLeaders;
+            if (homeLoanScenarioLeadersComplete(scenarioLeaders)) return scenarioLeaders;
         }
         if (context.activeCount === 0) {
             var defaultLeaders = currentLeaders && Array.isArray(currentLeaders.rows) ? currentLeaders.rows : null;

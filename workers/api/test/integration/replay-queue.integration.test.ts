@@ -2,6 +2,7 @@ import { env } from 'cloudflare:test'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   claimReplayQueueRows,
+  deferReplayQueueRowAfterActiveClaimLease,
   getReplayQueueRow,
   queueReplayFromExhaustedMessage,
   requeueStaleDispatchingReplayRows,
@@ -101,5 +102,32 @@ describe('ingest replay queue recovery', () => {
 
     expect((await getReplayQueueRow(env.DB, td.replay_id))?.status).toBe('queued')
     expect((await getReplayQueueRow(env.DB, savings.replay_id))?.status).toBe('dispatching')
+  })
+
+  it('defer after active idempotency lease undoes claim replay_attempt_count', async () => {
+    const queued = await queueReplayFromExhaustedMessage(env.DB, {
+      message: detailMessage('td-lease-defer'),
+      errorMessage: 'detail_fetch_failed',
+      maxReplayAttempts: 2,
+      baseDelaySeconds: 60,
+    })
+    await env.DB.prepare("UPDATE ingest_replay_queue SET next_attempt_at = '2026-04-25T00:00:00.000Z' WHERE replay_id = ?1")
+      .bind(queued.replay_id)
+      .run()
+    const claimed = await claimReplayQueueRows(env.DB, { limit: 5, collectionDate: '2026-04-25' })
+    const row = claimed.find((r) => r.replay_id === queued.replay_id)
+    expect(row?.status).toBe('dispatching')
+    expect(row?.replay_attempt_count).toBe(1)
+
+    const leaseUntil = new Date(Date.now() + 60_000).toISOString()
+    const deferred = await deferReplayQueueRowAfterActiveClaimLease(env.DB, {
+      replayId: queued.replay_id,
+      nextAttemptAtIso: leaseUntil,
+      errorMessage: 'queue_message_duplicate_active_claim_max_attempts',
+    })
+    expect(deferred).toBeTruthy()
+    expect(deferred?.status).toBe('queued')
+    expect(deferred?.replay_attempt_count).toBe(0)
+    expect(Date.parse(String(deferred?.next_attempt_at))).toBe(Date.parse(leaseUntil))
   })
 })

@@ -19,9 +19,9 @@ import { getLandingOverview } from '../db/landing-overview'
 import { getFilters } from '../db/home-loans/filters'
 import { getSavingsFilters } from '../db/savings/filters'
 import { getTdFilters } from '../db/term-deposits/filters'
-import { queryLatestAllRates } from '../db/home-loans/latest'
-import { queryLatestAllSavingsRates } from '../db/savings/latest'
-import { queryLatestAllTdRates } from '../db/term-deposits/latest'
+import { queryLatestAllRates, queryLatestRatesCount } from '../db/home-loans/latest'
+import { queryLatestAllSavingsRates, queryLatestSavingsRatesCount } from '../db/savings/latest'
+import { queryLatestAllTdRates, queryLatestTdRatesCount } from '../db/term-deposits/latest'
 import {
   queryHomeLoanRateChanges,
   queryHomeLoanRateChangeIntegrity,
@@ -56,8 +56,13 @@ import {
   type SnapshotScope,
 } from '../db/snapshot-cache'
 import type { ChartCacheSection } from '../db/chart-cache'
-import { queryCachedLatestSectionMaxCollectionDate } from '../db/public-cache-support'
-import { resolveFiltersForScope, type ScopedFilters } from '../db/scope-filters'
+import { queryLatestSectionMaxCollectionDate } from '../db/public-cache-support'
+import {
+  parseChartCacheScope,
+  resolveFiltersForScope,
+  stripConsumerPresetFilters,
+  type ScopedFilters,
+} from '../db/scope-filters'
 import { publicApiBasePathForSection } from '../pipeline/public-cache-datasets'
 import { resolvePublicSnapshotRequestScope } from '../pipeline/public-package-scopes'
 import { getAppConfig } from '../db/app-config'
@@ -66,6 +71,7 @@ import { withPublicCache } from '../utils/http'
 import { buildSnapshotCurrentLeaders } from './snapshot-current-leaders'
 import { trimSnapshotDataForHtmlInline } from '../utils/snapshot-inline-trim'
 import { previousCalendarUtcDay } from '../utils/previous-calendar-utc-day'
+import { buildListMeta, sourceMixFromRows } from '../utils/response-meta'
 
 const SNAPSHOT_CACHE_MAX_AGE = 300
 
@@ -126,29 +132,48 @@ async function buildRateChangesEntry(db: D1Database, section: DatasetKind): Prom
   }
 }
 
-function buildLatestAllFilters(filters: ScopedFilters): ScopedFilters & { limit: number; limitMax: number } {
+function buildLatestAllFilters(
+  filters: ScopedFilters,
+  rowLimit = 5000,
+): ScopedFilters & { limit: number; limitMax: number } {
   // `/latest-all` is latest-as-of snapshot, so date-range fields don't apply.
   // Carry preset fields (security_purpose etc.) through so consumer-default snapshots stay scoped.
+  const limit = Math.max(1, Math.min(5000, Math.floor(rowLimit)))
   return {
     ...filters,
-    limit: 5000,
-    limitMax: 5000,
+    limit,
+    limitMax: limit,
   }
 }
 
-async function buildLatestAllEntry(
+/** Exported for tests that verify snapshot latest-all coverage metadata. */
+export async function buildLatestAllEntry(
   db: D1Database,
   section: DatasetKind,
   filters: ScopedFilters,
+  options?: { rowLimit?: number },
 ): Promise<Record<string, unknown>> {
-  const latestFilters = buildLatestAllFilters(filters)
-  const rows =
+  const latestFilters = buildLatestAllFilters(filters, options?.rowLimit)
+  const [rows, total] = await Promise.all([
     section === 'home_loans'
-      ? await queryLatestAllRates(db, latestFilters)
+      ? queryLatestAllRates(db, latestFilters)
       : section === 'savings'
-        ? await queryLatestAllSavingsRates(db, latestFilters)
-        : await queryLatestAllTdRates(db, latestFilters)
-  return { ok: true, count: rows.length, rows }
+        ? queryLatestAllSavingsRates(db, latestFilters)
+        : queryLatestAllTdRates(db, latestFilters),
+    section === 'home_loans'
+      ? queryLatestRatesCount(db, latestFilters)
+      : section === 'savings'
+        ? queryLatestSavingsRatesCount(db, latestFilters)
+        : queryLatestTdRatesCount(db, latestFilters),
+  ])
+  const meta = buildListMeta({
+    sourceMode: filters.sourceMode,
+    totalRows: total,
+    returnedRows: rows.length,
+    sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
+    limited: total > rows.length,
+  })
+  return { ok: true, count: rows.length, total, rows, meta }
 }
 
 /**
@@ -305,7 +330,13 @@ export async function buildSnapshotPayload(
   }
   const latestAllEntry = data.latestAll as { rows?: Array<Record<string, unknown>> } | undefined
   if (latestAllEntry && Array.isArray(latestAllEntry.rows) && latestAllEntry.rows.length) {
-    data.currentLeaders = buildSnapshotCurrentLeaders(section, latestAllEntry.rows)
+    const { preset } = parseChartCacheScope(scope)
+    if (section === 'home_loans' && preset === 'consumer-default') {
+      const leadersEntry = await buildLatestAllEntry(db, section, stripConsumerPresetFilters(section, filters))
+      data.currentLeaders = buildSnapshotCurrentLeaders(section, leadersEntry.rows as Array<Record<string, unknown>>)
+    } else {
+      data.currentLeaders = buildSnapshotCurrentLeaders(section, latestAllEntry.rows)
+    }
   }
 
   const analyticsResult = await analyticsPromise
@@ -358,7 +389,7 @@ async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKin
   const query = c.req.query()
   const scope = resolveRequestScope(section, query.chart_window, query.preset)
   const wantsLite = parseBooleanQuery(query.lite)
-  const latestAvailableCollectionDate = await queryCachedLatestSectionMaxCollectionDate(getReadDb(c), section)
+  const latestAvailableCollectionDate = await queryLatestSectionMaxCollectionDate(getReadDb(c), section)
   let payload: Awaited<ReturnType<typeof getCachedOrComputeSnapshot>>
   try {
     // KV-only would 503 after SNAPSHOT_PAYLOAD_VERSION bumps until cron repopulates.

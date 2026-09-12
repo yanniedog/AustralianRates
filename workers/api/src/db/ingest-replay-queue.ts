@@ -303,6 +303,38 @@ export async function upsertReplayQueueDeferredAfterLease(
   return row
 }
 
+/**
+ * After max queue retries on an idempotency `active_claim` duplicate, put the row back in
+ * `queued` at `nextAttemptAtIso` without treating the dispatch as a replay failure: undo the
+ * claim-time increment of `replay_attempt_count` so lease contention does not exhaust
+ * {@link ReplayQueueRow.max_replay_attempts}.
+ */
+export async function deferReplayQueueRowAfterActiveClaimLease(
+  db: D1Database,
+  input: {
+    replayId: string
+    nextAttemptAtIso: string
+    errorMessage: string
+  },
+): Promise<ReplayQueueRow | null> {
+  const now = new Date().toISOString()
+  const update = await db
+    .prepare(
+      `UPDATE ingest_replay_queue
+       SET status = 'queued',
+           next_attempt_at = ?1,
+           last_error = ?2,
+           updated_at = ?3,
+           replay_attempt_count = MAX(0, replay_attempt_count - 1)
+       WHERE replay_id = ?4
+         AND status = 'dispatching'`,
+    )
+    .bind(input.nextAttemptAtIso, input.errorMessage.slice(0, 2000), now, input.replayId)
+    .run()
+  if (Number(update.meta?.changes ?? 0) <= 0) return null
+  return getReplayQueueRow(db, input.replayId)
+}
+
 export async function claimReplayQueueRows(
   db: D1Database,
   input: {

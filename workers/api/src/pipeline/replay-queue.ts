@@ -1,5 +1,6 @@
 import {
   claimReplayQueueRows,
+  deferReplayQueueRowAfterActiveClaimLease,
   markReplayQueueSuccess,
   parseReplayPayload,
   queueReplayFromExhaustedMessage,
@@ -75,6 +76,19 @@ export async function scheduleReplayForActiveClaimLeaseWait(
     errorMessage: 'queue_message_duplicate_active_claim_max_attempts',
     maxReplayAttempts: config.maxReplayAttempts,
     nextAttemptAtIso,
+  })
+}
+
+/** Same scheduling as {@link scheduleReplayForActiveClaimLeaseWait} for rows already claimed from the replay queue (undoes claim attempt count). */
+export async function deferReplayAfterActiveClaimLeaseForTicket(
+  env: EnvBindings,
+  input: { replayTicketId: string; leaseUntilIso: string | null | undefined },
+): Promise<ReplayQueueRow | null> {
+  const nextAttemptAtIso = nextIsoAfterLeaseExpires(input.leaseUntilIso)
+  return deferReplayQueueRowAfterActiveClaimLease(env.DB, {
+    replayId: input.replayTicketId,
+    nextAttemptAtIso,
+    errorMessage: 'queue_message_duplicate_active_claim_max_attempts',
   })
 }
 

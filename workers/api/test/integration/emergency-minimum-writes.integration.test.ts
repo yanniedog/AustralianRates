@@ -15,6 +15,7 @@ async function resetHomeWriteTables(): Promise<void> {
     'home_loan_rate_intervals',
     'latest_home_loan_series',
     'historical_loan_rates',
+    'cdr_detail_payload_store',
     'product_catalog',
     'series_catalog',
     'series_presence_status',
@@ -152,5 +153,59 @@ describe('emergency minimum write mode', () => {
     expect(interval?.last_confirmed_collection_date).toBe('2026-04-01')
     expect(productPresence).toBeNull()
     expect(seriesPresence?.last_seen_collection_date).toBe('2026-04-01')
+  })
+
+  it('does not skip a same-rate row when CDR detail JSON changes under skipUnchangedRows', async () => {
+    await resetHomeWriteTables()
+
+    const productId = `home-cdr-delta-${crypto.randomUUID()}`
+    const detailUrl = 'https://www.anz.com.au/personal/home-loans/'
+    const makeDetailJson = (note: string) =>
+      JSON.stringify({
+        productId,
+        name: 'CDR detail test product',
+        productUrl: detailUrl,
+        note,
+      })
+
+    const base = {
+      ...homeFixture(),
+      bankName: 'ANZ',
+      productId,
+      sourceUrl: 'https://api.anz/cds-au/v1/banking/products/home-cdr-delta',
+      productUrl: detailUrl,
+      runSource: 'scheduled' as const,
+      retrievalType: 'present_scrape_same_date' as const,
+      fetchEventId: 501,
+    }
+    const first: NormalizedRateRow = {
+      ...base,
+      collectionDate: '2026-04-01',
+      runId: `daily:test:${crypto.randomUUID()}`,
+      cdrProductDetailJson: makeDetailJson('a'),
+    }
+    const second: NormalizedRateRow = {
+      ...base,
+      collectionDate: '2026-04-02',
+      runId: `daily:test:${crypto.randomUUID()}`,
+      fetchEventId: 502,
+      cdrProductDetailJson: makeDetailJson('b'),
+    }
+
+    const initial = await upsertHistoricalRateRows(env.DB, [first])
+    const repeated = await upsertHistoricalRateRows(env.DB, [second], { skipUnchangedRows: true })
+
+    const historical = await env.DB
+      .prepare('SELECT COUNT(*) AS n FROM historical_loan_rates WHERE product_id = ?')
+      .bind(base.productId)
+      .first<{ n: number }>()
+    const payloads = await env.DB
+      .prepare('SELECT COUNT(*) AS n FROM cdr_detail_payload_store')
+      .first<{ n: number }>()
+
+    expect(initial).toMatchObject({ written: 1, unchanged: 0 })
+    expect(repeated).toMatchObject({ written: 1, unchanged: 0 })
+    expect(Number(historical?.n || 0)).toBe(2)
+    expect(Number(payloads?.n || 0)).toBe(2)
   })
 })
